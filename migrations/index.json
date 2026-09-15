@@ -100,6 +100,15 @@
       "items": [
         "docs-sync-skill"
       ]
+    },
+    {
+      "from_version": "1.1.10",
+      "to_version": "1.1.11",
+      "path": "migrations/1.1.10-to-1.1.11.md",
+      "items": [
+        "current-branch-defaults",
+        "adopt-mode-docs"
+      ]
     }
   ]
 }

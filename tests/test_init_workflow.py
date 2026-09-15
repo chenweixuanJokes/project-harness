@@ -57,9 +57,9 @@ class SkillContractTests(unittest.TestCase):
         cls.skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     def test_batch_version_single_ph_version_contract(self):
-        self.assertIn("本批版本为 `1.1.10`", self.skill)
-        # separate schema version is gone; 1.1.10 must not trip the check
-        self.assertNotRegex(self.skill, r"1\.1\.1(?!0)")
+        self.assertIn("本批版本为 `1.1.11`", self.skill)
+        # separate schema version is gone; 1.1.10/1.1.11 must not trip the check
+        self.assertNotRegex(self.skill, r"1\.1\.1(?![01])")
         self.assertIn("urn:ph:schema:project-harness", self.skill)
         self.assertIn("不再有独立的 Schema 版本", self.skill)
 
@@ -71,7 +71,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("新的仓外安全目录", self.skill)
         self.assertIn("不覆盖用户级入口与目标项目", self.skill)
         self.assertIn("prepare --version 1.1.8", self.skill)
-        self.assertIn("目标 `1.1.10` 发行根", self.skill)
+        self.assertIn("目标 `1.1.11` 发行根", self.skill)
         # old schema_version field is removed only after finalize passes
         self.assertIn("仅在 finalize", self.skill)
 

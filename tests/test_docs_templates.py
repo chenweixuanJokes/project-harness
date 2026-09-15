@@ -60,13 +60,13 @@ class DocsTemplateTests(unittest.TestCase):
 
     def test_docs_migration_keeps_single_version_contract(self):
         release = json.loads((ROOT / "release.json").read_text())
-        self.assertEqual(release["version"], "1.1.10")
+        self.assertEqual(release["version"], "1.1.11")
         self.assertNotIn("schema_version", release)  # single PH version since 1.1.8
         self.assertEqual(len(release["required_skills"]), 11)
         self.assertIn("ph-docs-sync", release["required_skills"])
         manifest = json.loads((SCAFFOLD / ".agents/ph.json").read_text())
         self.assertNotIn("schema_version", manifest)
-        self.assertEqual(manifest["template_version"], "1.1.10")
+        self.assertEqual(manifest["template_version"], "1.1.11")
         self.assertEqual(manifest["skills"]["required_names"], release["required_skills"])
         schema = json.loads((SCAFFOLD / ".agents/ph.schema.json").read_text())
         self.assertEqual(schema["$id"], "urn:ph:schema:project-harness")  # fixed, versionless

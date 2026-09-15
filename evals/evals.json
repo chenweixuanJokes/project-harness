@@ -111,14 +111,14 @@
     },
     {
       "id": 19,
-      "prompt": "用户目录里装的 ph-init 还是旧版，刚才升级时脚本报错 illegal release.json: missing schema_version。这个仓库已装 PH，帮我升到 1.1.10。",
-      "expected_output": "触发 ph-init。识别为 1.1.7 及更早入口必然拒绝 1.1.8 及以后包（新包无 schema_version，旧脚本必查该键），不是网络故障，不重试不回退不假称自动恢复。执行一次性入口切换：把已发布 v1.1.8 clone 到新的仓外安全目录，不覆盖用户级入口与目标项目，不用 main 或本地开发树冒充；先用新目录 prepare --version 1.1.8 并读取返回根的 Skill，再由这份新工具准备并固定 1.1.10。之后本会话只用 1.1.10 发行根按 merge-update 步骤 inspect → 语义合并 → verify → finalize 完成，不 init --apply。finalize 通过后项目清单不再含 schema_version，template_version 写 1.1.10。本 eval 不表示已实测。",
+      "prompt": "用户目录里装的 ph-init 还是旧版，刚才升级时脚本报错 illegal release.json: missing schema_version。这个仓库已装 PH，帮我升到 1.1.11。",
+      "expected_output": "触发 ph-init。识别为 1.1.7 及更早入口必然拒绝 1.1.8 及以后包（新包无 schema_version，旧脚本必查该键），不是网络故障，不重试不回退不假称自动恢复。执行一次性入口切换：把已发布 v1.1.8 clone 到新的仓外安全目录，不覆盖用户级入口与目标项目，不用 main 或本地开发树冒充；先用新目录 prepare --version 1.1.8 并读取返回根的 Skill，再由这份新工具准备并固定 1.1.11。之后本会话只用 1.1.11 发行根按 merge-update 步骤 inspect → 语义合并 → verify → finalize 完成，不 init --apply。finalize 通过后项目清单不再含 schema_version，template_version 写 1.1.11。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 20,
-      "prompt": "从 PH 1.1.6 直接升到 1.1.10。项目 ph.json 里还有 schema_version 字段，业务文档和没做完的升级记录都别动。",
-      "expected_output": "触发 ph-init 的升级分流。先通过已发布 v1.1.8 工具取得 1.1.10 发行根，再读完整迁移链 1.1.6→1.1.7→1.1.8→1.1.9→1.1.10，进度目录用最终目标版本 1.1.10；依次处理加星说明、single-ph-version、worktree-auto-branch 和 docs-sync-skill（只装 ph-docs-sync Skill 与规则索引，不自动同步业务文档）。业务正文、既有模式与未完成升级记录保留，已落地项不重做；旧 schema_version 字段仅在 finalize 验收通过后随 template_version=1.1.10 一起移除，schema 换无版本 $id。不重跑文档补全、不 init --apply。本 eval 不表示已实测。",
+      "prompt": "从 PH 1.1.6 直接升到 1.1.11。项目 ph.json 里还有 schema_version 字段，业务文档和没做完的升级记录都别动。",
+      "expected_output": "触发 ph-init 的升级分流。先通过已发布 v1.1.8 工具取得 1.1.11 发行根，再读完整迁移链 1.1.6→1.1.7→1.1.8→1.1.9→1.1.10→1.1.11，进度目录用最终目标版本 1.1.11；依次处理加星说明、single-ph-version、worktree-auto-branch、docs-sync-skill（只装 ph-docs-sync Skill 与规则索引，不自动同步业务文档）、current-branch-defaults（只合并两个 Skill 的分支默认规则，不改变现有分支和 worktree）和 adopt-mode-docs（初始化指引 adopt 命令示例补 --mode auto）。业务正文、既有模式与未完成升级记录保留，已落地项不重做；旧 schema_version 字段仅在 finalize 验收通过后随 template_version=1.1.11 一起移除，schema 换无版本 $id。不重跑文档补全、不 init --apply。本 eval 不表示已实测。",
       "files": []
     },
     {

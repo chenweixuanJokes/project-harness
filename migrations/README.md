@@ -55,3 +55,4 @@
 | [1.1.7 → 1.1.8](./1.1.7-to-1.1.8.md) | 彻底取消独立 Schema 版本，单一 PH 版本与一次性入口切换 | `single-ph-version` |
 | [1.1.8 → 1.1.9](./1.1.8-to-1.1.9.md) | worktree 默认使用当前源分支，任务分支由代理确定；适配层改工具中立三工具拓扑，安全退役 `.codex/skills/ph-*`；官方仓库更名 `project-harness`，产品名 Project Harness，技能名不变 | `worktree-auto-branch` `tool-neutral-adapters` `repository-rename` |
 | [1.1.9 → 1.1.10](./1.1.9-to-1.1.10.md) | 新增第十一个必需 Skill `ph-docs-sync`：对照代码 / 配置 / 锁文件 / CI 核验并按授权修复 README、docs 配置说明、使用示例与 Wiki；升级只装 Skill 与规则索引，不自动同步业务文档 | `docs-sync-skill` |
+| [1.1.10 → 1.1.11](./1.1.10-to-1.1.11.md) | 实现默认留当前分支，worktree 默认从当前分支检出；初始化指引 adopt 命令示例补 `--mode auto` | `current-branch-defaults` `adopt-mode-docs` |

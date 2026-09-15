@@ -92,12 +92,14 @@ OLD_ALIASES = ("ph-intent-capture", "ph-intent-plan", "ph-intent-abandon")
 NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
 TARGET_SKILLS = BASE_SKILLS + NEW_INTENT + ("ph-merge-update", "ph-docs-sync")
 LAYOUT_SKILLS = {
+    "eleven-skills": TARGET_SKILLS,
     "six-skills": BASE_SKILLS,
     "legacy-names": ("ph-init",) + CORE_NON_INIT + OLD_ALIASES,
     "current-names": ("ph-init",) + CORE_NON_INIT + NEW_INTENT,
     "ten-skills": ("ph-init",) + CORE_NON_INIT + NEW_INTENT + ("ph-merge-update",),
 }
 LAYOUT_PROFILE = {
+    "eleven-skills": "1.1.0-current-names",
     "six-skills": "1.0.0",
     "legacy-names": "1.1.0-legacy-names",
     "current-names": "1.1.0-current-names",
@@ -248,7 +250,7 @@ def sources_for_version(version: str):
             f"historical version {version} has no published tag v{version} and no fixed commit source; "
             "the upgrade matrix refuses to fabricate history - publish the tag or register a fixed source"
         )
-    return (("ten-skills", tag),)
+    return (("eleven-skills" if semver_tuple(version) >= (1, 1, 10) else "ten-skills", tag),)
 
 
 def build_cases():
@@ -488,6 +490,24 @@ class HistoricalTree:
 # ---------------------------------------------------------------------------
 
 ENGINE_ENSURE = {
+    "current-branch-defaults": {
+        # 1.1.11 release deltas this item owns: the branch-default rules in
+        # ph-intent-impl and ph-worktree-enter (SKILL.md + evals samples),
+        # plus the runtime-material version refs that follow the release
+        # bump (scaffold ph-merge-update skill, root SKILL.md, release.json,
+        # migrations register this item). Existing branches and worktrees
+        # are never touched by this item.
+        "skills": ("ph-intent-impl", "ph-worktree-enter", "ph-merge-update"),
+        "payload": True,
+    },
+    "adopt-mode-docs": {
+        # 1.1.11 doc-line delta this item owns: the adopt install command's
+        # --mode example in the initialization guide gains the auto option
+        # the CLI has accepted since 1.1.9. The line had stayed at the
+        # 1.1.4-era two-option list; customized guides are preserved by
+        # ensure_file instead of being overwritten.
+        "docs": [f"{W}/初始化与文档补全.md"],
+    },
     "intent-domain": {
         "docs": [
             "docs/意图/README.md", "docs/意图/_模板.md",
@@ -1020,11 +1040,11 @@ def _make_handler(item_id):
             engine.ensure_schema()
         codex_archived, codex_left = [], []
         if spec.get("codex"):
-            # Runs after every skill/payload ensure in this chain: the
-            # classification reflects the final canonical state that the
-            # earlier items and this item's ensures have already produced.
-            # The repository-rename item that follows only re-ensures
-            # already-target materials, so the classification stays valid.
+            # Later hops can change canonical skills after mirror classification.
+            for name in TARGET_SKILLS:
+                if name != "ph-init":
+                    engine.ensure_skill(name)
+            engine.ensure_payload()
             codex_archived, codex_left = engine.retire_codex_mirrors()
         moved = None
         if spec.get("entries") == LEGACY_COMPLETED:

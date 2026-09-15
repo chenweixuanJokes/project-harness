@@ -29,7 +29,7 @@ TRASH_ROOT = Path.home() / "trash"
 FIXED_SOURCE = ph_release.FIXED_SOURCE
 DOWNLOAD_SOURCE = ph_release.DOWNLOAD_SOURCE
 SCHEMA_ID = ph_release.SCHEMA_ID
-CURRENT_VERSION = "1.1.10"
+CURRENT_VERSION = "1.1.11"
 LEGACY_VERSION = "1.1.7"
 DEFAULT_SKILLS = [
     "ph-init",
@@ -738,10 +738,10 @@ class PhReleaseTests(unittest.TestCase):
 
     def test_future_release_can_add_skill_and_prepare(self):
         skills = [*DEFAULT_SKILLS, "ph-future-skill"]
-        files = self.release_files("1.1.11", skills=skills)
-        transport, _ = self.transport_for(files, version="1.1.11")
-        prepared = self.prepare(transport, "1.1.11")
-        self.assertEqual(prepared.version, "1.1.11")
+        files = self.release_files("1.1.12", skills=skills)
+        transport, _ = self.transport_for(files, version="1.1.12")
+        prepared = self.prepare(transport, "1.1.12")
+        self.assertEqual(prepared.version, "1.1.12")
         self.assertTrue(
             (prepared.root / "assets/scaffold/.agents/skills/ph-future-skill/SKILL.md").is_file()
         )

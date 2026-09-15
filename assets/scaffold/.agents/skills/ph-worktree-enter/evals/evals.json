@@ -24,6 +24,7 @@
       "prompt": "给当前这个登录超时修复开一个 worktree，直接创建，不用再问我分支名。",
       "expected_output": "触发 ph-worktree-enter；源分支直接取主工作区当前 attached branch，代理结合修复任务和项目规则自行生成未占用的新任务分支名（例如 fix/login-timeout），审查只读计划和验收命令后直接 apply。正常创建不再询问来源分支、任务分支或是否真正创建；异常安全门禁仍阻断。",
       "files": []
-    }
+    },
+    {"id": 5, "prompt": "当前主工作区在 feature/payments，HEAD 比 main 多两个提交。给修复任务开一个 worktree。", "expected_output": "默认从 feature/payments 当前 HEAD 检出新任务分支，不切换源分支，不改用 main/master/develop 或远端默认分支；审查无异常后按授权创建。", "files": []}
   ]
 }

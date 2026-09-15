@@ -31,12 +31,12 @@ description: "已装 PH 项目升到正式发行版的步骤：从唯一 GitHub 
 准备（下载在目标仓库外）：
 
 ```text
-python3 <ph-init-root>/scripts/ph_release.py prepare --version latest|1.1.10 --repo <target>
+python3 <ph-init-root>/scripts/ph_release.py prepare --version latest|1.1.11 --repo <target>
 ```
 
 stdout JSON 字段：`root` `version` `tag` `commit` `source`。`source` 是固定仓库 URL 字符串（1.x 仍为旧地址，保留兼容含义，不改写、不当错误）。本地已有该 commit 的检查不访问网络。准备成功后把脚本提示转告用户；没登录不拦升级。本会话刚用旧脚本 prepare 时，用发行根补跑 `python3 <release-root>/scripts/ph_release.py support`，不必为了加星再下一遍包。检查 / 同步仍然离线，不重新 prepare，也不为了加星上网。安装和以后升级仍从官方地址进行。
 
-**一次性入口切换**：旧版（1.1.7 及更早）用户级入口的 prepare 必查发行元数据里的 `schema_version`，会必然拒绝 1.1.8 及以后发行包；这是预期现象，不重试、不回退、不假称自动恢复。把首个无独立 Schema 版本的已发布标签 v1.1.8 clone 到一个**新的仓外安全目录**（如 `mktemp -d` 创建），不覆盖用户级入口与目标项目，不用 `main` 或本地开发树冒充发行；先在该目录运行 `python3 <新目录>/scripts/ph_release.py prepare --version 1.1.8` 并读取返回根的 Skill，再用这份新工具准备并固定目标 1.1.10 发行根。之后本文件全部升级命令都使用 1.1.10 prepare 返回的根，不再用旧目录或 v1.1.8 发行根冒充最终目标。1.1.8 及以后入口可直接准备 1.1.10。
+**一次性入口切换**：旧版（1.1.7 及更早）用户级入口的 prepare 必查发行元数据里的 `schema_version`，会必然拒绝 1.1.8 及以后发行包；这是预期现象，不重试、不回退、不假称自动恢复。把首个无独立 Schema 版本的已发布标签 v1.1.8 clone 到一个**新的仓外安全目录**（如 `mktemp -d` 创建），不覆盖用户级入口与目标项目，不用 `main` 或本地开发树冒充发行；先在该目录运行 `python3 <新目录>/scripts/ph_release.py prepare --version 1.1.8` 并读取返回根的 Skill，再用这份新工具准备并固定目标 1.1.11 发行根。之后本文件全部升级命令都使用 1.1.11 prepare 返回的根，不再用旧目录或 v1.1.8 发行根冒充最终目标。1.1.8 及以后入口可直接准备 1.1.11。
 
 同一次预检与写入复用这个 `root`。读该 root 的本 Skill 与 `migrations/`。升级工具在发行根，不在目标旧包：
 
@@ -197,6 +197,18 @@ finalize 成功后清单删除 `adapters.codex_skills`，普通 check 不得再�
 | `docs-sync-skill` | 新必需 Skill `ph-docs-sync` 已从发行根安装到 `.agents/skills/ph-docs-sync/`；`.agents/AGENTS.md` 技能表与 `docs/约束规范/工程规范/文档治理.md` §6、`初始化与文档补全.md` 的规则索引已合并指向该 Skill；**本项不自动同步任何业务文档**（README / docs / Wiki 的核验修复由用户另行发起 `ph-docs-sync`）；项目定制与 adapter mode 保留 |
 
 合并前核对 `.agents/skills/ph-docs-sync/`：旧版（1.1.9 及更早）不携带该 Skill，若项目已有**同名自定义 Skill**，本项 `blocked`，保留原件并请用户决定（改名保留或替换为官方版），不得覆盖；项目规则明确禁止自动修正文档或禁止新增 ph-* Skill 时同样 `blocked`。形态规整的同名目录由 `inspect` 列入冲突清单；无 `SKILL.md` 或含软链等异常形态会先被结构校验直接拒绝，两种路径都 fail-closed。
+
+## 1.1.11 分支默认项
+
+读 `<release-root>/migrations/1.1.10-to-1.1.11.md`，从更早版本出发仍须读完整链。
+
+| id | 做完的样子 |
+| --- | --- |
+| `current-branch-defaults` | `ph-intent-impl` 与 `ph-worktree-enter` 已合并分支与工作区默认规则：启动意图或批准计划不授权新建、切换分支或创建 worktree；worktree 从主工作区当前所在分支的 HEAD 检出，不自动改用 main/master/develop 或远端默认分支。已有分支和 worktree 未被改动 |
+
+## 1.1.11 指引命令示例项
+
+同样读取 `<release-root>/migrations/1.1.10-to-1.1.11.md` 的 `adopt-mode-docs`。`docs/约束规范/工程规范/初始化与文档补全.md` §3.4 adopt 安装命令示例的 `--mode` 选项已包含 `auto`，与 1.1.9 起的新装缺省一致；该文档已有项目定制按段落合并，只改这一行示例。
 
 ## 完成标准
 

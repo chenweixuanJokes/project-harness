@@ -58,12 +58,14 @@ CHAIN_110 = [
     "tool-neutral-adapters",
     "repository-rename",
     "docs-sync-skill",
+    "current-branch-defaults",
+    "adopt-mode-docs",
 ]
 CHAIN_100 = ["intent-domain", *CHAIN_110]
 CHAIN_111 = CHAIN_110[6:]  # everything after the 1.1.0 -> 1.1.1 hop
-CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill"]
-CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill"]
-CHAIN_119 = ["docs-sync-skill"]
+CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs"]
+CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs"]
+CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs"]
 CHAIN_112 = [
     "init-docs-workflow",
     "docs-guidance",
@@ -338,7 +340,8 @@ class MergeUpdateTests(unittest.TestCase):
                                "adopt-plan-init", "adopt-existing-content", "init-report-coverage",
                                "init-unified-entry", "plain-user-questions",
                                "prepare-star-fork", "single-ph-version", "worktree-auto-branch",
-                               "tool-neutral-adapters", "repository-rename", "docs-sync-skill"])
+                               "tool-neutral-adapters", "repository-rename", "docs-sync-skill",
+                               "current-branch-defaults", "adopt-mode-docs"])
         state = self.write_state(repo, from_version="1.1.2", items=ids)
         before_manifest = manifest_path.read_bytes()
         for status in ("pending", "blocked"):
@@ -554,6 +557,9 @@ class MergeUpdateTests(unittest.TestCase):
         # Marking the blocked item applied while the custom skill stays in
         # place must not pass verify: the installed skill has to match the
         # release bytes during the 1.1.10 upgrade.
+        for item in state["items"]:
+            item["status"] = "applied"
+            item["evidence"] = "fixture already contains the target skill defaults"
         docs_sync["status"] = "applied"
         docs_sync["evidence"] = "falsely claims the release skill was installed"
         self.write_json(dest / "state.json", state)
