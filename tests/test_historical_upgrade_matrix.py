@@ -7,7 +7,13 @@ objects, installs it into an isolated git repo with that version's own
 ``ph_merge_update.py`` flow (inspect -> semantic merge -> verify -> finalize
 dry-run -> finalize --apply -> installed check -> repeated idempotent runs)
 from an offline but genuinely verified prepared release, and asserts that every
-piece of project content survives byte-for-byte.
+piece of project content survives byte-for-byte. The one exception is the
+1.1.12 question-spec overwrite: ``docs/约束规范/工程规范/对用户提问.md`` is
+replaced wholesale with the release-root bytes (the pre-overwrite original is
+first moved to the same recovery trash used for retired files) under the
+``question-execution-contract`` item's explicit overwrite authorization, so
+file-internal project question rules do not survive as effective rules; the
+fixture asserts exactly that byte-identity and the recoverable backup.
 
 The semantic merge is performed by explicit per-migration-item handlers. A
 migration item that is not in the handler registry fails the test instead of
@@ -134,6 +140,14 @@ GOVERNANCE_APPEND = (
 INDEX_CUSTOM_BLOCK = (
     "\n## 项目索引定制（升级矩阵）\n\n"
     "本节是项目自定义索引说明：列出待办新特性时须同时标注访谈纪要链接。\n"
+)
+# A file-internal project question rule that conflicts with the 1.1.12
+# contract: the question-execution-contract overwrite must replace it (with a
+# recoverable backup) instead of preserving it as an effective rule.
+QUESTION_APPEND = (
+    "\n## 项目提问定制（升级矩阵）\n\n"
+    "本节是项目自定义提问规则：向用户确认前必须逐字使用固定话术模板，禁止调用宿主结构化问答工具。"
+    "1.1.12 覆盖策略授权本文件整文件替换：本节不得保留为仍生效的规则，覆盖前旧原文须备份可恢复。\n"
 )
 MIGRATION_DAY = "2026-09-09"
 REASON_PENDING = "记录显示尚未启动实施"
@@ -636,6 +650,33 @@ ENGINE_ENSURE = {
         "agents": True,
         "docs": [f"{W}/文档治理.md", f"{W}/初始化与文档补全.md"],
     },
+    "question-execution-contract": {
+        # 1.1.12 release deltas this item owns: the question spec rewritten as
+        # an execution contract (whether to ask / channel and real tool calls /
+        # question quality / answer states / recovery / boundary examples, no
+        # numbered sections), the semantic reference updates in the specs,
+        # memory README and canonical AGENTS that used to pin its numbered
+        # sections, the gate-question wording in the skills citing it, and the
+        # runtime-material version refs that follow the release bump. Answers
+        # and authorizations already given to the project are never re-asked.
+        # The question spec file itself carries this item's whole-file
+        # overwrite authorization ("overwrite"): it is replaced with the
+        # release-root bytes after a recoverable trash backup, never
+        # semantically merged, so file-internal project question rules do not
+        # survive as effective rules; conflicting rules in other files still
+        # block, and the flow's write confirmation and file safety checks
+        # still apply.
+        "payload": True,
+        "docs": [
+            f"{W}/对用户提问.md", f"{W}/意图与访谈.md", f"{W}/初始化与文档补全.md",
+            f"{W}/Git与并行开发.md", f"{W}/README.md", ".agents/memory/README.md",
+        ],
+        "overwrite": (f"{W}/对用户提问.md",),
+        "skills": ("ph-intent-new", "ph-intent-impl", "ph-intent-drop",
+                   "ph-memory-capture", "ph-memory-ask", "ph-worktree-exit",
+                   "ph-merge-update"),
+        "agents": True,
+    },
 }
 SPECIAL_SCAFFOLD_RELS = {".gitignore", ".agents/ph.json", ".agents/ph.schema.json", ".agents/AGENTS.md"}
 
@@ -694,7 +735,14 @@ def rename_contract_facts(repo: Path, prepared) -> list[str]:
 
 
 class MergeEngine:
-    """Agent-side semantic merge with an explicit template-drift policy."""
+    """Agent-side semantic merge with an explicit template-drift policy.
+
+    Customized scaffold files are preserved by default (``ensure_file``);
+    the only exception is a migration item's explicit overwrite
+    authorization (``overwrite_scaffold``), currently the 1.1.12 question
+    spec, which backs the original up to the recovery trash before replacing
+    it wholesale.
+    """
 
     def __init__(self, repo: Path, case: dict, prepared: PreparedTarget, hist: HistoricalTree,
                  trash: Path, before_digests: dict[str, str]):
@@ -706,6 +754,9 @@ class MergeEngine:
         self.mutations: list[str] = []
         self.preserved: set[str] = set()   # customized files the engine chose not to touch
         self.rewritten: set[str] = set()   # index files the entry migration rewrote
+        # Item-level overwrite policy outcome (1.1.12 question spec):
+        # repo-rel path -> recoverable backup file in the engine trash.
+        self.overwrite_backups: dict[str, Path] = {}
         # tool-neutral-adapters outcome: live .codex/skills/ph-* names at
         # handler time, which of them this engine archived itself, and which
         # provably-managed ones stayed in place for finalize --apply.
@@ -715,11 +766,13 @@ class MergeEngine:
 
     # -- primitives ---------------------------------------------------------
 
-    def trash_move(self, path: Path):
+    def trash_move(self, path: Path) -> Path | None:
         if not path.exists() and not path.is_symlink():
-            return
+            return None
         self.trash.mkdir(parents=True, exist_ok=True)
-        path.rename(self.trash / f"{time.time_ns()}-{path.name}")
+        dest = self.trash / f"{time.time_ns()}-{path.name}"
+        path.rename(dest)
+        return dest
 
     def ensure_file(self, repo_rel: str, target: Path, hist_path: Path | None) -> str:
         dest = self.repo / repo_rel
@@ -746,6 +799,38 @@ class MergeEngine:
     def ensure_scaffold(self, rel: str) -> str:
         hist = self.hist.scaffold_dir / rel
         return self.ensure_file(rel, self.prepared.scaffold_dir / rel, hist if hist.exists() else None)
+
+    def overwrite_scaffold(self, rel: str) -> str:
+        """Replace one scaffold file wholesale under an item-level overwrite
+        authorization (1.1.12 question spec).
+
+        The pre-overwrite original first moves to the same recovery trash the
+        engine already uses for retired files, so it stays recoverable; a
+        file already at target bytes is left untouched, so a retry neither
+        re-copies the file nor creates a duplicate backup nor clobbers the
+        recorded original. Symlink and non-regular-file refusals match
+        ``ensure_file``; a file replaced here is no longer reported as
+        preserved.
+        """
+        dest = self.repo / rel
+        if dest.is_symlink():
+            raise AssertionError(f"refusing to write through symlink: {rel}")
+        target_bytes = (self.prepared.scaffold_dir / rel).read_bytes()
+        if dest.is_file() and dest.read_bytes() == target_bytes:
+            return "ok"
+        if dest.exists():
+            if not dest.is_file():
+                raise AssertionError(f"overwrite path is not a regular file: {rel}")
+            backup = self.trash_move(dest)
+            assert backup is not None, f"trash move failed for {rel}"
+            self.overwrite_backups[rel] = backup
+            self.mutations.append(f"backup+overwrite {rel} (item-level overwrite policy)")
+        else:
+            self.mutations.append(f"create {rel} (item-level overwrite policy)")
+        self.preserved.discard(rel)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(target_bytes)
+        return "overwrite"
 
     def merge_agents(self):
         rel = ".agents/AGENTS.md"
@@ -1024,7 +1109,14 @@ def _make_handler(item_id):
     def handler(engine: MergeEngine):
         mark = len(engine.mutations)
         extra = []
+        overwritten_rels = set(spec.get("overwrite", ()))
+        for rel in spec.get("overwrite", ()):
+            if rel not in engine.prepared.scaffold_files:
+                raise AssertionError(f"overwrite scope references a scaffold file missing from the target: {rel}")
+            engine.overwrite_scaffold(rel)
         for rel in spec.get("docs", []):
+            if rel in overwritten_rels:
+                continue
             if rel not in engine.prepared.scaffold_files:
                 raise AssertionError(f"scope references a scaffold file missing from the target: {rel}")
             engine.ensure_scaffold(rel)
@@ -1302,6 +1394,18 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     governance = repo / W / "文档治理.md"
     governance.write_bytes(governance.read_bytes() + GOVERNANCE_APPEND.encode("utf-8"))
 
+    # File-internal project question rule for the 1.1.12 overwrite policy:
+    # question-execution-contract must replace the file wholesale (with a
+    # recoverable backup) instead of preserving this customization.
+    # Historical installs before 1.1.6 carry no question spec at all; there
+    # the chain creates the official file and there is nothing to overwrite.
+    question_rel = f"{W}/对用户提问.md"
+    overwritten_bytes: dict[str, bytes] = {}
+    question_spec = repo / question_rel
+    if question_spec.is_file():
+        question_spec.write_bytes(question_spec.read_bytes() + QUESTION_APPEND.encode("utf-8"))
+        overwritten_bytes[question_rel] = question_spec.read_bytes()
+
     # User-owned content inside the retired .codex adapter area: non ph-*
     # entries must survive the 1.1.9 tool-neutral retirement byte-for-byte.
     codex_tool = repo / ".codex" / "skills" / "my-tool"
@@ -1361,11 +1465,14 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     }
     if not old_layout:
         customized_scaffold.add("docs/意图/待办/新特性/README.md")
+    if overwritten_bytes:
+        customized_scaffold.add(question_rel)
     return {
         "preserved_bytes": preserved,
         "moved_entries": moved,
         "agents_tail": AGENTS_TAIL.encode("utf-8"),
         "customized_scaffold_paths": customized_scaffold,
+        "overwritten_bytes": overwritten_bytes,
     }
 
 
@@ -1540,6 +1647,31 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             path = repo / rel
             self.assertTrue(path.is_file(), f"preserved file missing after upgrade: {rel}")
             self.assertEqual(path.read_bytes(), expected, f"preserved content drifted: {rel}")
+        # 7b) 1.1.12 question-spec overwrite: the file must be byte-identical
+        # to the release root (no merged-in old wording or project rule), and
+        # when the historical install carried the spec, its pre-overwrite
+        # original must stay recoverable in the engine trash.
+        question_rel = f"{W}/对用户提问.md"
+        target_question = (prepared.scaffold_dir / question_rel).read_bytes()
+        self.assertFalse((repo / question_rel).is_symlink())
+        self.assertEqual(
+            (repo / question_rel).read_bytes(), target_question,
+            "the question spec must be byte-identical to the release root after the upgrade",
+        )
+        if custom["overwritten_bytes"]:
+            original_question = custom["overwritten_bytes"][question_rel]
+            self.assertNotEqual(original_question, target_question,
+                                "fixture customization must differ from the target spec")
+            self.assertNotIn(question_rel, engine.preserved,
+                             "the overwritten question spec must not be reported as preserved")
+            backup = engine.overwrite_backups.get(question_rel)
+            self.assertIsNotNone(backup, "the overwritten question spec lost its pre-overwrite backup")
+            self.assertTrue(backup.is_file(), f"backup missing after upgrade: {backup}")
+            self.assertEqual(backup.read_bytes(), original_question,
+                             "the backup must hold the pre-overwrite original bytes")
+        else:
+            self.assertNotIn(question_rel, engine.overwrite_backups,
+                             "a never-customized question spec must not be backed up")
         for name, src_dir, dst_dir, original, reason in custom["moved_entries"]:
             path = repo / "docs" / "意图" / dst_dir / name
             self.assertTrue(path.is_file(), f"moved intent entry missing: {dst_dir}/{name}")
@@ -1657,11 +1789,16 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         # Scaffold drift is allowed on exactly two classes of files: the ones
         # this fixture customized, and the index READMEs the entry migration
         # rewrote. The engine's own preserved set must equal the customized
-        # files it was actually asked to ensure - anything more or less fails.
+        # files it was actually asked to ensure - minus the question spec the
+        # 1.1.12 overwrite policy replaced (it ends at target bytes, so it
+        # shows no drift and must never appear as preserved) - anything more
+        # or less fails.
         ensured_rels = set()
         for item_id in item_ids:
             ensured_rels.update(ENGINE_ENSURE[item_id].get("docs", []))
-        expected_preserved = {rel for rel in custom["customized_scaffold_paths"] if rel in ensured_rels}
+        expected_preserved = {
+            rel for rel in custom["customized_scaffold_paths"] if rel in ensured_rels
+        } - set(custom["overwritten_bytes"])
         self.assertEqual(
             {rel for rel in engine.preserved if not rel.startswith(".agents/skills/")},
             expected_preserved,
@@ -1728,6 +1865,28 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         again = self.run_tool("finalize", "--apply", repo=repo, prepared=prepared)
         self.assertTrue(again["complete"])
         self.assertEqual(digest_tree(repo), after_upgrade, "repeated finalize must not change the repository")
+
+        # 10) 1.1.12 overwrite retry: re-running the item handler on the
+        # upgraded repo is a no-op - the file stays at target bytes, no new
+        # backup copy appears, and the recoverable pre-overwrite original
+        # keeps its bytes (a retry must not clobber the backup with newer
+        # content).
+        question_rel = f"{W}/对用户提问.md"
+        backup_before = engine.overwrite_backups.get(question_rel)
+        mutations_before = list(engine.mutations)
+        trash_names = sorted(p.name for p in self.trash_run.glob(f"*-{Path(question_rel).name}"))
+        HANDLERS["question-execution-contract"](engine)
+        self.assertEqual(engine.mutations, mutations_before, "retry re-ran the overwrite")
+        self.assertEqual(engine.overwrite_backups.get(question_rel), backup_before)
+        self.assertEqual(
+            sorted(p.name for p in self.trash_run.glob(f"*-{Path(question_rel).name}")),
+            trash_names, "retry created a duplicate question-spec backup",
+        )
+        self.assertEqual((repo / question_rel).read_bytes(),
+                         (prepared.scaffold_dir / question_rel).read_bytes())
+        if backup_before is not None:
+            self.assertTrue(backup_before.is_file(), "retry lost the recoverable original")
+            self.assertEqual(backup_before.read_bytes(), custom["overwritten_bytes"][question_rel])
 
     # -- tests ---------------------------------------------------------------
 

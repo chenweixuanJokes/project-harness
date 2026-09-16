@@ -111,14 +111,14 @@
     },
     {
       "id": 19,
-      "prompt": "用户目录里装的 ph-init 还是旧版，刚才升级时脚本报错 illegal release.json: missing schema_version。这个仓库已装 PH，帮我升到 1.1.11。",
-      "expected_output": "触发 ph-init。识别为 1.1.7 及更早入口必然拒绝 1.1.8 及以后包（新包无 schema_version，旧脚本必查该键），不是网络故障，不重试不回退不假称自动恢复。执行一次性入口切换：把已发布 v1.1.8 clone 到新的仓外安全目录，不覆盖用户级入口与目标项目，不用 main 或本地开发树冒充；先用新目录 prepare --version 1.1.8 并读取返回根的 Skill，再由这份新工具准备并固定 1.1.11。之后本会话只用 1.1.11 发行根按 merge-update 步骤 inspect → 语义合并 → verify → finalize 完成，不 init --apply。finalize 通过后项目清单不再含 schema_version，template_version 写 1.1.11。本 eval 不表示已实测。",
+      "prompt": "用户目录里装的 ph-init 还是旧版，刚才升级时脚本报错 illegal release.json: missing schema_version。这个仓库已装 PH，帮我升到 1.1.12。",
+      "expected_output": "触发 ph-init。识别为 1.1.7 及更早入口必然拒绝 1.1.8 及以后包（新包无 schema_version，旧脚本必查该键），不是网络故障，不重试不回退不假称自动恢复。执行一次性入口切换：把已发布 v1.1.8 clone 到新的仓外安全目录，不覆盖用户级入口与目标项目，不用 main 或本地开发树冒充；先用新目录 prepare --version 1.1.8 并读取返回根的 Skill，再由这份新工具准备并固定 1.1.12。之后本会话只用 1.1.12 发行根按 merge-update 步骤 inspect → 语义合并 → verify → finalize 完成，不 init --apply。finalize 通过后项目清单不再含 schema_version，template_version 写 1.1.12。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 20,
-      "prompt": "从 PH 1.1.6 直接升到 1.1.11。项目 ph.json 里还有 schema_version 字段，业务文档和没做完的升级记录都别动。",
-      "expected_output": "触发 ph-init 的升级分流。先通过已发布 v1.1.8 工具取得 1.1.11 发行根，再读完整迁移链 1.1.6→1.1.7→1.1.8→1.1.9→1.1.10→1.1.11，进度目录用最终目标版本 1.1.11；依次处理加星说明、single-ph-version、worktree-auto-branch、docs-sync-skill（只装 ph-docs-sync Skill 与规则索引，不自动同步业务文档）、current-branch-defaults（只合并两个 Skill 的分支默认规则，不改变现有分支和 worktree）和 adopt-mode-docs（初始化指引 adopt 命令示例补 --mode auto）。业务正文、既有模式与未完成升级记录保留，已落地项不重做；旧 schema_version 字段仅在 finalize 验收通过后随 template_version=1.1.11 一起移除，schema 换无版本 $id。不重跑文档补全、不 init --apply。本 eval 不表示已实测。",
+      "prompt": "从 PH 1.1.6 直接升到 1.1.12。项目 ph.json 里还有 schema_version 字段，业务文档和没做完的升级记录都别动。",
+      "expected_output": "触发 ph-init 的升级分流。先通过已发布 v1.1.8 工具取得 1.1.12 发行根，再读完整迁移链 1.1.6→1.1.7→1.1.8→1.1.9→1.1.10→1.1.11→1.1.12，进度目录用最终目标版本 1.1.12；依次处理加星说明、single-ph-version、worktree-auto-branch、docs-sync-skill（只装 ph-docs-sync Skill 与规则索引，不自动同步业务文档）、current-branch-defaults（只合并两个 Skill 的分支默认规则，不改变现有分支和 worktree）、adopt-mode-docs（初始化指引 adopt 命令示例补 --mode auto）和 question-execution-contract（对用户提问合并为执行契约，引用改语义落点，不重问已决定的事）。业务正文、既有模式与未完成升级记录保留，已落地项不重做；旧 schema_version 字段仅在 finalize 验收通过后随 template_version=1.1.12 一起移除，schema 换无版本 $id。不重跑文档补全、不 init --apply。本 eval 不表示已实测。",
       "files": []
     },
     {
@@ -149,6 +149,18 @@
       "id": 25,
       "prompt": "仓库改了不少代码，帮我同步一下文档：核对 README 和 docs 里的配置说明、使用示例跟现在的代码、锁文件、CI 是否一致，不一致的改掉。",
       "expected_output": "不触发 ph-init；这是 ph-docs-sync 的职责：对照当前代码、配置、锁文件、CI 全量核验（近 7 天提交只作线索），用户已明确要求同步修复，在授权范围内只修可直接证实的不一致并逐项报告文件与依据；规范冲突不降级规范，不自动造记忆 / 意图、不 git 操作、不改 template_version。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 26,
+      "prompt": "按旧版《对用户提问》执行的两次翻车：一次是代理说“我接下来会用选择题问你”，然后只在正文里列了三个选项就干等，没用任何问答工具；另一次是代理把“问题已经提交给你了”当成“用户已同意”，直接清掉了旧实例数据。现在有一个真正需要用户决定的问题（是否保留旧实例和数据），当前宿主有能表达它的结构化问答工具。请按最新规范处理。",
+      "expected_output": "按对用户提问执行契约纠正两类旧行为：宿主有能合理表达当前问题的结构化问答工具时必须实际调用，正文列选项、预告“我会问”或承诺“下次用工具”都不能代替调用；已提交问题、收到回答、取得操作授权是三个不同状态，提交不等于同意，清空或删除这类重大授权不能由提交状态、推荐项或沉默推定。本次先把存量兼容事实查清，再用工具实际提交“这次改造需要保留已有实例和数据吗”，拿到真实回答前不执行依赖该决定的动作。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 27,
+      "prompt": "一个仍需用户决定的问题，问答工具刚才连续报错没能提交，代理只在正文里说明了情况。现在工具恢复，用户说“用 Ask 把刚才的问题发我”；另外同一会话里用户此前曾取消过另一个无关问题。",
+      "expected_output": "按对用户提问执行契约处理降级与恢复：工具故障时降级为可见文字提问是明确例外，但必须如实说明工具未成功提交，不假称已通过工具提问；不能仅凭 error 状态默认技术故障，要按具体原因区分权限拒绝、用户取消或跳过与无法确认原因的无有效回答，被取消的问题保持未决，不换通道强迫再选、不解释成同意。现在工具已恢复且用户明确要求继续，必须实际调用工具提交同一决定，不以“这次会用”或再次说明代替；回答到达前不执行依赖该决定的动作。本 eval 不表示已实测。",
       "files": []
     }
   ]

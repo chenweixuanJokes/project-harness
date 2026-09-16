@@ -109,6 +109,14 @@
         "current-branch-defaults",
         "adopt-mode-docs"
       ]
+    },
+    {
+      "from_version": "1.1.11",
+      "to_version": "1.1.12",
+      "path": "migrations/1.1.11-to-1.1.12.md",
+      "items": [
+        "question-execution-contract"
+      ]
     }
   ]
 }

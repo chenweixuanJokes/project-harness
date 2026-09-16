@@ -60,12 +60,13 @@ CHAIN_110 = [
     "docs-sync-skill",
     "current-branch-defaults",
     "adopt-mode-docs",
+    "question-execution-contract",
 ]
 CHAIN_100 = ["intent-domain", *CHAIN_110]
 CHAIN_111 = CHAIN_110[6:]  # everything after the 1.1.0 -> 1.1.1 hop
-CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs"]
-CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs"]
-CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs"]
+CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract"]
+CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract"]
+CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract"]
 CHAIN_112 = [
     "init-docs-workflow",
     "docs-guidance",
@@ -341,7 +342,8 @@ class MergeUpdateTests(unittest.TestCase):
                                "init-unified-entry", "plain-user-questions",
                                "prepare-star-fork", "single-ph-version", "worktree-auto-branch",
                                "tool-neutral-adapters", "repository-rename", "docs-sync-skill",
-                               "current-branch-defaults", "adopt-mode-docs"])
+                               "current-branch-defaults", "adopt-mode-docs",
+                               "question-execution-contract"])
         state = self.write_state(repo, from_version="1.1.2", items=ids)
         before_manifest = manifest_path.read_bytes()
         for status in ("pending", "blocked"):

@@ -56,3 +56,4 @@
 | [1.1.8 → 1.1.9](./1.1.8-to-1.1.9.md) | worktree 默认使用当前源分支，任务分支由代理确定；适配层改工具中立三工具拓扑，安全退役 `.codex/skills/ph-*`；官方仓库更名 `project-harness`，产品名 Project Harness，技能名不变 | `worktree-auto-branch` `tool-neutral-adapters` `repository-rename` |
 | [1.1.9 → 1.1.10](./1.1.9-to-1.1.10.md) | 新增第十一个必需 Skill `ph-docs-sync`：对照代码 / 配置 / 锁文件 / CI 核验并按授权修复 README、docs 配置说明、使用示例与 Wiki；升级只装 Skill 与规则索引，不自动同步业务文档 | `docs-sync-skill` |
 | [1.1.10 → 1.1.11](./1.1.10-to-1.1.11.md) | 实现默认留当前分支，worktree 默认从当前分支检出；初始化指引 adopt 命令示例补 `--mode auto` | `current-branch-defaults` `adopt-mode-docs` |
+| [1.1.11 → 1.1.12](./1.1.11-to-1.1.12.md) | 对用户提问重写为执行契约：是否问、通道与工具实际调用、问题质量、答案三态处理、失误纠正与中断恢复、边界示例；引用改语义落点，不再锚定章节号；该文件整文件覆盖（旧原文备份后替换），不保留文件内项目定制 | `question-execution-contract` |

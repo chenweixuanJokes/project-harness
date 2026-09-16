@@ -86,16 +86,31 @@ class WorktreeEnterTests(unittest.TestCase):
         self.assertEqual(Path(session["taskPath"]), task_path)
 
     def test_shipped_skill_does_not_require_normal_creation_confirmation(self):
+        """Behavioral boundary (semantic, not sentence-bank anchored).
+
+        An explicit creation request is itself the authorization: the source
+        is the main worktree's current branch, the task branch is derived by
+        the agent, and none of the two nor the actual creation is re-asked.
+        Abnormal findings stop the flow instead of turning the already-given
+        authorization back into a confirmation question. Both the skill and
+        the question contract's boundary example must state this.
+        """
         skill = (REPO_ROOT / "assets/scaffold/.agents/skills/ph-worktree-enter/SKILL.md").read_text(encoding="utf-8")
         questions = (REPO_ROOT / "assets/scaffold/docs/约束规范/工程规范/对用户提问.md").read_text(encoding="utf-8")
-        for text in (skill, questions):
-            self.assertIn("主工作区当前", text)
-            self.assertIn("任务分支", text)
-            self.assertIn("不再", text)
-        self.assertIn("代理结合当前任务语义", skill)
-        self.assertIn("审查通过后直接加 `--apply`", skill)
-        self.assertNotIn("确认后我才会真正创建", questions)
-        self.assertNotIn("用新分支还是复用已有分支", skill)
+        # authorization premise and source-branch semantics in the skill
+        self.assertIn("用户明确要求", skill)
+        self.assertIn("当前所在分支", skill)
+        # no re-asking of source branch, task branch, or actual creation
+        self.assertIn("不再询问", skill)
+        self.assertNotIn("确认后我才会真正创建", skill)
+        # safety gates still stop abnormal runs instead of re-asking everything
+        self.assertIn("仍须停止", skill)
+        # the question contract's boundary example states the same behavior
+        self.assertIn("用户明确要求创建隔离工作区", questions)
+        self.assertIn("主工作区当前分支", questions)
+        self.assertIn("任务分支按项目规则确定", questions)
+        self.assertIn("不再询问", questions)
+        self.assertIn("安全阻断", questions)
 
 
 if __name__ == "__main__":

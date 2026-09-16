@@ -21,7 +21,7 @@ description: 将 PH 管理的任务 worktree 按“验证、受控提交、合�
 - clean：跳过提交；
 - 只有 staged：只提交 index；
 - 只有 tracked unstaged：执行 `git add -u` 后提交；
-- staged 与 unstaged 并存，或存在任何 untracked 文件：停止，由用户决定范围；对用户问“这次提交要包括哪些”，见 [对用户提问](../../../docs/约束规范/工程规范/对用户提问.md) 第 4 节。
+- staged 与 unstaged 并存，或存在任何 untracked 文件：停止，由用户决定范围；对用户问“这次提交要包括哪些”，问法见 [对用户提问](../../../docs/约束规范/工程规范/对用户提问.md) 的“把问题写成可回答的决定”。
 - ignored 文件永不加入；疑似密钥文件名或异常大文件阻断；
 - 需要提交时必须提供符合项目规范的消息，保留项目 hooks、签名和 Git author 配置。
 

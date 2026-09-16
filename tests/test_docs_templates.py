@@ -60,13 +60,13 @@ class DocsTemplateTests(unittest.TestCase):
 
     def test_docs_migration_keeps_single_version_contract(self):
         release = json.loads((ROOT / "release.json").read_text())
-        self.assertEqual(release["version"], "1.1.11")
+        self.assertEqual(release["version"], "1.1.12")
         self.assertNotIn("schema_version", release)  # single PH version since 1.1.8
         self.assertEqual(len(release["required_skills"]), 11)
         self.assertIn("ph-docs-sync", release["required_skills"])
         manifest = json.loads((SCAFFOLD / ".agents/ph.json").read_text())
         self.assertNotIn("schema_version", manifest)
-        self.assertEqual(manifest["template_version"], "1.1.11")
+        self.assertEqual(manifest["template_version"], "1.1.12")
         self.assertEqual(manifest["skills"]["required_names"], release["required_skills"])
         schema = json.loads((SCAFFOLD / ".agents/ph.schema.json").read_text())
         self.assertEqual(schema["$id"], "urn:ph:schema:project-harness")  # fixed, versionless
@@ -85,6 +85,12 @@ class DocsTemplateTests(unittest.TestCase):
         hop_1110 = next(h for h in hops if h["from_version"] == "1.1.9")
         self.assertEqual(hop_1110["to_version"], "1.1.10")
         self.assertEqual(hop_1110["items"], ["docs-sync-skill"])
+        hop_1111 = next(h for h in hops if h["from_version"] == "1.1.10")
+        self.assertEqual(hop_1111["to_version"], "1.1.11")
+        self.assertEqual(hop_1111["items"], ["current-branch-defaults", "adopt-mode-docs"])
+        hop_1112 = next(h for h in hops if h["from_version"] == "1.1.11")
+        self.assertEqual(hop_1112["to_version"], "1.1.12")
+        self.assertEqual(hop_1112["items"], ["question-execution-contract"])
 
     def test_single_ph_version_migration_documented(self):
         doc = (ROOT / "migrations/1.1.7-to-1.1.8.md").read_text(encoding="utf-8")
@@ -112,6 +118,16 @@ class DocsTemplateTests(unittest.TestCase):
         for term in ("docs-sync-skill", "ph-docs-sync", "1.1.9", "1.1.10",
                      "十一个必需 Skill", "不自动同步任何业务文档", "同名自定义 Skill",
                      "blocked", "adapter mode"):
+            self.assertIn(term, doc)
+
+    def test_question_execution_contract_migration_documented(self):
+        doc = (ROOT / "migrations/1.1.11-to-1.1.12.md").read_text(encoding="utf-8")
+        for heading in ("## why", "## from", "## to", "## affected",
+                        "## preserve", "## conflict", "## verify"):
+            self.assertIn(heading, doc)
+        for term in ("question-execution-contract", "对用户提问", "执行契约", "1.1.11",
+                     "1.1.12", "实际调用", "降级", "三个不同状态", "整文件覆盖",
+                     "逐字节一致", "备份", "语义引用", "blocked", "adapter mode"):
             self.assertIn(term, doc)
 
     def test_docs_sync_skill_shipped_and_indexed(self):
