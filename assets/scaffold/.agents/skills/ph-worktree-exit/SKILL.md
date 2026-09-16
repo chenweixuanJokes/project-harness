@@ -1,6 +1,6 @@
 ---
 name: ph-worktree-exit
-description: 将 PH 管理的任务 worktree 按“验证、受控提交、合并回进入时记录的源工作区、再次验证”交付，并在另行取得用户确认后清理本次 worktree。只要用户说“退出 worktree”“收口并合回主目录”“完成这个并行任务”或调用 ph-worktree-exit，都必须使用本技能。普通提交、普通合并、仅废弃或变更意图状态、非 PH 登记的 worktree、仅询问 Git 用法时不要使用；不得自动 push、删分支、stash、force 或清理其它会话。
+description: 将 PH 管理的任务 worktree 按“验证、受控提交、合并回进入时记录的源工作区、再次验证”交付，并在另行取得用户确认后清理本次 worktree。调用门禁：仅当用户当轮明确点名 ph-worktree-exit（如「用 ph-worktree-exit 收口」）并要求使用时才调用；只说“退出 worktree”“收口合回主目录”“完成这个并行任务”等普通描述、上下文提及或讨论技能名称都不触发。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。普通提交、普通合并、仅废弃或变更意图状态、非 PH 登记的 worktree、仅询问 Git 用法时不要使用；不得自动 push、删分支、stash、force 或清理其它会话。
 ---
 
 # ph-worktree-exit

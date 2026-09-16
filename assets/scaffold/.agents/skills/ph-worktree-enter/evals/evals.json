@@ -3,28 +3,39 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "这个需求和当前修复要并行做，帮我从主工作区开一个 feature/agent-search 的隔离 worktree。",
+      "prompt": "用 ph-worktree-enter 给这个需求开一个隔离 worktree，从主工作区创建，任务分支用 feature/agent-search。",
       "expected_output": "触发 ph-worktree-enter；源分支直接取主工作区当前 feature 分支，使用用户已给出的新任务分支 feature/agent-search，读取项目规范并审查只读计划；用户的创建请求已经授权本次正常创建，计划无异常时直接 apply，创建 PH session 与 linked worktree，不再询问分支或是否真正创建。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "主目录现在有未提交修改，但我想立刻进入另一个 worktree，你帮我处理。",
+      "prompt": "用 ph-worktree-enter 进入隔离工作区，但主目录现在有未提交修改，帮我处理一下。",
       "expected_output": "触发 ph-worktree-enter，但阻断创建；列出脏状态，不自动 commit、stash 或丢弃。",
       "files": []
     },
     {
       "id": 3,
+      "prompt": "这个需求和当前修复要并行做，帮我开一个隔离 worktree。",
+      "expected_output": "不触发 ph-worktree-enter：用户只描述并行需求，没有点名技能；普通描述不触发，不擅自创建 worktree，也不只给口头方案当作已执行。",
+      "files": []
+    },
+    {
+      "id": 4,
       "prompt": "把当前分支切换到 release/sit 看一下代码，不需要并行工作区。",
       "expected_output": "不触发 ph-worktree-enter；这是普通切换分支且用户明确不需要 worktree。",
       "files": []
     },
     {
-      "id": 4,
-      "prompt": "给当前这个登录超时修复开一个 worktree，直接创建，不用再问我分支名。",
-      "expected_output": "触发 ph-worktree-enter；源分支直接取主工作区当前 attached branch，代理结合修复任务和项目规则自行生成未占用的新任务分支名（例如 fix/login-timeout），审查只读计划和验收命令后直接 apply。正常创建不再询问来源分支、任务分支或是否真正创建；异常安全门禁仍阻断。",
+      "id": 5,
+      "prompt": "用 ph-worktree-enter 给当前这个登录超时修复开一个 worktree，直接创建，不用再问我分支名。",
+      "expected_output": "触发 ph-worktree-enter；源分支直接取主工作区当前 attached branch，代理结合修复任务和项目规则自行生成未占用的新任务分支名（例如 fix/login-timeout），审查无异常后按授权创建。",
       "files": []
     },
-    {"id": 5, "prompt": "当前主工作区在 feature/payments，HEAD 比 main 多两个提交。给修复任务开一个 worktree。", "expected_output": "默认从 feature/payments 当前 HEAD 检出新任务分支，不切换源分支，不改用 main/master/develop 或远端默认分支；审查无异常后按授权创建。", "files": []}
+    {
+      "id": 6,
+      "prompt": "用 ph-worktree-enter 开一个 worktree。当前主工作区在 feature/payments，HEAD 比 main 多两个提交。",
+      "expected_output": "默认从 feature/payments 当前 HEAD 检出新任务分支，不切换源分支，不改用 main/master/develop 或远端默认分支；审查无异常后按授权创建。",
+      "files": []
+    }
   ]
 }

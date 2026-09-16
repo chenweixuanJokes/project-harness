@@ -117,6 +117,15 @@
       "items": [
         "question-execution-contract"
       ]
+    },
+    {
+      "from_version": "1.1.12",
+      "to_version": "1.1.13",
+      "path": "migrations/1.1.12-to-1.1.13.md",
+      "items": [
+        "explicit-invocation-rules",
+        "intent-verify-skill"
+      ]
     }
   ]
 }

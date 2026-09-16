@@ -3,18 +3,24 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "这个 PH worktree 已经做完了，跑门禁、提交并合回我进入时的主目录，清理前再问我。",
+      "prompt": "用 ph-worktree-exit 收口这个 PH worktree：跑门禁、提交并合回我进入时的主目录，清理前再问我。",
       "expected_output": "触发 ph-worktree-exit；验证、按安全范围提交、合并到 session source、再次验证，清理另行确认。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "合并出现冲突，我已经解决并 git add 了，继续 PH worktree 的退出流程。",
+      "prompt": "用 ph-worktree-exit 继续：合并出现冲突，我已经解决并 git add 了。",
       "expected_output": "触发 ph-worktree-exit continue；确认无未解决条目后继续 merge 和验证，不自动清理。",
       "files": []
     },
     {
       "id": 3,
+      "prompt": "worktree 里的活干完了，收口合回主目录吧。",
+      "expected_output": "不触发 ph-worktree-exit：用户只描述交付意图，没有点名技能；普通描述不触发，也不自行执行验证、提交或合并。",
+      "files": []
+    },
+    {
+      "id": 4,
       "prompt": "把普通 feature 分支 merge 到 main 并推送远端，这个分支不是 PH worktree 创建的。",
       "expected_output": "不触发 ph-worktree-exit；非 PH session 且包含普通 merge/push，按项目 Git 流程另行处理。",
       "files": []

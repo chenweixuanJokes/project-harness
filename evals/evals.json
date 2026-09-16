@@ -3,19 +3,19 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "这个刚创建的 Git 仓库还没有项目级 Agent 约束，请按 PH 标准初始化整套目录，先预检再实施。",
+      "prompt": "用 ph-init 初始化这个刚创建的 Git 仓库：还没有项目级 Agent 约束，请按 PH 标准初始化整套目录，先预检再实施。",
       "expected_output": "触发 ph-init。先对唯一 GitHub 源 prepare（latest 稳定 tag、固定 commit），读发行根 SKILL，再用该根 ph_init.py 先 dry-run 后 apply。无 tag 或网络失败则阻断，不拿本地 scaffold 冒充最新。不 git pull。准备成功后把脚本提示转告用户：已登录会加星并建账号副本，没登录不拦安装，不从副本拉正式包。确认后按缺省 auto 初始化（apply 阶段优先相对 symlink，探测失败自动 portable）并跑已装内核 check。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "Windows 同事说根 AGENTS.md 和 .agents/AGENTS.md 不一致，检查 PH 适配层并给出同步方案。",
+      "prompt": "用 ph-init 检查 PH：Windows 同事说根 AGENTS.md 和 .agents/AGENTS.md 不一致，给出同步方案。",
       "expected_output": "触发 ph-init 的 check/sync，使用项目已装内核，离线，不 prepare、不为加星上网、不升 template_version、不走 ph-merge-update。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 3,
-      "prompt": "仓库已按 PH 1.0.0 装过（六个 Skill，意图在进行中）。请升到官方最新正式版，先预检。",
+      "prompt": "用 ph-init 升级这个仓库：它已按 PH 1.0.0 装过（六个 Skill，意图在进行中）。请升到官方最新正式版，先预检。",
       "expected_output": "触发 ph-init，不把 init --apply 当升级。本会话读发行根 merge-update Skill 并执行：prepare 后 inspect 只读，识别六 Skill 历史布局，再语义合并、verify、finalize。刚用旧脚本 prepare 时用发行根补跑 support。不另开技能。本 eval 不表示已实测。",
       "files": []
     },
@@ -45,7 +45,7 @@
     },
     {
       "id": 8,
-      "prompt": "这个存量仓没装 PH，已有 docs/README.md、Java 后端和单测，没有前端，也没用 Kong/Eureka/Apollo。初始化并根据真实代码补齐 Wiki 和规范。",
+      "prompt": "用 ph-init 接入这个存量仓：没装 PH，已有 docs/README.md、Java 后端和单测，没有前端，也没用 Kong/Eureka/Apollo。初始化并根据真实代码补齐 Wiki 和规范。",
       "expected_output": "先 prepare 固定正式 commit、只读盘点、dry-run；安全同名 docs 保留待会话审阅，不搬走强盖。获授权安装后分阶段派发 subagent，按实际 Java/框架版本实时查官方资料，补 Wiki/工程/后端/测试规范；前端及未使用中间件标不适用。不猜 owner、不造意图/历史决策/测试通过。canonical 修改后原 mode sync/check。分别报告安装和文档结果。本 eval 不表示已实测。",
       "files": []
     },
@@ -63,73 +63,73 @@
     },
     {
       "id": 11,
-      "prompt": "我们仓库有一套成熟约束：CONTRIBUTING 写了分支策略，docs/rules 是强制代码门禁，团队要求接入 PH 但绝不能削弱现有规则。",
+      "prompt": "用 ph-init 把我们接入 PH：仓库有一套成熟约束，CONTRIBUTING 写了分支策略，docs/rules 是强制代码门禁，但绝不能削弱现有规则。",
       "expected_output": "触发 ph-init 存量接入：prepare 固定源、只读盘点七类证据（旧约束单列）、dry-run 报告整合。向用户说明还没改文件，并问这次先处理哪些，不用内部命令名。获授权后在仓外生成 sources 快照与合并候选，已有正文优先引用记复用，不复制第二套；init --adopt-plan 先 dry 后 apply，装后用已装内核 check。与旧规则冲突的条目记冲突待用户裁决，不覆盖、不降格旧规范；PH 入口为旧内容加摘要+深链。不先装模板盖旧正文。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 12,
-      "prompt": "存量仓 docs 下已有 specs/（接口规格）、domains/（领域说明）、plans/（迭代计划）三类完整文档和旧 README。接入 PH 并整理导航，别丢任何旧文档。",
+      "prompt": "用 ph-init 接入这个存量仓：docs 下已有 specs/（接口规格）、domains/（领域说明）、plans/（迭代计划）三类完整文档和旧 README。整理导航，别丢任何旧文档。",
       "expected_output": "保留内容不保留旧目录：按旧路径→新落点归并进约束规范/意图/项目Wiki，不留旧目录、空壳或软链。同主题合成单一正文，README 独有规则先提取再整理索引，附件随所属正文走。摘要+深链指向归并后的正文，旧规范保持效力。内核 adopt 只写 canonical 与 docs/**，不自动搬删；获本轮授权、把原文备份到 .agents/archived/<日期>-pre-init/、修活动引用与索引后再移出活树旧文件，仓内快照即是可恢复原件。未授权或冲突记未完成。仓外 plan、init --adopt-plan 安装；能复用的记复用，init-report 覆盖全部独立 id。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 13,
-      "prompt": "这个仓库只有代码：src、tests、CI 配置和锁文件，一个 .md 都没有。接入 PH 并把该有的文档补起来。",
+      "prompt": "用 ph-init 接入这个仓库：只有代码 src、tests、CI 配置和锁文件，一个 .md 都没有。把该有的文档补起来。",
       "expected_output": "逐项反推 PH 文档：模块/代码/配置/真实依赖/测试/CI 只是事实候选，不能倒推成强制规范；无既有来源的规范条目保持 PH 通用门禁或标待核实，不造 ADR、意图、访谈或测试通过记录。sources 三入口与 docs 目标全为 null，候选为脚手架正文；仓外 plan、init --adopt-plan 安装后逐项补全并产出覆盖 init-report。查不到的组件版本标待核实。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 14,
-      "prompt": "旧规范写着用 Maven 构建、JDK 8，但仓库早已迁到 Gradle 和 JDK 21，CI 也全是 Gradle。接入 PH 时以哪个为准？",
+      "prompt": "用 ph-init 接入这个仓库：旧规范写着用 Maven 构建、JDK 8，但仓库早已迁到 Gradle 和 JDK 21，CI 也全是 Gradle。以哪个为准？",
       "expected_output": "不悄悄改旧文，也不拿旧文当现行事实：代码/锁文件/CI 是事实源，冲突条目在 dry-run 整合与 init-report 记冲突并留双方证据，规范效力交用户裁决。向用户只问文档该怎么写，不用内部字段名。Wiki 与事实叙述按当前实态记已核验；引用旧规范时标明其与实态的冲突。合并候选在仓外生成，经 adopt-plan 安装，不先装模板盖旧正文。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 15,
-      "prompt": "旧 docs/specs/api.md 旁边有 sequence.puml、fixture.json 和一段生成脚本；接入 PH 时这些附件怎么办？脚本要不要跑一遍？",
+      "prompt": "用 ph-init 接入这个仓库：docs/specs/api.md 旁边有 sequence.puml、fixture.json 和一段生成脚本；这些附件怎么办？脚本要不要跑一遍？",
       "expected_output": "附件与辅助脚本随所属正文迁移到新落点，不因整理而执行。先建旧路径→新落点映射，把原文备份到 .agents/archived/<日期>-pre-init/，核对新正文完整、附件一致后再移出活树旧文件；仓内快照即是可恢复原件，不用 rm。内核 adopt 不自动搬附件。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 16,
-      "prompt": "同一接口约束在 docs/specs/auth.md 和即将写入的约束规范里各有一份，内容大部分重复、细节略有出入。接入时两份都留下吗？",
+      "prompt": "用 ph-init 接入这个仓库：同一接口约束在 docs/specs/auth.md 和即将写入的约束规范里各有一份，内容大部分重复、细节略有出入。两份都留下吗？",
       "expected_output": "同主题合成单一正文：保留旧文有效细节与历史记录，把已核验新摘要整合进去，去掉重复；不是双全文追加。细节冲突记冲突待裁决，不以代码擅自废止旧规则。向用户提问时用日常用语，不把内部分类名当问句。摘要与深链只指向归并后的那一份。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 17,
-      "prompt": "docs/plans/ 里有一份真实迭代计划，标题、日期和原编号都在，但找不到评审纪要或批准记录。接入 PH 时能不能直接写成已评审通过的意图？",
+      "prompt": "用 ph-init 接入这个仓库：docs/plans/ 里有一份真实迭代计划，标题、日期和原编号都在，但找不到评审纪要或批准记录。能不能直接写成已评审通过的意图？",
       "expected_output": "旧计划只有真实源才整理进意图：保留原题、来源、原有标识和日期，缺失字段标未知，不推定评审、批准或测试通过。交付留在实施并在记录注明原有结果；非计划内容归 Wiki 或规范。调试实录不冒充访谈，不造纪要。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 18,
-      "prompt": "这个仓库已经按 PH 1.1.4 初始化过，用户现在说：初始化 PH。",
+      "prompt": "这个仓库已经按 PH 1.1.4 初始化过，用户现在说：用 ph-init 升到最新正式版。",
       "expected_output": "触发 ph-init。prepare 后发现已装且版本旧于发行根：停 init --apply / --adopt-plan，本会话读发行根 ph-merge-update Skill，跑 inspect → 按迁移说明语义合并 → verify → finalize。不另开技能，不自动 finalize。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 19,
-      "prompt": "用户目录里装的 ph-init 还是旧版，刚才升级时脚本报错 illegal release.json: missing schema_version。这个仓库已装 PH，帮我升到 1.1.12。",
-      "expected_output": "触发 ph-init。识别为 1.1.7 及更早入口必然拒绝 1.1.8 及以后包（新包无 schema_version，旧脚本必查该键），不是网络故障，不重试不回退不假称自动恢复。执行一次性入口切换：把已发布 v1.1.8 clone 到新的仓外安全目录，不覆盖用户级入口与目标项目，不用 main 或本地开发树冒充；先用新目录 prepare --version 1.1.8 并读取返回根的 Skill，再由这份新工具准备并固定 1.1.12。之后本会话只用 1.1.12 发行根按 merge-update 步骤 inspect → 语义合并 → verify → finalize 完成，不 init --apply。finalize 通过后项目清单不再含 schema_version，template_version 写 1.1.12。本 eval 不表示已实测。",
+      "prompt": "用户目录里装的 ph-init 还是旧版，刚才升级时脚本报错 illegal release.json: missing schema_version。这个仓库已装 PH，用 ph-init 帮我升到 1.1.13。",
+      "expected_output": "触发 ph-init。识别为 1.1.7 及更早入口必然拒绝 1.1.8 及以后包（新包无 schema_version，旧脚本必查该键），不是网络故障，不重试不回退不假称自动恢复。执行一次性入口切换：把已发布 v1.1.8 clone 到新的仓外安全目录，不覆盖用户级入口与目标项目，不用 main 或本地开发树冒充；先用新目录 prepare --version 1.1.8 并读取返回根的 Skill，再由这份新工具准备并固定 1.1.13。之后本会话只用 1.1.13 发行根按 merge-update 步骤 inspect → 语义合并 → verify → finalize 完成，不 init --apply。finalize 通过后项目清单不再含 schema_version，template_version 写 1.1.13。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 20,
-      "prompt": "从 PH 1.1.6 直接升到 1.1.12。项目 ph.json 里还有 schema_version 字段，业务文档和没做完的升级记录都别动。",
-      "expected_output": "触发 ph-init 的升级分流。先通过已发布 v1.1.8 工具取得 1.1.12 发行根，再读完整迁移链 1.1.6→1.1.7→1.1.8→1.1.9→1.1.10→1.1.11→1.1.12，进度目录用最终目标版本 1.1.12；依次处理加星说明、single-ph-version、worktree-auto-branch、docs-sync-skill（只装 ph-docs-sync Skill 与规则索引，不自动同步业务文档）、current-branch-defaults（只合并两个 Skill 的分支默认规则，不改变现有分支和 worktree）、adopt-mode-docs（初始化指引 adopt 命令示例补 --mode auto）和 question-execution-contract（对用户提问合并为执行契约，引用改语义落点，不重问已决定的事）。业务正文、既有模式与未完成升级记录保留，已落地项不重做；旧 schema_version 字段仅在 finalize 验收通过后随 template_version=1.1.12 一起移除，schema 换无版本 $id。不重跑文档补全、不 init --apply。本 eval 不表示已实测。",
+      "prompt": "用 ph-init 从 PH 1.1.6 直接升到 1.1.13。项目 ph.json 里还有 schema_version 字段，业务文档和没做完的升级记录都别动。",
+      "expected_output": "触发 ph-init 的升级分流。先通过已发布 v1.1.8 工具取得 1.1.13 发行根，再读完整迁移链 1.1.6→1.1.7→1.1.8→1.1.9→1.1.10→1.1.11→1.1.12→1.1.13，进度目录用最终目标版本 1.1.13；依次处理加星说明、single-ph-version、worktree-auto-branch、docs-sync-skill（只装 ph-docs-sync Skill 与规则索引，不自动同步业务文档）、current-branch-defaults（只合并两个 Skill 的分支默认规则，不改变现有分支和 worktree）、adopt-mode-docs（初始化指引 adopt 命令示例补 --mode auto）、question-execution-contract（对用户提问合并为执行契约，引用改语义落点，不重问已决定的事）、explicit-invocation-rules（十一个既有 Skill 合并调用门禁并清除自动串联）和 intent-verify-skill（安装新验收技能 ph-intent-verify，同名冲突先阻断）。业务正文、既有模式与未完成升级记录保留，已落地项不重做；旧 schema_version 字段仅在 finalize 验收通过后随 template_version=1.1.13 一起移除，schema 换无版本 $id。不重跑文档补全、不 init --apply。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 21,
-      "prompt": "Windows 上新仓库初始化 PH，Git 没开符号链接支持。装完同事问：根 AGENTS.md 怎么不是链接，是不是功能缩水了？",
+      "prompt": "用 ph-init 在 Windows 上初始化新仓库 PH，Git 没开符号链接支持。装完同事问：根 AGENTS.md 怎么不是链接，是不是功能缩水了？",
       "expected_output": "触发 ph-init。新装缺省 auto：dry-run 不探测、不写入；apply 阶段先探测链接能力，Windows core.symlinks=false、文件系统不支持链接等探测失败场景自动改用 portable 受管副本，不当作错误。向用户解释 portable 是内容一致的受管镜像、不是功能降级，并说明显式 --mode symlink 会严格失败不回退、已装项目升级保留模式不自动转换。check 通过即可，不改业务文件。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 22,
-      "prompt": "团队同时用 Claude Code、Codex 和 OpenCode。初始化 PH 之后，各自的规则入口和技能从哪里读？",
+      "prompt": "用 ph-init 初始化 PH 之后，团队同时用 Claude Code、Codex 和 OpenCode，各自的规则入口和技能从哪里读？",
       "expected_output": "触发 ph-init（或已装项目的检查说明）。canonical 固定在 .agents/：约束正文 .agents/AGENTS.md，技能 .agents/skills/；根 AGENTS.md 是通用入口。Claude Code 走 CLAUDE.md 与 .claude/skills/ 适配层；Codex、OpenCode 原生读取 .agents/skills。修改约束只编辑 .agents/AGENTS.md 后 ph-init sync，不手改适配层。本 eval 不表示已实测。",
       "files": []
     },
@@ -142,7 +142,7 @@
     {
       "id": 24,
       "prompt": "GitHub 上仓库改叫 project-harness 了，给我们项目装一套 Project Harness。装完技能是不是也要跟着改名？",
-      "expected_output": "触发 ph-init。Project Harness（PH）是产品名，官方仓库已由 ph-init 更名为 project-harness；技能名与安装路径不随仓库名变化：入口仍是 ph-init，十一个技能仍是 ph-*，用户级路径仍是 ~/.agents/skills/ph-init（clone 新地址到该路径）。按正常流程 prepare、盘点、dry-run、确认后安装并跑已装内核 check。不因仓库名与技能名不同误判为未知技能，不另建 project-harness 目录。本 eval 不表示已实测。",
+      "expected_output": "触发 ph-init。Project Harness（PH）是产品名，官方仓库已由 ph-init 更名为 project-harness；技能名与安装路径不随仓库名变化：入口仍是 ph-init，十二个技能仍是 ph-*，用户级路径仍是 ~/.agents/skills/ph-init（clone 新地址到该路径）。按正常流程 prepare、盘点、dry-run、确认后安装并跑已装内核 check。不因仓库名与技能名不同误判为未知技能，不另建 project-harness 目录。本 eval 不表示已实测。",
       "files": []
     },
     {
@@ -161,6 +161,24 @@
       "id": 27,
       "prompt": "一个仍需用户决定的问题，问答工具刚才连续报错没能提交，代理只在正文里说明了情况。现在工具恢复，用户说“用 Ask 把刚才的问题发我”；另外同一会话里用户此前曾取消过另一个无关问题。",
       "expected_output": "按对用户提问执行契约处理降级与恢复：工具故障时降级为可见文字提问是明确例外，但必须如实说明工具未成功提交，不假称已通过工具提问；不能仅凭 error 状态默认技术故障，要按具体原因区分权限拒绝、用户取消或跳过与无法确认原因的无有效回答，被取消的问题保持未决，不换通道强迫再选、不解释成同意。现在工具已恢复且用户明确要求继续，必须实际调用工具提交同一决定，不以“这次会用”或再次说明代替；回答到达前不执行依赖该决定的动作。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 28,
+      "prompt": "初始化 PH，先检查现有代码和文档，列出要改哪些文件，确认后再安装。",
+      "expected_output": "不触发 ph-init：用户只说「初始化 PH」，没有点名技能；普通描述不触发，不下载、不安装、不改目标文件，可以说明需要点名 ph-init 才执行。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 29,
+      "prompt": "ph-init 和 ph-merge-update 是什么关系？升级的时候用哪个？先别执行。",
+      "expected_output": "不触发 ph-init：这是讨论技能名称与分工，不要求执行；可口头说明升级由点名 ph-init 的会话按 merge-update 步骤完成。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 30,
+      "prompt": "用 ph-intent-verify 验收刚做完的登录超时修复，宿主有结构化问答工具。",
+      "expected_output": "不触发 ph-init：这是 ph-intent-verify 的职责（用户点名该技能并要求验收）；PH 技能互不代为调用，普通描述与点名其他技能都不触发本技能。本 eval 不表示已实测。",
       "files": []
     }
   ]

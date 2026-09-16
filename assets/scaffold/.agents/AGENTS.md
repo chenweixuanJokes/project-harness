@@ -71,7 +71,7 @@ docs/
 - 普通手工开特性分支时从仓库声明的基线检出。用户明确要求创建 worktree 时，源分支取主工作区当前分支，任务分支由代理结合任务语义与项目规则自行确定；正常创建不再次问询。分支名用英文 `<类型>/<主题>`，禁止中文。
 - 并行任务默认进入 `.worktrees/<slug>--<hash>/`，该目录由仓库根 `.gitignore` 的 PH marker 忽略。
 - 禁止 `git stash`。进入 worktree 前遇到未提交改动必须停止，由用户明确决定是否提交 `wip: <说明>`；不得自动收纳未知文件。
-- 进入 / 退出流程由 `ph-worktree-enter` / `ph-worktree-exit` 执行。用户明确要求创建 worktree 已构成本次创建授权，正常计划审查通过后直接创建；异常安全门禁仍须停止。退出按“验证、受控提交、合并回进入时记录的源分支、再次验证”交付；清理本次隔离工作区前必须另行确认，对用户说“这次任务的工作目录”，不要把内部会话名当问句。
+- 进入 / 退出流程由 `ph-worktree-enter` / `ph-worktree-exit` 执行：用户当轮点名对应技能并要求使用才进入该流程，用户明确要求创建 worktree 已构成本次创建授权，正常计划审查通过后直接创建；异常安全门禁仍须停止。退出按“验证、受控提交、合并回进入时记录的源分支、再次验证”交付；清理本次隔离工作区前必须另行确认，对用户说“这次任务的工作目录”，不要把内部会话名当问句。
 
 ## 测试门禁
 
@@ -102,7 +102,7 @@ docs/
 
 ## PH Skills
 
-十一名固定，目录名与 `name` 一致且均为 kebab-case；所有 Skill 都以 `.agents/skills/<name>/SKILL.md` 为唯一人工编辑源。升官方发行版仍由 `ph-init` 会话按 `ph-merge-update` 步骤做完，不要用 `ph-init --apply` 覆盖本文件已填事实。升级进度在 `.agents/updates/<版本>/`（`state.json` 与 `report.md`），不是业务文档。
+十二名固定，目录名与 `name` 一致且均为 kebab-case；所有 Skill 都以 `.agents/skills/<name>/SKILL.md` 为唯一人工编辑源。**调用门禁：每个 PH 技能仅在用户当轮明确点名该技能（如「用 ph-xxx …」）并要求使用时才调用；普通描述任务、上下文提及或讨论技能名称都不触发，技能之间也不自动串联——一个技能的调用不推导出调用另一技能的授权。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。唯一例外：`ph-init` 会话执行用户已请求的升级时，读发行根 `ph-merge-update` 步骤属于该次升级的内部步骤。** 升官方发行版仍由 `ph-init` 会话按 `ph-merge-update` 步骤做完，不要用 `ph-init --apply` 覆盖本文件已填事实。升级进度在 `.agents/updates/<版本>/`（`state.json` 与 `report.md`），不是业务文档。
 
 | Skill | 何时用 |
 | --- | --- |
@@ -115,6 +115,7 @@ docs/
 | `.agents/skills/ph-memory-ask/SKILL.md` | 只读检索记忆并标注来源与有效性 |
 | `.agents/skills/ph-intent-new/SKILL.md` | 录入或补充意图及访谈纪要；新建入待办，补充保持原目录 |
 | `.agents/skills/ph-intent-impl/SKILL.md` | 可写时先迁实施，再准备交接并进入原生计划模式 |
+| `.agents/skills/ph-intent-verify/SKILL.md` | 实现完成后由用户逐点验收唯一意图，结论写入该意图「记录」节；启动推进不等于实现完成 |
 | `.agents/skills/ph-intent-drop/SKILL.md` | 明确原因后从待办或实施废弃意图并修复引用 |
 | `.agents/skills/ph-docs-sync/SKILL.md` | 对照当前代码、配置、锁文件与 CI 核验 README、docs 配置说明、使用示例与 Wiki；检查默认只读，明确授权后才修可直接证实的不一致 |
 

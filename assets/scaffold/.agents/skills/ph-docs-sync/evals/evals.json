@@ -3,19 +3,19 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "最近改了不少代码，检查一下 README 和 docs 里的配置说明、使用示例是不是过期了，先不要改文件。",
+      "prompt": "用 ph-docs-sync 处理：最近改了不少代码，检查一下 README 和 docs 里的配置说明、使用示例是不是过期了，先不要改文件。",
       "expected_output": "触发 ph-docs-sync 且保持只读：以当前代码、配置、锁文件、CI 为全量事实源逐项核验，近 7 天提交只作线索；逐项报告一致 / 不一致 / 待核实与证据位置，不写任何文件。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "同步修复文档：README 的启动命令和 docs 里的示例跟现在的 package.json scripts 对不上了，按仓库实态改过来。",
+      "prompt": "用 ph-docs-sync 处理：同步修复文档：README 的启动命令和 docs 里的示例跟现在的 package.json scripts 对不上了，按仓库实态改过来。",
       "expected_output": "触发 ph-docs-sync 并获得修复授权：只修可直接证实的不一致（命令与 scripts 实态逐项对上），保持原结构与术语风格，逐项报告文件与依据；授权范围内不逐项再问。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 3,
-      "prompt": "上周有笔提交标题写着“已切换到 PostgreSQL”，但 README 还写 MySQL。照提交记录把文档改了。",
+      "prompt": "用 ph-docs-sync 处理：上周有笔提交标题写着“已切换到 PostgreSQL”，但 README 还写 MySQL。照提交记录把文档改了。",
       "expected_output": "触发 ph-docs-sync 但不照提交标题直接改：提交标题不能证明实现已落地，先核对当前代码、配置与锁文件确认实际数据库；证实后修，证实不了标待核实。找不到提交也不能反推文档仍正确。本 eval 不表示已实测。",
       "files": []
     },
@@ -27,7 +27,7 @@
     },
     {
       "id": 5,
-      "prompt": "只核对了项目概述 Wiki 的技术栈一段，把整页的 last_verified 更新成今天吧。",
+      "prompt": "用 ph-docs-sync 处理：只核对了项目概述 Wiki 的技术栈一段，把整页的 last_verified 更新成今天吧。",
       "expected_output": "触发 ph-docs-sync 但不谎称整页核实：五字段仅如实维护，verified_against 写明实际核对范围，未核对整页就不把整页标成已核验；owner 未知写 unknown。本 eval 不表示已实测。",
       "files": []
     },
@@ -63,20 +63,26 @@
     },
     {
       "id": 11,
-      "prompt": "README 的启动命令过期了，把它改成 PORT=3000 npm run start。package.json 里 start 脚本是 node dist/server.js。",
+      "prompt": "用 ph-docs-sync 处理：README 的启动命令过期了，把它改成 PORT=3000 npm run start。package.json 里 start 脚本是 node dist/server.js。",
       "expected_output": "触发 ph-docs-sync 且核对完整前置条件：start 指向 dist/server.js 是构建产物，示例必须包含或引用前置构建步骤（如先 npm run build），不能只替换命令名；工作目录、环境变量与步骤依赖一并核对，漏了前置条件要一并修。未实际运行则写明静态依据（由 package.json scripts 推导），不标已验证通过。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 12,
-      "prompt": "docs 里写着“日志框架为 Spring Boot 默认的 Logback，级别用 LOG_LEVEL 环境变量配置，默认 INFO”。仓库里没有 pom，代码里日志级别是个 INFO 常量。照文档意思补两句说明就行。",
+      "prompt": "用 ph-docs-sync 处理：docs 里写着“日志框架为 Spring Boot 默认的 Logback，级别用 LOG_LEVEL 环境变量配置，默认 INFO”。仓库里没有 pom，代码里日志级别是个 INFO 常量。照文档意思补两句说明就行。",
       "expected_output": "触发 ph-docs-sync 但不照抄补写：配置项须分别核验名称、可配置性、默认值——代码硬编码 INFO 常量或输出恰好相同不证明 LOG_LEVEL 可配置；仓内无 pom 等依赖证据时不得凭 Spring Boot 框架印象断言默认 Logback。证据不足处报告未知并标待核实，不改文档或只登记缺口。本 eval 不表示已实测。",
       "files": []
     },
     {
       "id": 13,
       "prompt": "把这个项目的文档同步一下，跟代码对不上的地方修掉。",
-      "expected_output": "触发 ph-docs-sync：已获修复授权但未指定范围，按核验对象默认范围（README、docs 配置说明 / 使用示例、Wiki 现行叙述）执行，无需再问。修复后重读 diff 确认只消除目标不一致、未夹带计划外改动，并复核受影响文档的相对链接与沿途索引；逐项报告修改与依据。本 eval 不表示已实测。",
+      "expected_output": "不触发 ph-docs-sync：用户只描述同步需求，没有点名技能；普通描述不触发，不自行修改文档，也不承诺稍后自动同步。",
+      "files": []
+    },
+    {
+      "id": 14,
+      "prompt": "ph-docs-sync 和 ph-intent-verify 分别管什么？先别执行。",
+      "expected_output": "不触发 ph-docs-sync：这是讨论技能名称与分工；可以口头解释边界（文档一致性核验 vs 实现后用户验收）。",
       "files": []
     }
   ]

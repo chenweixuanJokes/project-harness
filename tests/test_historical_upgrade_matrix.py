@@ -13,7 +13,11 @@ replaced wholesale with the release-root bytes (the pre-overwrite original is
 first moved to the same recovery trash used for retired files) under the
 ``question-execution-contract`` item's explicit overwrite authorization, so
 file-internal project question rules do not survive as effective rules; the
-fixture asserts exactly that byte-identity and the recoverable backup.
+fixture asserts exactly that byte-identity and the recoverable backup. The
+1.1.13 hop has two handlers: ``explicit-invocation-rules`` merges the
+invoke-only-when-named gate into the eleven pre-1.1.13 skills (and clears the
+auto-chaining wording), and ``intent-verify-skill`` installs the new
+``ph-intent-verify`` skill from the release scaffold.
 
 The semantic merge is performed by explicit per-migration-item handlers. A
 migration item that is not in the handler registry fails the test instead of
@@ -96,9 +100,12 @@ CORE_NON_INIT = (
 BASE_SKILLS = ("ph-init",) + CORE_NON_INIT
 OLD_ALIASES = ("ph-intent-capture", "ph-intent-plan", "ph-intent-abandon")
 NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
-TARGET_SKILLS = BASE_SKILLS + NEW_INTENT + ("ph-merge-update", "ph-docs-sync")
+# Historical 1.1.10-1.1.12 releases ship exactly these eleven; the current
+# release adds ph-intent-verify (1.1.13) on top of them.
+HISTORICAL_ELEVEN_SKILLS = BASE_SKILLS + NEW_INTENT + ("ph-merge-update", "ph-docs-sync")
+TARGET_SKILLS = HISTORICAL_ELEVEN_SKILLS + ("ph-intent-verify",)
 LAYOUT_SKILLS = {
-    "eleven-skills": TARGET_SKILLS,
+    "eleven-skills": HISTORICAL_ELEVEN_SKILLS,
     "six-skills": BASE_SKILLS,
     "legacy-names": ("ph-init",) + CORE_NON_INIT + OLD_ALIASES,
     "current-names": ("ph-init",) + CORE_NON_INIT + NEW_INTENT,
@@ -675,6 +682,41 @@ ENGINE_ENSURE = {
         "skills": ("ph-intent-new", "ph-intent-impl", "ph-intent-drop",
                    "ph-memory-capture", "ph-memory-ask", "ph-worktree-exit",
                    "ph-merge-update"),
+        "agents": True,
+    },
+    "explicit-invocation-rules": {
+        # 1.1.13 release deltas this item owns: the invocation gate across the
+        # eleven pre-1.1.13 skills (invoke only when the user explicitly names
+        # the skill and asks for it; plain need descriptions, context mentions
+        # and name discussions never trigger), the removal of auto-chaining
+        # (enter no longer derives the exit-skill call, intent skills no
+        # longer derive each other), the gate sentences in the canonical
+        # AGENTS skill table and the intent/template/parallel-dev/init-guide
+        # wording, the trigger positive/negative eval samples, and the
+        # runtime-material version refs that follow the release bump. The
+        # ph-init internal-step wording (an upgrade requested to ph-init is
+        # executed by that session from the release-root merge-update steps)
+        # is kept. Project-customized skill prose is preserved by ensure_file.
+        "payload": True,
+        "docs": [
+            f"{W}/意图与访谈.md", f"{W}/Git与并行开发.md",
+            f"{W}/初始化与文档补全.md", f"{W}/文档治理.md",
+            f"{W}/README.md", "docs/意图/_模板.md",
+        ],
+        "skills": CORE_NON_INIT + NEW_INTENT + ("ph-merge-update", "ph-docs-sync"),
+        "agents": True,
+    },
+    "intent-verify-skill": {
+        # 1.1.13 release deltas this item owns: the new twelfth skill
+        # ph-intent-verify (SKILL.md + evals) installed from the release
+        # scaffold, its twelfth row in the canonical AGENTS skill table and
+        # the intent spec's duty table, and the payload refresh. No business
+        # intent, lifecycle status, directory or interview purpose is added;
+        # a live same-name custom skill on an older project blocks the item
+        # upstream (release_skill_name_conflicts) instead of being replaced.
+        "payload": True,
+        "docs": [f"{W}/意图与访谈.md"],
+        "skills": ("ph-intent-verify",),
         "agents": True,
     },
 }
@@ -1399,10 +1441,14 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     # recoverable backup) instead of preserving this customization.
     # Historical installs before 1.1.6 carry no question spec at all; there
     # the chain creates the official file and there is nothing to overwrite.
+    # From 1.1.12 the contract is already installed, the overwrite
+    # authorization is not part of any later chain, and a 1.1.13-upgrade
+    # project question rule is ordinary customization to preserve - so the
+    # fixture only injects it while the overwrite hop is actually in the chain.
     question_rel = f"{W}/对用户提问.md"
     overwritten_bytes: dict[str, bytes] = {}
     question_spec = repo / question_rel
-    if question_spec.is_file():
+    if question_spec.is_file() and semver_tuple(version) < (1, 1, 12):
         question_spec.write_bytes(question_spec.read_bytes() + QUESTION_APPEND.encode("utf-8"))
         overwritten_bytes[question_rel] = question_spec.read_bytes()
 

@@ -1,6 +1,6 @@
 {
   "$schema": "./ph.schema.json",
-  "template_version": "1.1.12",
+  "template_version": "1.1.13",
   "adapter_mode": "portable",
   "canonical": {
     "root": ".agents",
@@ -67,6 +67,7 @@
       "ph-memory-ask",
       "ph-intent-new",
       "ph-intent-impl",
+      "ph-intent-verify",
       "ph-intent-drop",
       "ph-merge-update",
       "ph-docs-sync"

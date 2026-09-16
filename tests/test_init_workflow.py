@@ -57,7 +57,7 @@ class SkillContractTests(unittest.TestCase):
         cls.skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     def test_batch_version_single_ph_version_contract(self):
-        self.assertIn("本批版本为 `1.1.12`", self.skill)
+        self.assertIn("本批版本为 `1.1.13`", self.skill)
         # separate schema version is gone; 1.1.10+ release numbers must not trip the check
         self.assertNotRegex(self.skill, r"1\.1\.1(?![0-9])")
         self.assertIn("urn:ph:schema:project-harness", self.skill)
@@ -71,7 +71,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("新的仓外安全目录", self.skill)
         self.assertIn("不覆盖用户级入口与目标项目", self.skill)
         self.assertIn("prepare --version 1.1.8", self.skill)
-        self.assertIn("目标 `1.1.12` 发行根", self.skill)
+        self.assertIn("目标 `1.1.13` 发行根", self.skill)
         # old schema_version field is removed only after finalize passes
         self.assertIn("仅在 finalize", self.skill)
 
@@ -125,12 +125,13 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn(".claude/skills/", self.skill)
         self.assertIn("原生读取 `.agents/skills`", self.skill)
 
-    def test_eleven_distributed_skills_share_strict_frontmatter_subset(self):
+    def test_twelve_distributed_skills_share_strict_frontmatter_subset(self):
         release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
         required = release["required_skills"]
-        self.assertEqual(len(required), 11)
+        self.assertEqual(len(required), 12)
         self.assertIn("ph-docs-sync", required)
-        # the root SKILL.md is the ph-init slot; the other ten live in scaffold
+        self.assertIn("ph-intent-verify", required)
+        # the root SKILL.md is the ph-init slot; the other eleven live in scaffold
         slots = {
             "ph-init": ROOT / "SKILL.md",
             **{
@@ -321,7 +322,7 @@ class EntryPointsTests(unittest.TestCase):
         self.assertIn(".agents/archived", self.agents)
 
     def test_canonical_agents_skill_table_registers_docs_sync(self):
-        self.assertIn("十一名固定", self.agents)
+        self.assertIn("十二名固定", self.agents)
         self.assertIn("ph-docs-sync", self.agents)
         self.assertIn("只读", self.agents)
 

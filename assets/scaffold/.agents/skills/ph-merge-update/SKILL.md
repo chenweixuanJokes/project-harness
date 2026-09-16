@@ -1,11 +1,11 @@
 ---
 name: ph-merge-update
-description: "已装 PH 项目升到正式发行版的步骤：从唯一 GitHub 源准备固定 tag/commit，按迁移链审阅合并，验收后再推进项目版本。用户说“升级 PH”“初始化 PH”“安装 harness”“合并更新 PH”且目标已装旧版时，由 ph-init 会话读本文件并执行，不另开技能。不要把未初始化仓库的安装、普通 check/sync、git pull、录入/实施/废弃意图、记忆或 worktree 误判为本文件的步骤。"
+description: "已装 PH 项目升到正式发行版的步骤：从唯一 GitHub 源准备固定 tag/commit，按迁移链审阅合并，验收后再推进项目版本。本文件不按普通描述触发：用户点名 ph-init 并请求升级已装项目时，由 ph-init 会话读本文件作为该次升级的内部步骤执行；用户当轮明确点名 ph-merge-update 并要求使用时，也由同一会话按本文件执行。只说“升级 PH”“安装 harness”、上下文提及或讨论名称不触发。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。不要把未初始化仓库的安装、普通 check/sync、git pull、录入/实施/验收/废弃意图、记忆或 worktree 误判为本文件的步骤。"
 ---
 
 # ph-merge-update
 
-已接入 PH 的仓库跟官方发行版对齐。这是 **`ph-init` 会话**在已装旧版上要执行的步骤，不是对外另开的分流技能。Agent 按迁移说明做语义合并；脚本只读状态、验收结构和收尾。不要用 `init --apply` 覆盖定制，不要在目标仓库 `git pull`。
+已接入 PH 的仓库跟官方发行版对齐。这是 **`ph-init` 会话**在已装旧版上要执行的步骤：用户点名 `ph-init` 并请求升级时，本会话读本文件作为该次升级的内部步骤执行；用户当轮点名本文件并要求使用时同样执行。Agent 按迁移说明做语义合并；脚本只读状态、验收结构和收尾。不要用 `init --apply` 覆盖定制，不要在目标仓库 `git pull`。
 
 旧项目可以没有本目录。从准备好的发行根读取：
 
@@ -31,12 +31,12 @@ description: "已装 PH 项目升到正式发行版的步骤：从唯一 GitHub 
 准备（下载在目标仓库外）：
 
 ```text
-python3 <ph-init-root>/scripts/ph_release.py prepare --version latest|1.1.12 --repo <target>
+python3 <ph-init-root>/scripts/ph_release.py prepare --version latest|1.1.13 --repo <target>
 ```
 
 stdout JSON 字段：`root` `version` `tag` `commit` `source`。`source` 是固定仓库 URL 字符串（1.x 仍为旧地址，保留兼容含义，不改写、不当错误）。本地已有该 commit 的检查不访问网络。准备成功后把脚本提示转告用户；没登录不拦升级。本会话刚用旧脚本 prepare 时，用发行根补跑 `python3 <release-root>/scripts/ph_release.py support`，不必为了加星再下一遍包。检查 / 同步仍然离线，不重新 prepare，也不为了加星上网。安装和以后升级仍从官方地址进行。
 
-**一次性入口切换**：旧版（1.1.7 及更早）用户级入口的 prepare 必查发行元数据里的 `schema_version`，会必然拒绝 1.1.8 及以后发行包；这是预期现象，不重试、不回退、不假称自动恢复。把首个无独立 Schema 版本的已发布标签 v1.1.8 clone 到一个**新的仓外安全目录**（如 `mktemp -d` 创建），不覆盖用户级入口与目标项目，不用 `main` 或本地开发树冒充发行；先在该目录运行 `python3 <新目录>/scripts/ph_release.py prepare --version 1.1.8` 并读取返回根的 Skill，再用这份新工具准备并固定目标 1.1.12 发行根。之后本文件全部升级命令都使用 1.1.12 prepare 返回的根，不再用旧目录或 v1.1.8 发行根冒充最终目标。1.1.8 及以后入口可直接准备 1.1.12。
+**一次性入口切换**：旧版（1.1.7 及更早）用户级入口的 prepare 必查发行元数据里的 `schema_version`，会必然拒绝 1.1.8 及以后发行包；这是预期现象，不重试、不回退、不假称自动恢复。把首个无独立 Schema 版本的已发布标签 v1.1.8 clone 到一个**新的仓外安全目录**（如 `mktemp -d` 创建），不覆盖用户级入口与目标项目，不用 `main` 或本地开发树冒充发行；先在该目录运行 `python3 <新目录>/scripts/ph_release.py prepare --version 1.1.8` 并读取返回根的 Skill，再用这份新工具准备并固定目标 1.1.13 发行根。之后本文件全部升级命令都使用 1.1.13 prepare 返回的根，不再用旧目录或 v1.1.8 发行根冒充最终目标。1.1.8 及以后入口可直接准备 1.1.13。
 
 同一次预检与写入复用这个 `root`。读该 root 的本 Skill 与 `migrations/`。升级工具在发行根，不在目标旧包：
 
@@ -219,6 +219,17 @@ finalize 成功后清单删除 `adapters.codex_skills`，普通 check 不得再�
 | `question-execution-contract` | `docs/约束规范/工程规范/对用户提问.md` 已按执行契约组织（何时需要用户决定、通过正确通道实际提问、把问题写成可回答的决定、根据真实回答推进、纠正失误与恢复中断、边界示例、完成检查），旧编号章节与固定句库不再保留；该文件本身由发行根副本整文件覆盖，与发行根逐字节一致，文件内旧定制不留为生效规则，旧原文已备份；引用该文的规范文档、`.agents/memory/README.md`、`.agents/AGENTS.md` 提问摘要节与各 Skill 门禁句已改为不锚定章节号的语义引用。报告字段、脚本命令、已填项目正文与既有授权结论仍保留，未因本项重问已决定的事 |
 
 该文件适用本版覆盖策略：不按段落语义合并、不保留文件内旧话术或项目定制，直接用发行根副本整文件替换（逐字节一致）；替换前旧原文移入 `~/trash/` 或 `.agents/updates/<ver>/backup/` 备份（现行退役备份机制，禁止 `rm`），重试时文件已是目标内容则不再重复备份、不改动备份原件。软链与非普通文件照常拒绝，写入仍在本 Skill 的用户确认范围内。该文件内的旧提问定制因此不作为仍生效的冲突规则；其他文件中与契约相反的显式规则（如禁止宿主问答工具）仍按冲突规则 `blocked` 并请用户决定。引用该文的语义更新照常进行。向用户确认升级或冲突时按该契约选择通道与问法，不要把项编号念给用户。
+
+## 1.1.13 调用门禁与新技能项
+
+读 `<release-root>/migrations/1.1.12-to-1.1.13.md`，从更早版本出发仍须读完整链。
+
+| id | 做完的样子 |
+| --- | --- |
+| `explicit-invocation-rules` | 十一个既有 Skill（根 `ph-init` 与 scaffold 十个）的 `description` 与正文已合并调用门禁：仅当用户当轮明确点名该技能并要求使用时才调用，普通描述、上下文提及与讨论名称不触发；“只要用户说…就必须使用”“即使没点名”一类描述即触发语句已清除；跨技能自动串联（如进入 worktree 自动调用退出技能）已改为由用户点名，`ph-init` 会话执行已请求升级所需内部步骤与参考文档的说明保留。`.agents/AGENTS.md` 技能表上方与 `docs/约束规范/工程规范/意图与访谈.md`、`docs/意图/_模板.md`、`Git与并行开发.md` 的技能入口表述同步。各 Skill 行为样例补触发正反例。项目对 Skill 正文的已有定制按段落合并保留 |
+| `intent-verify-skill` | 新必需 Skill `ph-intent-verify` 已从发行根安装到 `.agents/skills/ph-intent-verify/`（SKILL.md 与 evals）；`.agents/AGENTS.md` 技能表与 `docs/约束规范/工程规范/意图与访谈.md` 已登记第十二行；本项不迁移任何业务意图，不新增意图状态、目录或纪要 purpose。安装证据记录在 state 项 |
+
+合并前核对 `.agents/skills/ph-intent-verify/`：旧版（1.1.12 及更早）不携带该 Skill，若项目已有**同名自定义 Skill**，本项 `blocked`，保留原件并请用户决定（改名保留或替换为官方版），不得覆盖；项目规则明确禁止新增 ph-* Skill 时同样 `blocked`。形态规整的同名目录由 `inspect` 列入冲突清单；无 `SKILL.md` 或含软链等异常形态会先被结构校验直接拒绝，两种路径都 fail-closed。`explicit-invocation-rules` 与项目显式规则相反（如项目要求按普通描述自动触发某 Skill）时该项 `blocked`，交用户裁决。
 
 ## 完成标准
 

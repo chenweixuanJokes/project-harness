@@ -35,13 +35,15 @@ ITEM_STATUSES = ITEM_DONE | {"pending", "blocked"}
 BASE_SKILLS = ("ph-init", "ph-worktree-enter", "ph-worktree-exit", "ph-memory-capture", "ph-memory-archive", "ph-memory-ask")
 OLD_ALIASES = ("ph-intent-capture", "ph-intent-plan", "ph-intent-abandon")
 NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
-# 1.1.10 (migration item docs-sync-skill) introduced the ph-docs-sync skill.
-# No release at or below 1.1.9 ships it, so a live same-named directory on an
-# older project is project content on a PH-reserved name: the upgrade must
-# block the item instead of overwriting it.
-DOCS_SYNC_SKILL = "ph-docs-sync"
-DOCS_SYNC_ITEM = "docs-sync-skill"
-DOCS_SYNC_RELEASE = "1.1.10"
+# Skills introduced by a named migration item at a known release. No earlier
+# release ships them, so a live same-named directory on an older project is
+# project content on a PH-reserved name: the upgrade must block that item
+# instead of overwriting it. (ph-docs-sync arrived with 1.1.10/docs-sync-skill;
+# ph-intent-verify arrives with 1.1.13/intent-verify-skill.)
+RELEASE_ONLY_SKILLS = {
+    "ph-docs-sync": ("docs-sync-skill", "1.1.10"),
+    "ph-intent-verify": ("intent-verify-skill", "1.1.13"),
+}
 INTENT_ROOTS = ("docs/意图/待办", "docs/意图/实施")
 INTENT_KINDS = ("新特性", "问题记录")
 TARGET_FILES = ("docs/意图/README.md", "docs/意图/_模板.md", "docs/意图/访谈纪要/_模板.md", "docs/约束规范/工程规范/意图与访谈.md", ".agents/AGENTS.md")
@@ -185,11 +187,12 @@ def detect_profile(names: set[str]) -> tuple[str, list[str]]:
     base, old, new = set(BASE_SKILLS), set(OLD_ALIASES), set(NEW_INTENT)
     if not base <= names:
         raise PHError("unknown PH skill layout; refuse to guess")
-    # Release-only skills (ph-docs-sync from 1.1.10) are tolerated here so an
-    # older project carrying a same-named directory still resolves to its
-    # historical profile and gets the named conflict below, instead of a
-    # generic unknown-layout error; at 1.1.10+ the skill is the release's own.
-    core = names - {DOCS_SYNC_SKILL}
+    # Release-only skills (ph-docs-sync from 1.1.10, ph-intent-verify from
+    # 1.1.13) are tolerated here so an older project carrying a same-named
+    # directory still resolves to its historical profile and gets the named
+    # conflict below, instead of a generic unknown-layout error; from each
+    # introducing release on the skill is the release's own.
+    core = names - set(RELEASE_ONLY_SKILLS)
     if old & core and new & core:
         both = ", ".join(sorted((old | new) & core))
         return "mixed-intent-names", [f"old and new intent skill names both live: {both}"]
@@ -202,27 +205,32 @@ def detect_profile(names: set[str]) -> tuple[str, list[str]]:
     raise PHError("unknown PH skill layout; refuse to guess")
 
 
-def docs_sync_name_conflicts(names: set[str], disk_version: str, existing: dict | None) -> list[str]:
-    """A live ph-docs-sync below its introducing release blocks docs-sync-skill.
+def release_skill_name_conflicts(names: set[str], disk_version: str, existing: dict | None) -> list[str]:
+    """Live release-only skills below their introducing release block the item.
 
-    No PH release at or below 1.1.9 ships the skill, so an older project with
-    a live ``.agents/skills/ph-docs-sync`` directory carries project content
-    on a PH-reserved name: the semantic merge must keep it in place, mark the
-    docs-sync-skill item blocked, and ask the user instead of overwriting.
-    Reported only before the merge starts (no target state on disk yet);
-    once the state exists its recorded item status governs, and at 1.1.10+
-    the skill is the release's own and never conflicts.
+    No PH release before the introducing version ships the skill, so an older
+    project with a live same-named ``.agents/skills/<name>`` directory carries
+    project content on a PH-reserved name: the semantic merge must keep it in
+    place, mark that migration item blocked, and ask the user instead of
+    overwriting. Reported only before the merge starts (no target state on
+    disk yet); once the state exists its recorded item status governs, and
+    from the introducing release on the skill is the release's own and never
+    conflicts.
     """
-    if DOCS_SYNC_SKILL not in names or existing is not None:
-        return []
-    if semver_tuple(disk_version) >= semver_tuple(DOCS_SYNC_RELEASE):
-        return []
-    return [
-        f".agents/skills/{DOCS_SYNC_SKILL}: same-name directory exists below "
-        f"{DOCS_SYNC_RELEASE} and no PH release ships it; treat it as project "
-        f"content, keep it in place, block the {DOCS_SYNC_ITEM} item, and ask "
-        "the user before any replacement"
-    ]
+    out: list[str] = []
+    for skill in sorted(RELEASE_ONLY_SKILLS):
+        item, introduced = RELEASE_ONLY_SKILLS[skill]
+        if skill not in names or existing is not None:
+            continue
+        if semver_tuple(disk_version) >= semver_tuple(introduced):
+            continue
+        out.append(
+            f".agents/skills/{skill}: same-name directory exists below "
+            f"{introduced} and no PH release ships it; treat it as project "
+            f"content, keep it in place, block the {item} item, and ask "
+            "the user before any replacement"
+        )
+    return out
 
 
 def load_index() -> list[dict]:
@@ -534,7 +542,7 @@ def inspect_payload(repo: Path) -> dict:
     state_path = updates / to_version / "state.json"
     existing = load_state(repo, to_version) if state_path.exists() or state_path.is_symlink() else None
     from_version = resolve_from_version(disk_version, to_version, existing)
-    conflicts += docs_sync_name_conflicts(names, disk_version, existing)
+    conflicts += release_skill_name_conflicts(names, disk_version, existing)
     if semver_tuple(from_version) > semver_tuple(to_version):
         raise PHError(f"refusing downgrade {from_version} -> {to_version}")
     chain = chain_between(from_version, to_version)
@@ -999,46 +1007,49 @@ def build_candidate(data: dict, version: str, skills: tuple[str, ...]) -> dict:
     return cand
 
 
-def assert_docs_sync_install(repo: Path, disk_version: str, state: dict) -> None:
-    """Pin a freshly installed ph-docs-sync to the release bytes.
+def assert_release_skill_installs(repo: Path, disk_version: str, state: dict) -> None:
+    """Pin each freshly installed release-only skill to the release bytes.
 
-    During the 1.1.10 upgrade (disk still below 1.1.10) an applied or
-    not_applicable docs-sync-skill item means the semantic merge installed
-    the release skill, so the canonical tree must match the release scaffold
-    byte for byte: a same-name custom skill left in place must not pass as
-    the installed one. After finalize writes 1.1.10 the pin no longer
-    applies and later project customization of the skill is free.
+    While the disk is still below a skill's introducing release, an applied
+    or not_applicable migration item means the semantic merge installed the
+    release skill, so the canonical tree must match the release scaffold byte
+    for byte: a same-name custom skill left in place must not pass as the
+    installed one (ph-docs-sync with 1.1.10, ph-intent-verify with 1.1.13).
+    After finalize writes the introducing version the pin no longer applies
+    and later project customization of the skill is free.
     """
     statuses = {
         item.get("id"): item.get("status")
         for item in state.get("items", [])
         if isinstance(item, dict)
     }
-    if statuses.get(DOCS_SYNC_ITEM) not in ITEM_DONE:
-        return  # pending/blocked items already fail the evidence gate
-    if semver_tuple(disk_version) >= semver_tuple(DOCS_SYNC_RELEASE):
-        return
-    target = SOURCE_ROOT / "assets" / "scaffold" / ".agents" / "skills" / DOCS_SYNC_SKILL
-    installed = repo / ".agents" / "skills" / DOCS_SYNC_SKILL
-    if not installed.is_dir() or installed.is_symlink():
-        raise PHError(f"canonical skill {DOCS_SYNC_SKILL} must be a real directory")
-    assert_real_dir(repo, installed, f"canonical skill {DOCS_SYNC_SKILL}")
-    if not target.is_dir() or target.is_symlink():
-        raise PHError(f"release scaffold is missing the {DOCS_SYNC_SKILL} skill")
-    try:
-        target_files = {
-            posix_rel(path.relative_to(target)): path.read_bytes() for path in iter_files(target)
-        }
-        installed_files = {
-            posix_rel(path.relative_to(installed)): path.read_bytes() for path in iter_files(installed)
-        }
-    except PHError as exc:
-        raise PHError(f"cannot verify the installed {DOCS_SYNC_SKILL}: {exc}") from exc
-    if installed_files != target_files:
-        raise PHError(
-            f"installed {DOCS_SYNC_SKILL} does not match the release skill; a same-name "
-            "custom skill must block the migration item instead of passing as installed"
-        )
+    for skill in sorted(RELEASE_ONLY_SKILLS):
+        item, introduced = RELEASE_ONLY_SKILLS[skill]
+        if statuses.get(item) not in ITEM_DONE:
+            continue  # pending/blocked items already fail the evidence gate
+        if semver_tuple(disk_version) >= semver_tuple(introduced):
+            continue
+        target = SOURCE_ROOT / "assets" / "scaffold" / ".agents" / "skills" / skill
+        installed = repo / ".agents" / "skills" / skill
+        if not installed.is_dir() or installed.is_symlink():
+            raise PHError(f"canonical skill {skill} must be a real directory")
+        assert_real_dir(repo, installed, f"canonical skill {skill}")
+        if not target.is_dir() or target.is_symlink():
+            raise PHError(f"release scaffold is missing the {skill} skill")
+        try:
+            target_files = {
+                posix_rel(path.relative_to(target)): path.read_bytes() for path in iter_files(target)
+            }
+            installed_files = {
+                posix_rel(path.relative_to(installed)): path.read_bytes() for path in iter_files(installed)
+            }
+        except PHError as exc:
+            raise PHError(f"cannot verify the installed {skill}: {exc}") from exc
+        if installed_files != target_files:
+            raise PHError(
+                f"installed {skill} does not match the release skill; a same-name "
+                "custom skill must block the migration item instead of passing as installed"
+            )
 
 
 def verify_payload(repo: Path) -> dict:
@@ -1062,7 +1073,7 @@ def verify_payload(repo: Path) -> dict:
     pending = [i["id"] for i in state["items"] if i.get("status") not in ITEM_DONE or not str(i.get("evidence", "")).strip()]
     if pending:
         raise PHError("items are not applied/not_applicable with evidence: " + ", ".join(pending))
-    assert_docs_sync_install(repo, disk_version, state)
+    assert_release_skill_installs(repo, disk_version, state)
     check_target_layout(repo, skills)
     assert_target_schema(repo)
     assert_local_ph_init(repo, to_version, skills)

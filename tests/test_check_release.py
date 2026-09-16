@@ -35,14 +35,27 @@ REQUIRED_SKILLS = [
     "ph-memory-ask",
     "ph-intent-new",
     "ph-intent-impl",
+    "ph-intent-verify",
     "ph-intent-drop",
     "ph-merge-update",
     "ph-docs-sync",
 ]
-# The pre-1.1.8 era shipped exactly ten skills (ph-docs-sync arrived in
-# 1.1.10); the synthetic legacy fixture keeps the historical list instead
-# of blindly inheriting the current one.
-LEGACY_TEN_SKILLS = REQUIRED_SKILLS[:-1]
+# The pre-1.1.8 era shipped exactly these ten skills (ph-docs-sync arrived in
+# 1.1.10, ph-intent-verify in 1.1.13); the synthetic legacy fixture keeps the
+# historical list explicitly instead of slicing the current one, so a new
+# release skill can never silently grow the legacy fixture.
+LEGACY_TEN_SKILLS = [
+    "ph-init",
+    "ph-worktree-enter",
+    "ph-worktree-exit",
+    "ph-memory-capture",
+    "ph-memory-archive",
+    "ph-memory-ask",
+    "ph-intent-new",
+    "ph-intent-impl",
+    "ph-intent-drop",
+    "ph-merge-update",
+]
 
 
 def _read_release_version() -> str:
@@ -163,6 +176,17 @@ class CheckReleaseTests(unittest.TestCase):
         self.assertEqual(result["version"], CURRENT)
         self.assertEqual(result["required_skills"], REQUIRED_SKILLS)
         self.assertNotIn("schema_version", result)
+
+    def test_skill_list_contract(self):
+        # 1.1.13 ships twelve skills; the synthetic pre-1.1.8 legacy fixture
+        # must keep exactly the historical ten (ph-docs-sync arrived in
+        # 1.1.10, ph-intent-verify in 1.1.13) instead of slicing the current
+        # list, so new release skills never leak into legacy fixtures.
+        self.assertEqual(len(REQUIRED_SKILLS), 12)
+        self.assertEqual(len(LEGACY_TEN_SKILLS), 10)
+        self.assertNotIn("ph-docs-sync", LEGACY_TEN_SKILLS)
+        self.assertNotIn("ph-intent-verify", LEGACY_TEN_SKILLS)
+        self.assertIn("ph-intent-verify", REQUIRED_SKILLS)
 
     def test_cli_current_tree(self):
         buf = io.StringIO()

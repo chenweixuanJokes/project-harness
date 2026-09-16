@@ -29,8 +29,8 @@ Last verified: <填写：YYYY-MM-DD>
 - 并行任务的隔离目录固定为仓库根下 `.worktrees/<slug>--<hash>/`。`.worktrees/` 是真实目录，不是软链。`slug` 由英文任务分支生成，短 hash 防止大小写、截断与同名冲突；脚本必须校验 Git ref 和目标路径不越出 `.worktrees/`。
 - `.worktrees/` 由仓库根 `.gitignore` 的 PH marker `/.worktrees/` 忽略。不要把隔离目录或本机会话状态提交进版本库。
 - worktree 是执行环境，不是第二份知识库。约束、Wiki、记忆仍以已入库版本为准；在隔离环境里改这些文件时，随该任务一并提交。
-- 进入流程由 `ph-worktree-enter` 执行，只允许从 clean main worktree 创建一级 linked worktree。源分支和源提交直接取主工作区当前状态，任务分支由代理依据任务语义和本节命名规则确定；用户明确要求创建 worktree 已经构成本次创建授权，正常计划审查通过后直接创建，不再询问这两个分支或是否实际创建。流程记录源目录、源分支、源提交、任务分支、任务路径，以及此刻审核过的验证命令。验证命令会在任务树和合并后的 source 树执行，等同仓库代码，必须经过评审；任务分支后续改写清单不影响本 session。验证命令若改变 staged、tracked 或 untracked 状态，流程必须停止，由用户审查变化。
-- 退出流程由 `ph-worktree-exit` 执行：先跑项目门禁，再安全提交任务改动，合并回进入时记录的源目录与源分支，再次验证。合并采用 Git 默认 fast-forward / merge 策略并显式禁用 autostash。修复或重跑必须覆盖全部 phase 的 dry-run，不能只复验其中一个 phase。
+- 进入流程由用户当轮点名 `ph-worktree-enter` 并要求使用时执行，只允许从 clean main worktree 创建一级 linked worktree。源分支和源提交直接取主工作区当前状态，任务分支由代理依据任务语义和本节命名规则确定；用户明确要求创建 worktree 已经构成本次创建授权，正常计划审查通过后直接创建，不再询问这两个分支或是否实际创建。流程记录源目录、源分支、源提交、任务分支、任务路径，以及此刻审核过的验证命令。验证命令会在任务树和合并后的 source 树执行，等同仓库代码，必须经过评审；任务分支后续改写清单不影响本 session。验证命令若改变 staged、tracked 或 untracked 状态，流程必须停止，由用户审查变化。
+- 退出流程由用户当轮点名 `ph-worktree-exit` 并要求使用时执行：先跑项目门禁，再安全提交任务改动，合并回进入时记录的源目录与源分支，再次验证。合并采用 Git 默认 fast-forward / merge 策略并显式禁用 autostash。修复或重跑必须覆盖全部 phase 的 dry-run，不能只复验其中一个 phase。进入 worktree 不推导出退出技能的调用授权。
 - 退出提交遵守安全分级：只有 staged 时只提交 index；只有 tracked unstaged 时可 `git add -u`；两者并存或存在 untracked 时必须停止让用户选择。向用户展示时至少给出 HEAD、当前 branch、index 与 untracked 摘要，并问“这次提交要包括哪些”，不要问内部命令名。ignored 文件一律阻断清理，并提醒先自行保全；不得加入提交或静默丢弃。不得使用 `--no-verify` 绕过 hooks。
 - 同一 main 工作区上的 enter/exit 交付互斥：已有未完成交付时不得并行再开或再收另一条。
 - 合并成功后必须另行征得用户同意，才能普通移除本 session 的 clean linked worktree；对用户问“要不要删掉这个隔离目录”，不要问 session 或脚本参数。默认保留任务分支，不 push、不删分支、不 prune 其它 worktree，也不使用 force。
