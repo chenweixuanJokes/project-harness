@@ -1,0 +1,9 @@
+{
+  "skill_links": 13,
+  "eval_cases": 35,
+  "outside_files_unchanged": 133,
+  "source_fixtures_unchanged": true,
+  "markdown_characters_before": 17286,
+  "markdown_characters_after": 11717,
+  "note": "结构检查，不是模型行为通过率"
+}

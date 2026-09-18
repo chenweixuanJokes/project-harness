@@ -1,0 +1,6 @@
+{
+  "eval_id": 3,
+  "eval_name": "implement-stale-config",
+  "prompt": "真实文件变化检查，不是Git生命周期测试",
+  "assertions": []
+}

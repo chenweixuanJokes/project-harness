@@ -30,7 +30,7 @@ import ph_release  # noqa: E402
 FORMAT_VERSION = 1
 STABLE_TAG = re.compile(r"^v([0-9]+)\.([0-9]+)\.([0-9]+)$")
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
-# Strict kebab-case for the twelve distributed skills: lowercase alphanumeric
+# Strict kebab-case for the thirteen distributed skills: lowercase alphanumeric
 # segments joined by single hyphens, no leading/trailing/double hyphen.
 SKILL_NAME = re.compile(r"^ph-[a-z0-9]+(?:-[a-z0-9]+)*$")
 ITEM_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -199,8 +199,8 @@ def load_release(root: Path) -> dict:
         not isinstance(item, str) or not SKILL_NAME.match(item) for item in skills
     ):
         raise CheckError("illegal release.json: required_skills must be ph-* names")
-    if len(skills) != 12 or len(set(skills)) != 12:
-        raise CheckError("illegal release.json: required_skills must list 12 unique names")
+    if len(skills) != 13 or len(set(skills)) != 13:
+        raise CheckError("illegal release.json: required_skills must list 13 unique names")
     if skills[0] != "ph-init":
         raise CheckError("illegal release.json: required_skills[0] must be ph-init")
     return {
@@ -357,7 +357,7 @@ def parse_frontmatter(text: str, label: str) -> dict[str, str]:
 
 
 def validate_skill(path: Path, expected_name: str) -> None:
-    """Common strict subset shared by all twelve distributed skills.
+    """Common strict subset shared by all thirteen distributed skills.
 
     The skill slot (root ``SKILL.md`` for ``ph-init``, the scaffold directory
     otherwise) and the frontmatter ``name`` must be the same strict kebab-case

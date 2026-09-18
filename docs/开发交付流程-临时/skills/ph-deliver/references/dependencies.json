@@ -1,0 +1,35 @@
+{
+  "scope": "目标项目能力发现清单，不是安装器或机器权限策略；路径相对目标项目根目录。非 PH 项目使用已有同类规范。",
+  "always": {
+    "capabilities": [
+      "读取适用项目约束",
+      "识别真实工作目录和当前任务",
+      "读取相关实现与验证入口"
+    ]
+  },
+  "conditional": [
+    {
+      "when": "目标项目已采用 PH",
+      "project_files": [
+        ".agents/AGENTS.md",
+        ".agents/ph.json"
+      ]
+    },
+    {
+      "when": "在 PH 项目提问、创建或更新任务记录、执行 Git 操作；只读取相关规范",
+      "project_files": [
+        "docs/约束规范/工程规范/对用户提问.md",
+        "docs/约束规范/工程规范/意图与访谈.md",
+        "docs/约束规范/工程规范/Git与并行开发.md"
+      ]
+    },
+    {
+      "when": "用户授权且项目显式调用门禁满足，需要交付或恢复 PH worktree",
+      "project_files": [
+        ".agents/skills/ph-worktree-exit/SKILL.md",
+        ".agents/skills/ph-worktree-exit/scripts/ph_worktree.py"
+      ]
+    }
+  ],
+  "packaging": "本文件随所属技能独立保留；项目路径是条件能力索引，不是无条件安装依赖。"
+}

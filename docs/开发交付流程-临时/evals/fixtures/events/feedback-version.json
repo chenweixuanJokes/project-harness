@@ -1,0 +1,14 @@
+{
+  "fixture_only": true,
+  "criterion": "A1 CSV下载内容",
+  "historical_feedback": {
+    "build": "build-10",
+    "text": "文件符合约定",
+    "source": "模拟用户事件，非真实验收"
+  },
+  "current": {
+    "build": "build-11",
+    "change": "CSV编码由UTF-8改为UTF-16"
+  },
+  "technical_check": "pending"
+}

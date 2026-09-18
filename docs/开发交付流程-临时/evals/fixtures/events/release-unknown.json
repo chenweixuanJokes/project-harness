@@ -1,0 +1,11 @@
+{
+  "fixture_only": true,
+  "request": "deploy-v2",
+  "response": "timeout",
+  "read_only_query": {
+    "deployment": "v2",
+    "status": "starting"
+  },
+  "health": "pending",
+  "rollback_authorized": false
+}

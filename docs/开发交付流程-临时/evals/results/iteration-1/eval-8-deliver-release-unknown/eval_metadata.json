@@ -1,0 +1,6 @@
+{
+  "eval_id": 8,
+  "eval_name": "deliver-release-unknown",
+  "prompt": "模拟状态走读，未调用发布API",
+  "assertions": []
+}

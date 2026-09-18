@@ -126,6 +126,16 @@
         "explicit-invocation-rules",
         "intent-verify-skill"
       ]
+    },
+    {
+      "from_version": "1.1.13",
+      "to_version": "1.1.14",
+      "path": "migrations/1.1.13-to-1.1.14.md",
+      "items": [
+        "worktree-wip-confirm",
+        "intent-verify-acceptance-contract",
+        "sure-skill"
+      ]
     }
   ]
 }

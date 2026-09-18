@@ -39,10 +39,12 @@ NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
 # release ships them, so a live same-named directory on an older project is
 # project content on a PH-reserved name: the upgrade must block that item
 # instead of overwriting it. (ph-docs-sync arrived with 1.1.10/docs-sync-skill;
-# ph-intent-verify arrives with 1.1.13/intent-verify-skill.)
+# ph-intent-verify with 1.1.13/intent-verify-skill; ph-sure with
+# 1.1.14/sure-skill.)
 RELEASE_ONLY_SKILLS = {
     "ph-docs-sync": ("docs-sync-skill", "1.1.10"),
     "ph-intent-verify": ("intent-verify-skill", "1.1.13"),
+    "ph-sure": ("sure-skill", "1.1.14"),
 }
 INTENT_ROOTS = ("docs/意图/待办", "docs/意图/实施")
 INTENT_KINDS = ("新特性", "问题记录")
@@ -188,10 +190,10 @@ def detect_profile(names: set[str]) -> tuple[str, list[str]]:
     if not base <= names:
         raise PHError("unknown PH skill layout; refuse to guess")
     # Release-only skills (ph-docs-sync from 1.1.10, ph-intent-verify from
-    # 1.1.13) are tolerated here so an older project carrying a same-named
-    # directory still resolves to its historical profile and gets the named
-    # conflict below, instead of a generic unknown-layout error; from each
-    # introducing release on the skill is the release's own.
+    # 1.1.13, ph-sure from 1.1.14) are tolerated here so an older project
+    # carrying a same-named directory still resolves to its historical profile
+    # and gets the named conflict below, instead of a generic unknown-layout
+    # error; from each introducing release on the skill is the release's own.
     core = names - set(RELEASE_ONLY_SKILLS)
     if old & core and new & core:
         both = ", ".join(sorted((old | new) & core))
@@ -1014,7 +1016,8 @@ def assert_release_skill_installs(repo: Path, disk_version: str, state: dict) ->
     or not_applicable migration item means the semantic merge installed the
     release skill, so the canonical tree must match the release scaffold byte
     for byte: a same-name custom skill left in place must not pass as the
-    installed one (ph-docs-sync with 1.1.10, ph-intent-verify with 1.1.13).
+    installed one (ph-docs-sync with 1.1.10, ph-intent-verify with 1.1.13,
+    ph-sure with 1.1.14).
     After finalize writes the introducing version the pin no longer applies
     and later project customization of the skill is free.
     """

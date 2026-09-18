@@ -17,7 +17,35 @@ fixture asserts exactly that byte-identity and the recoverable backup. The
 1.1.13 hop has two handlers: ``explicit-invocation-rules`` merges the
 invoke-only-when-named gate into the eleven pre-1.1.13 skills (and clears the
 auto-chaining wording), and ``intent-verify-skill`` installs the new
-``ph-intent-verify`` skill from the release scaffold.
+``ph-intent-verify`` skill from the release scaffold. The 1.1.14 hop has three
+handlers: ``worktree-wip-confirm`` merges the unified WIP confirmation (fixed
+two-option question asking whether to adopt a wip commit as the way out of the
+current blocker - not a per-file content approval - actual question-tool call,
+ordinary drift under the same blocker never re-asked while the authorization
+is not long-term, refusal/cancel/no-answer stops) plus the conflict-recovery
+contract (shared fixed conflict question with "保留现场，我解决后继续" /
+"撤销这次合并" only, no stash/discard/ours/theirs/agent presets, keep stops
+and waits, abort single-use, continue only on an explicit resolved-and-staged
+continue request verified read-only, conflict state outranking the WIP flow)
+into the two worktree skills
+and the parallel-development spec, replaces the two worktree runtime scripts
+byte-identically with the release root (unified ``wip`` subcommand with a
+read-only dry-run, read-only ``doctor``, explicit ``recover``, ``redeliver``
+and the enter expectation flags, while existing sessions stay untouched and
+old sessions lacking new evidence block conservatively), and existing
+confirmed WIP decisions are never re-asked;
+``intent-verify-acceptance-contract`` merges the acceptance-contract semantics
+(formal entry first per target user, remote-localhost honesty, no-entry/no
+page plus separately-authorized auxiliary tools, per-client/per-role coverage,
+async accept-vs-complete and file standards, deep links never proving
+navigation-permission standards, user feedback separated from pre-check
+evidence with contradiction clarification, read-only prepares no writes,
+recovery re-verifies only affected points) into ``ph-intent-verify``; and
+``sure-skill`` installs the new thirteenth skill ``ph-sure`` (wrap-up
+verification of implemented / tested / merged / leftovers from current
+evidence, no reliance on verbal claims, clean-tree-is-not-merged, no
+target-branch guessing, no new commit/merge/publish/delete authorization)
+from the release scaffold.
 
 The semantic merge is performed by explicit per-migration-item handlers. A
 migration item that is not in the handler registry fails the test instead of
@@ -100,11 +128,16 @@ CORE_NON_INIT = (
 BASE_SKILLS = ("ph-init",) + CORE_NON_INIT
 OLD_ALIASES = ("ph-intent-capture", "ph-intent-plan", "ph-intent-abandon")
 NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
-# Historical 1.1.10-1.1.12 releases ship exactly these eleven; the current
-# release adds ph-intent-verify (1.1.13) on top of them.
+# Historical 1.1.10-1.1.12 releases ship exactly these eleven; 1.1.13 added
+# ph-intent-verify, so the tagged 1.1.13 release ships the twelve. The
+# unreleased 1.1.14 target adds ph-sure as the thirteenth; the historical
+# twelve stay pinned to their actual values so new target skills never leak
+# into historical fixture verification.
 HISTORICAL_ELEVEN_SKILLS = BASE_SKILLS + NEW_INTENT + ("ph-merge-update", "ph-docs-sync")
-TARGET_SKILLS = HISTORICAL_ELEVEN_SKILLS + ("ph-intent-verify",)
+HISTORICAL_TWELVE_SKILLS = HISTORICAL_ELEVEN_SKILLS + ("ph-intent-verify",)
+TARGET_SKILLS = HISTORICAL_TWELVE_SKILLS + ("ph-sure",)
 LAYOUT_SKILLS = {
+    "twelve-skills": HISTORICAL_TWELVE_SKILLS,
     "eleven-skills": HISTORICAL_ELEVEN_SKILLS,
     "six-skills": BASE_SKILLS,
     "legacy-names": ("ph-init",) + CORE_NON_INIT + OLD_ALIASES,
@@ -112,6 +145,7 @@ LAYOUT_SKILLS = {
     "ten-skills": ("ph-init",) + CORE_NON_INIT + NEW_INTENT + ("ph-merge-update",),
 }
 LAYOUT_PROFILE = {
+    "twelve-skills": "1.1.0-current-names",
     "eleven-skills": "1.1.0-current-names",
     "six-skills": "1.0.0",
     "legacy-names": "1.1.0-legacy-names",
@@ -271,7 +305,12 @@ def sources_for_version(version: str):
             f"historical version {version} has no published tag v{version} and no fixed commit source; "
             "the upgrade matrix refuses to fabricate history - publish the tag or register a fixed source"
         )
-    return (("eleven-skills" if semver_tuple(version) >= (1, 1, 10) else "ten-skills", tag),)
+    layout = (
+        "twelve-skills" if semver_tuple(version) >= (1, 1, 13)
+        else "eleven-skills" if semver_tuple(version) >= (1, 1, 10)
+        else "ten-skills"
+    )
+    return ((layout, tag),)
 
 
 def build_cases():
@@ -718,6 +757,95 @@ ENGINE_ENSURE = {
         "docs": [f"{W}/意图与访谈.md"],
         "skills": ("ph-intent-verify",),
         "agents": True,
+    },
+    "worktree-wip-confirm": {
+        # 1.1.14 release deltas this item owns: the unified WIP confirmation
+        # across the three blocked sites (ph-worktree-enter's source tree,
+        # ph-worktree-exit's task tree and the merge-target source tree): a
+        # read-only listing of directory, branch, staged/unstaged/untracked
+        # and the proposed wip message (explaining the situation and the
+        # safety screening), then an actual question-tool call asking whether
+        # to adopt the wip commit as the way out of this blocker - not a
+        # per-file content approval - offering exactly "确认 WIP 并继续" /
+        # "停止，保留现场"; refusal, cancel or no answer keeps the changes
+        # and stops; ordinary content drift under the same blocker before the
+        # commit runs is not re-asked, and the authorization is not long-term
+        # (running the commit consumes it; every new blocking instance is
+        # reconfirmed against the situation at hand). Exit no longer defaults
+        # normal commits by the staged/unstaged classification. Also owned:
+        # the conflict-recovery contract (real MERGE_HEAD/unmerged conflict
+        # verified read-only first, the merge identity checked against the
+        # session snapshot before continue and abort, the shared fixed
+        # conflict question offering exactly "保留现场，我解决后继续" /
+        # "撤销这次合并" with no stash/discard/ours/theirs/agent presets,
+        # keep stops and waits, abort granted only by that option for that
+        # one merge, continue only after an explicit resolved-and-staged
+        # continue request verified read-only, conflict state outranking the
+        # WIP flow). Also owned: the parallel-development spec's two WIP
+        # paragraphs and the conflict question section, both skills' trigger
+        # evals, the two worktree runtime scripts replaced byte-identically
+        # with the release root (unified wip/doctor/recover/redeliver
+        # subcommands and the enter expectation flags; existing sessions are
+        # never rewritten and old sessions lacking new evidence block
+        # conservatively), and the runtime-material version refs that follow
+        # the release bump (scaffold ph-merge-update skill, root SKILL.md,
+        # release.json, migrations register this item). Existing confirmed
+        # WIP or cleanup decisions are never re-asked.
+        "payload": True,
+        "skills": ("ph-worktree-enter", "ph-worktree-exit", "ph-merge-update"),
+        "docs": [f"{W}/Git与并行开发.md"],
+        "agents": True,
+    },
+    "intent-verify-acceptance-contract": {
+        # 1.1.14 release deltas this item owns: the ph-intent-verify skill's
+        # acceptance-contract semantics - entry chosen per the intent's actual
+        # target users with the formal entry first (web page, user-terminal
+        # command, minimal API call; business users never handed only a curl
+        # command), remote localhost/127.0.0.1 never claimed as user-side
+        # address, opening distinguished as provided vs request-accepted vs
+        # user-side-loaded, missing entries reported honestly as delivery
+        # defects (no default demo pages; auxiliary tools only after separate
+        # authorization as a separate task, never mocking business results,
+        # real calls only), one independent result per round possibly spanning
+        # steps without expanding the standard and written into the
+        # user-visible message, per-client and per-role coverage, async
+        # observed as accepted-or-completed per the standard with no invented
+        # timeout failure, file standards actually obtaining the file, deep
+        # links never proving navigation/permission standards, user feedback
+        # (four states) separated from pre-check evidence with contradiction
+        # clarification over object/environment/input/role and no fabricated
+        # failures, docs verified against scripts/configs within
+        # authorization, cache/log byproducts scoped to authorized operations
+        # (read-only sessions start no writing preparations), records carrying
+        # entry / role / known build (never fabricated) / pre-check evidence
+        # and excluding secrets, sensitive inputs and credentialed URLs,
+        # non-read-only writes limited to appending the target intent's 记录
+        # section (read-only also prepares no writes), and recovery
+        # re-verifying only affected points. The invocation gate is unchanged
+        # by this item.
+        "skills": ("ph-intent-verify",),
+    },
+    "sure-skill": {
+        # 1.1.14 release deltas this item owns: the new thirteenth skill
+        # ph-sure (SKILL.md + evals) installed from the release scaffold, its
+        # thirteenth row in the canonical AGENTS.md skill table, the fixed
+        # skill-count wording in the completion guide, and the runtime
+        # material version refs that follow the release bump (release.json,
+        # migrations register this item; the canonical AGENTS merge itself is
+        # owned by worktree-wip-confirm's payload/agents refresh in the same
+        # hop). The skill verifies the four wrap-up questions (implemented,
+        # tested, merged, leftovers) from current evidence only: verbal
+        # claims are re-verified, untested/failed/not-applicable are kept
+        # apart, a clean worktree is not a merge, and the target branch is
+        # never guessed; the check itself grants no commit/merge/publish/
+        # delete authorization and never crosses the user acceptance gate.
+        # No business intent, lifecycle status, directory or interview
+        # purpose is added; a live same-name custom skill on an older project
+        # blocks the item upstream (release_skill_name_conflicts) instead of
+        # being replaced.
+        "payload": True,
+        "docs": [f"{W}/初始化与文档补全.md"],
+        "skills": ("ph-sure",),
     },
 }
 SPECIAL_SCAFFOLD_RELS = {".gitignore", ".agents/ph.json", ".agents/ph.schema.json", ".agents/AGENTS.md"}
@@ -1174,8 +1302,13 @@ def _make_handler(item_id):
             engine.ensure_schema()
         codex_archived, codex_left = [], []
         if spec.get("codex"):
-            # Later hops can change canonical skills after mirror classification.
-            for name in TARGET_SKILLS:
+            # Later hops can change canonical skills after mirror
+            # classification. Only skills a historical install could have
+            # carried (and therefore could have mirrored into .codex) are
+            # synced here: release-only skills introduced by the target hop
+            # (ph-sure in 1.1.14) are installed by their own migration item
+            # and have no historical mirror to classify.
+            for name in HISTORICAL_TWELVE_SKILLS:
                 if name != "ph-init":
                     engine.ensure_skill(name)
             engine.ensure_payload()

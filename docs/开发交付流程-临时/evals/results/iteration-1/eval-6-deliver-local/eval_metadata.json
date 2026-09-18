@@ -1,0 +1,6 @@
+{
+  "eval_id": 6,
+  "eval_name": "deliver-local",
+  "prompt": "真实本地文件检查",
+  "assertions": []
+}

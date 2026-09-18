@@ -1,0 +1,6 @@
+{
+  "eval_id": 7,
+  "eval_name": "deliver-merge-failed",
+  "prompt": "模拟回执走读，未执行合并",
+  "assertions": []
+}

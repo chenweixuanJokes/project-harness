@@ -4,13 +4,13 @@
     {
       "id": 1,
       "prompt": "用 ph-worktree-enter 给这个需求开一个隔离 worktree，从主工作区创建，任务分支用 feature/agent-search。",
-      "expected_output": "触发 ph-worktree-enter；源分支直接取主工作区当前 feature 分支，使用用户已给出的新任务分支 feature/agent-search，读取项目规范并审查只读计划；用户的创建请求已经授权本次正常创建，计划无异常时直接 apply，创建 PH session 与 linked worktree，不再询问分支或是否真正创建。",
+      "expected_output": "触发 ph-worktree-enter；源分支直接取主工作区当前 feature 分支，使用用户已给出的新任务分支 feature/agent-search，读取项目规范并审查只读计划；用户的创建请求已经授权本次正常创建，计划无异常时直接 apply，创建 PH session 与 linked worktree，不再询问分支或是否真正创建；源工作区干净，正常创建无需 WIP 提交。",
       "files": []
     },
     {
       "id": 2,
       "prompt": "用 ph-worktree-enter 进入隔离工作区，但主目录现在有未提交修改，帮我处理一下。",
-      "expected_output": "触发 ph-worktree-enter，但阻断创建；列出脏状态，不自动 commit、stash 或丢弃。",
+      "expected_output": "触发 ph-worktree-enter，但停止创建；先只读列明源工作区目录、分支与 staged、unstaged、untracked 完整清单及拟用 wip 信息（用于说明现场与安全筛查结果），再实际调用问答工具提固定问句（问的是是否采用 wip: 提交解决当前这次阻断，不是对文件内容的逐项审批），只给“确认 WIP 并继续”“停止，保留现场”两个选择，不开放式问“怎么办”；用户拒绝、取消或未回答时保留全部改动并暂停，不 stash、不丢弃、不自动授权。",
       "files": []
     },
     {
@@ -35,6 +35,36 @@
       "id": 6,
       "prompt": "用 ph-worktree-enter 开一个 worktree。当前主工作区在 feature/payments，HEAD 比 main 多两个提交。",
       "expected_output": "默认从 feature/payments 当前 HEAD 检出新任务分支，不切换源分支，不改用 main/master/develop 或远端默认分支；审查无异常后按授权创建。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "用 ph-worktree-enter 开隔离工作区。主工作区有两个改到一半的跟踪文件和一个未跟踪的新文件，你先看着办，反正别丢我的改动。",
+      "expected_output": "触发 ph-worktree-enter，但停止创建；先只读列明目录、分支与完整改动清单及拟用 wip 信息，再实际调用问答工具提固定问句，不替用户自行选择处理方式；用户确认后才执行这次 WIP 提交：以运行时脚本的 wip 子命令先只读 dry-run、再显式加 --apply，不由 Agent 手写 git add / git commit 拼装，staged、unstaged、untracked 一起收进，ignored 排除，不盲目 git add -A；提交后源工作区干净，脚本只见 clean 工作区，回到本技能继续审查计划并创建；全程不 stash、不丢弃。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "用 ph-worktree-enter 开 worktree。主目录还有没提交的改动，里面有个新放的 server.key 和一个很大的数据文件，一起提交进去吧。",
+      "expected_output": "触发 ph-worktree-enter，但停止创建；疑似密钥文件与异常大文件不得为 WIP 收进提交，也不得绕过安全门禁；wip 脚本对无法纳入的非 ignored 变动整单拒绝、不部分提交，须如实列为剩余阻断由用户另行处置；其余改动仍按统一问句征求 WIP 授权，确认才提交；剩余阻断未处置前创建保持停止，即使其中部分路径已另行经授权提交，也不把源工作区当作干净继续创建。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "用 ph-worktree-enter 开隔离工作区。主目录有未提交修改；如果问我 wip 提交，我不同意。",
+      "expected_output": "触发 ph-worktree-enter，但停止创建；按统一 WIP 确认实际调用问答工具（只给“确认 WIP 并继续”“停止，保留现场”两个选择）征求授权后用户拒绝采用 WIP 方案：保留全部改动并停止创建，不 stash、不丢弃、不改用其他提交方式、不换问法重问、不自动授权。",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "用 ph-worktree-enter 开隔离工作区。主目录的未提交改动这一轮你问过、我确认过按 wip: 调试日志 提交但还没实际提交；刚才我又顺手改了其中一个文件。",
+      "expected_output": "触发 ph-worktree-enter；该授权对应的 wip: 提交尚未执行，WIP 确认问的是是否采用 wip: 提交解决当前这次阻断、不是对文件内容的逐项审批：同一阻断场景内的普通内容变化不需要重新确认，也不与提问时的清单逐字绑定，直接以统一脚本按当时现场执行受确认的 wip: 提交（仍只收通过安全筛查的路径），源工作区干净后继续审查计划并创建；该提交一经执行授权即消费。",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "用 ph-worktree-enter 开隔离工作区。上一轮确认过的 wip 提交早就提交进去了，现在主目录又有新的未提交改动挡着创建。",
+      "expected_output": "触发 ph-worktree-enter，但这是新的阻断：授权不是长期授权，之前的 WIP 授权已随其提交执行而消费，不能沿用；按当前现场重新执行统一 WIP 确认（固定问句与“确认 WIP 并继续”“停止，保留现场”两个固定选项），确认后才以统一脚本提交并继续创建；拒绝、取消或未回答保留改动并停止创建。",
       "files": []
     }
   ]

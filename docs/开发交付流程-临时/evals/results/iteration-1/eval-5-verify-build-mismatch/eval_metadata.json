@@ -1,0 +1,6 @@
+{
+  "eval_id": 5,
+  "eval_name": "verify-build-mismatch",
+  "prompt": "模拟事件契约走读，非真实用户验收",
+  "assertions": []
+}

@@ -41,7 +41,7 @@ REQUIRED = [
     "ph-init", "ph-worktree-enter", "ph-worktree-exit",
     "ph-memory-capture", "ph-memory-archive", "ph-memory-ask",
     "ph-intent-new", "ph-intent-impl", "ph-intent-verify", "ph-intent-drop",
-    "ph-merge-update", "ph-docs-sync",
+    "ph-merge-update", "ph-docs-sync", "ph-sure",
 ]
 
 
@@ -51,7 +51,7 @@ def frontmatter(text: str) -> str:
 
 
 class ExplicitInvocationGateTests(unittest.TestCase):
-    def test_twelve_skills_present(self):
+    def test_thirteen_skills_present(self):
         self.assertEqual(sorted(ALL_SKILL_PATHS), sorted(REQUIRED))
 
     def test_every_description_carries_the_gate(self):
@@ -231,8 +231,8 @@ class IntentVerifyAcceptanceContractTests(unittest.TestCase):
 
     def test_real_user_visible_entry_no_faked_opening(self):
         show = self.section("展示真实入口")
-        for term in ("隔离浏览器", "可访问的地址不等于已打开", "打开成功", "实际打开",
-                     "不只给一个链接", "假称打开", "非网页"):
+        for term in ("隔离浏览器", "可访问的地址不等于已打开", "打开操作返回成功",
+                     "实际打开", "不只给一个链接", "假称打开", "非网页"):
             self.assertIn(term, show)
 
     def test_boundaries_no_commit_push_branch_worktree_or_other_skills(self):

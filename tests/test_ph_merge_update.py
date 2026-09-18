@@ -63,12 +63,15 @@ CHAIN_110 = [
     "question-execution-contract",
     "explicit-invocation-rules",
     "intent-verify-skill",
+    "worktree-wip-confirm",
+    "intent-verify-acceptance-contract",
+    "sure-skill",
 ]
 CHAIN_100 = ["intent-domain", *CHAIN_110]
 CHAIN_111 = CHAIN_110[6:]  # everything after the 1.1.0 -> 1.1.1 hop
-CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill"]
-CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill"]
-CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill"]
+CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract", "sure-skill"]
+CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract", "sure-skill"]
+CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract", "sure-skill"]
 CHAIN_112 = [
     "init-docs-workflow",
     "docs-guidance",
@@ -346,7 +349,8 @@ class MergeUpdateTests(unittest.TestCase):
                                "tool-neutral-adapters", "repository-rename", "docs-sync-skill",
                                "current-branch-defaults", "adopt-mode-docs",
                                "question-execution-contract", "explicit-invocation-rules",
-                               "intent-verify-skill"])
+                               "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract",
+                               "sure-skill"])
         state = self.write_state(repo, from_version="1.1.2", items=ids)
         before_manifest = manifest_path.read_bytes()
         for status in ("pending", "blocked"):
@@ -704,6 +708,88 @@ class MergeUpdateTests(unittest.TestCase):
                                "check", "--repo", str(repo)])
         self.assertIn("status=ok", installed_check.stdout, installed_check.stdout)
         self.assertIn(".agents/skills/ph-intent-verify/SKILL.md", installed_check.stdout)
+
+    def test_sure_same_name_custom_skill_blocks_inspect(self):
+        # ph-sure arrives with 1.1.14: a live same-named directory on a 1.1.9
+        # project is project content and must block instead of being
+        # overwritten (same contract as the 1.1.10/1.1.13 protections).
+        self.install_receipt()
+        repo = self.fixture_at_119()
+        custom = repo / ".agents/skills/ph-sure/SKILL.md"
+        custom_body = (
+            "---\nname: ph-sure\ndescription: team custom wrap-up checks\n---\n"
+            "# our own sure skill\n项目自建收尾核查，升级不得覆盖。\n"
+        )
+        custom.write_text(custom_body, encoding="utf-8")
+        before = self.tree_snapshot(repo)
+
+        inspected = ph_merge_update.inspect_payload(repo)
+        self.assertEqual(inspected["from"], "1.1.9")
+        self.assertEqual(inspected["to"], CURRENT)
+        self.assertEqual(inspected["profile"], "1.1.0-current-names")
+        self.assertTrue(
+            any("ph-sure" in conflict for conflict in inspected["conflicts"]),
+            inspected["conflicts"],
+        )
+        self.assertFalse(inspected["can_finalize"])
+        # inspect stays read-only and the custom body survives byte-for-byte
+        self.assertEqual(self.tree_snapshot(repo), before)
+        self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
+
+    def test_sure_install_pinned_to_release_bytes(self):
+        # Marking sure-skill applied while a drifted same-name skill stays in
+        # place must not pass verify: the installed skill has to match the
+        # release bytes during the 1.1.14 upgrade.
+        self.install_receipt()
+        repo = self.fixture_at_119()
+        custom = repo / ".agents/skills/ph-sure/SKILL.md"
+        custom_body = "---\nname: ph-sure\ndescription: drift\n---\n# drifted sure skill\n"
+        custom.write_text(custom_body, encoding="utf-8")
+        manifest_path = repo / ".agents/ph.json"
+        before = manifest_path.read_bytes()
+
+        inspected = ph_merge_update.inspect_payload(repo)
+        state = inspected["suggested_state"]
+        self.assertEqual([i["id"] for i in state["items"]], CHAIN_119)
+        for item in state["items"]:
+            item["status"] = "applied"
+            item["evidence"] = "fixture already contains the target skill defaults"
+        dest = self.update_dir(repo)
+        dest.mkdir(parents=True, exist_ok=True)
+        self.write_json(dest / "state.json", state)
+        (dest / "report.md").write_text("# report\nsure-skill applied\n", encoding="utf-8")
+
+        with self.assertRaises(ph_init.PHError) as ctx:
+            ph_merge_update.verify_payload(repo)
+        self.assertIn("installed ph-sure does not match the release skill", str(ctx.exception))
+        # a failing verify never advances the version or rewrites the state
+        self.assertEqual(manifest_path.read_bytes(), before)
+        self.assertEqual(
+            json.loads((dest / "state.json").read_text())["status"], "in_progress"
+        )
+        self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
+
+        # Installing the genuine release skill unblocks verify and finalize;
+        # afterwards project customization of the skill is free.
+        custom.write_text(
+            (SCAFFOLD / ".agents/skills/ph-sure/SKILL.md").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+        verified = ph_merge_update.verify_payload(repo)
+        self.assertTrue(verified["ok"])
+        result = ph_merge_update.finalize_payload(repo, True)
+        self.assertTrue(result["complete"])
+        written = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertIn("ph-sure", written["skills"]["required_names"])
+        self.assertEqual(
+            (repo / ".agents/skills/ph-sure/SKILL.md").read_bytes(),
+            (SCAFFOLD / ".agents/skills/ph-sure/SKILL.md").read_bytes(),
+        )
+        installed_check = run([sys.executable,
+                               str(repo / ".agents/skills/ph-init/scripts/ph_init.py"),
+                               "check", "--repo", str(repo)])
+        self.assertIn("status=ok", installed_check.stdout, installed_check.stdout)
+        self.assertIn(".agents/skills/ph-sure/SKILL.md", installed_check.stdout)
 
     def test_upgrade_from_118_worktree_and_tool_neutral(self):
         self.install_receipt()

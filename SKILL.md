@@ -1,6 +1,6 @@
 ---
 name: ph-init
-description: "初始化、检查或同步本仓库的项目级 Harness（PH）：从唯一 GitHub 源准备正式发行版、安装 canonical 与十二个 ph-* skills。存量项目用旧内容接入：盘点后在仓外生成 sources 快照与合并候选，经 init --adopt-plan 安装，不先装模板盖旧正文；init 会话按代码与实时官方资料逐项补全文档并产出覆盖报告。调用门禁：仅当用户当轮明确点名 ph-init（如「用 ph-init 初始化这个仓库」）并要求使用时才调用；只说“初始化 PH”“检查 PH”“同步 PH”“升级 PH”“bootstrap harness”等普通描述、上下文提及或讨论技能名称都不触发。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。已装项目的安装、检查、同步、升正式版都由本 Skill 接；用户已请求的升级在本会话按 merge-update 步骤做完，不另开技能。不要把编码客户端内置的初始化向导（如 /init）、厂商脚手架、git init、目标仓 git pull、或 ph-memory-* / ph-worktree-* / ph-intent-* / ph-docs-sync 误判为本技能。"
+description: "初始化、检查或同步本仓库的项目级 Harness（PH）：从唯一 GitHub 源准备正式发行版、安装 canonical 与十三个 ph-* skills。存量项目用旧内容接入：盘点后在仓外生成 sources 快照与合并候选，经 init --adopt-plan 安装，不先装模板盖旧正文；init 会话按代码与实时官方资料逐项补全文档并产出覆盖报告。调用门禁：仅当用户当轮明确点名 ph-init（如「用 ph-init 初始化这个仓库」）并要求使用时才调用；只说“初始化 PH”“检查 PH”“同步 PH”“升级 PH”“bootstrap harness”等普通描述、上下文提及或讨论技能名称都不触发。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。已装项目的安装、检查、同步、升正式版都由本 Skill 接；用户已请求的升级在本会话按 merge-update 步骤做完，不另开技能。不要把编码客户端内置的初始化向导（如 /init）、厂商脚手架、git init、目标仓 git pull、或 ph-memory-* / ph-worktree-* / ph-intent-* / ph-docs-sync / ph-sure 误判为本技能。"
 ---
 
 # ph-init
@@ -25,16 +25,16 @@ PH 面向多种编码客户端：约束与技能的正式存放位置（canonica
 
 - 编码客户端内置的初始化向导（如 `/init`）、厂商脚手架、`git init` 本身
 - 在目标仓库 `git pull` 当升级
-- `ph-memory-*` / `ph-worktree-*` / `ph-intent-*` / `ph-docs-sync`（文档与代码一致性核验，检查默认只读）；各技能仅在用户点名该技能并要求使用时触发，本 Skill 不代为调用
+- `ph-memory-*` / `ph-worktree-*` / `ph-intent-*` / `ph-docs-sync`（文档与代码一致性核验，检查默认只读）/ `ph-sure`（任务收尾四问核查，只核实与报告）；各技能仅在用户点名该技能并要求使用时触发，本 Skill 不代为调用
 
 ## 唯一源与准备
 
-正式源只有 `https://github.com/chenweixuanJokes/project-harness.git`。官方仓库由 `ph-init` 更名而来，产品名 Project Harness；技能名与安装路径不随仓库名变化，仍是 `ph-init` 与 `ph-*`。旧地址 `https://github.com/chenweixuanJokes/ph-init.git` 经 GitHub 重定向指向同一仓库：1.1.8 及以后入口按旧地址 prepare 也能取到新包，不是错误；`FIXED_SOURCE` 等固定标识与 `release.json.repository`、`receipt.source`、`state.source.repository` 在 1.x 保留旧地址的兼容含义，存量值不改写、不当作错误。`latest` 取数值最大的稳定 tag（排除预发布与非版本标签），并固定到该 tag 的 commit。本批版本为 `1.1.13`（十二个必需 Skill）。PH 只有这一个版本号：不再有独立的 Schema 版本，发行包与项目清单都不携带 `schema_version` 字段，schema 标识固定为无版本的 `urn:ph:schema:project-harness`；`template_version` 仍表示项目已完成升级的 PH 版本。
+正式源只有 `https://github.com/chenweixuanJokes/project-harness.git`。官方仓库由 `ph-init` 更名而来，产品名 Project Harness；技能名与安装路径不随仓库名变化，仍是 `ph-init` 与 `ph-*`。旧地址 `https://github.com/chenweixuanJokes/ph-init.git` 经 GitHub 重定向指向同一仓库：1.1.8 及以后入口按旧地址 prepare 也能取到新包，不是错误；`FIXED_SOURCE` 等固定标识与 `release.json.repository`、`receipt.source`、`state.source.repository` 在 1.x 保留旧地址的兼容含义，存量值不改写、不当作错误。`latest` 取数值最大的稳定 tag（排除预发布与非版本标签），并固定到该 tag 的 commit。本批版本为 `1.1.14`（十三个必需 Skill）。PH 只有这一个版本号：不再有独立的 Schema 版本，发行包与项目清单都不携带 `schema_version` 字段，schema 标识固定为无版本的 `urn:ph:schema:project-harness`；`template_version` 仍表示项目已完成升级的 PH 版本。
 
 当前这份 Skill 可能是旧用户入口或 shadow 副本。**初始化必须先准备发行根，再读该根的 `SKILL.md` 并只执行该根脚本**。不要用眼前这份本地 `assets/scaffold` 冒充最新版。离线内核可以安装它携带的确定版本，但不代表最新正式版。
 
 ```text
-python3 <ph-init-root>/scripts/ph_release.py prepare --version latest|1.1.13 --repo <target>
+python3 <ph-init-root>/scripts/ph_release.py prepare --version latest|1.1.14 --repo <target>
 ```
 
 stdout JSON：`root` `version` `tag` `commit` `source`（`source` 是固定仓库 URL 字符串）。材料下在目标仓库外的隔离目录，不读不传目标内容。同一 commit 已在本地时检查可不访问网络。无 tag、网络失败、tag/commit/`release.json` 不一致：停止，不回退到未准备的本地包。
@@ -47,7 +47,7 @@ python3 <release-root>/scripts/ph_release.py support
 
 记下 JSON 里的 `root`。后续 dry-run 与 apply 固定同一 `version`/`commit`。预检可以下载，不得改目标。
 
-旧版（1.1.7 及更早）用户级入口的 prepare 会**必然拒绝 1.1.8 及以后发行包**：旧脚本必查发行元数据里的 `schema_version`，新版包已删除该键。这是预期现象，不重试、不回退、不假称自动恢复。一次性入口切换使用首个无独立 Schema 版本的已发布标签 v1.1.8：把 v1.1.8 clone 到一个**新的仓外安全目录**（如 `mktemp -d` 创建），不覆盖用户级入口与目标项目，不用 `main` 或本地开发树冒充发行；先在该目录运行 `python3 <新目录>/scripts/ph_release.py prepare --version 1.1.8` 并读取返回根的 Skill，再用这份新工具准备并固定目标 `1.1.13` 发行根。之后只用 1.1.13 根按 merge-update 步骤合并、verify、finalize；旧 `schema_version` 字段仅在 finalize 验收通过后随版本写入一起移除。1.1.8 及以后入口可直接准备 1.1.13；已经持有本次 prepare 的固定 1.1.13 root 时，读取其中 Skill 后直接进入分流，不再次 prepare。
+旧版（1.1.7 及更早）用户级入口的 prepare 会**必然拒绝 1.1.8 及以后发行包**：旧脚本必查发行元数据里的 `schema_version`，新版包已删除该键。这是预期现象，不重试、不回退、不假称自动恢复。一次性入口切换使用首个无独立 Schema 版本的已发布标签 v1.1.8：把 v1.1.8 clone 到一个**新的仓外安全目录**（如 `mktemp -d` 创建），不覆盖用户级入口与目标项目，不用 `main` 或本地开发树冒充发行；先在该目录运行 `python3 <新目录>/scripts/ph_release.py prepare --version 1.1.8` 并读取返回根的 Skill，再用这份新工具准备并固定目标 `1.1.14` 发行根。之后只用 1.1.14 根按 merge-update 步骤合并、verify、finalize；旧 `schema_version` 字段仅在 finalize 验收通过后随版本写入一起移除。1.1.8 及以后入口可直接准备 1.1.14；已经持有本次 prepare 的固定 1.1.14 root 时，读取其中 Skill 后直接进入分流，不再次 prepare。
 
 `build_scaffold.py` / `build_project_template.py` 是旧 monorepo 作者工具，不是发布源，安装与升级不要跑它们。
 
@@ -105,5 +105,5 @@ python3 <project-or-installed-ph-init>/scripts/ph_init.py sync [--apply] [--mode
 - 未先安装模板再盖旧正文：存量内容经仓外合并候选接入，`sources` 快照与 plan 均在仓外生成，发行树未被改动；已有正文以复用 / 引用登记，未复制第二套，冲突未擅自裁决。
 - `--adopt-plan` 仅用于尚无 `.agents/ph.json` 的目标；`--apply` 后已装内核 `check` 通过；未为原生读取 `.agents/skills` 的客户端另建重复技能目录。
 - `.agents/init-report.md` 覆盖指引第 5 节全部独立 id；未核实内容未伪装成规范或事实，未执行命令未标通过，未臆造 ADR / 意图 / 访谈 / 记忆 / 测试通过。安装检查通过不代表文档补全完成。最终 `docs/` 只留 `README.md` 与三域；未获迁移授权或存在冲突的旧目录记未完成，不把长期并存当完成。
-- 已装旧版未走 `init --apply`；升级在本会话用发行根 `ph_merge_update.py` 做完，未另开技能、未自动 finalize。1.1.7 及更早入口拒绝新包时已用已发布 v1.1.8 完成一次性入口切换，并由该工具取得固定的 1.1.13 发行根；旧 `schema_version` 字段仅在 finalize 通过后移除。文档补全和普通 check/sync 未擅自升版本。
+- 已装旧版未走 `init --apply`；升级在本会话用发行根 `ph_merge_update.py` 做完，未另开技能、未自动 finalize。1.1.7 及更早入口拒绝新包时已用已发布 v1.1.8 完成一次性入口切换，并由该工具取得固定的 1.1.14 发行根；旧 `schema_version` 字段仅在 finalize 通过后移除。文档补全和普通 check/sync 未擅自升版本。
 - 未自动 commit / push / 公开仓库、部署或发送通知。

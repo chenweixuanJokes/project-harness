@@ -1,6 +1,6 @@
 {
   "$schema": "./ph.schema.json",
-  "template_version": "1.1.13",
+  "template_version": "1.1.14",
   "adapter_mode": "portable",
   "canonical": {
     "root": ".agents",
@@ -70,7 +70,8 @@
       "ph-intent-verify",
       "ph-intent-drop",
       "ph-merge-update",
-      "ph-docs-sync"
+      "ph-docs-sync",
+      "ph-sure"
     ]
   }
 }

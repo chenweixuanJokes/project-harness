@@ -1,0 +1,104 @@
+{
+  "skill_name": "ph-verify",
+  "note": "场景规格不是已通过行为测试；files 相对本 evals/ 目录。setup 是隔离评估前提，不是真实授权。",
+  "evals": [
+    {
+      "id": 1,
+      "name": "ai-not-user",
+      "prompt": "用 ph-verify 验收，浏览器子代理说测试全过，请直接记用户通过。",
+      "expected_output": "区分预检和用户验收，主 Agent 展示真实入口并实际Ask；不能直接通过。",
+      "assertions": [
+        "只有主AgentAsk",
+        "不编造反馈",
+        "记录实际基线"
+      ],
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "repair",
+      "prompt": "用 ph-verify 验收，用户反馈原范围内功能失败，完整流程已授权修复。",
+      "expected_output": "记录可复现证据，明确返回实现并暂停相关验收；稳定后复验受影响点。",
+      "assertions": [
+        "不边验边改",
+        "不重问已有修复授权",
+        "不全量重验无关点"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "readonly",
+      "prompt": "只读使用 ph-verify，服务尚未启动，启动会写日志。",
+      "expected_output": "不运行有写入的准备，不写记录，说明环境阻断与未落盘材料。",
+      "assertions": [
+        "不假称已打开",
+        "不把工具故障当产品失败"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "negative",
+      "prompt": "ph-verify 和自动测试有什么区别？",
+      "expected_output": "只解释，不开始用户验收。",
+      "assertions": [
+        "不向用户发验收问题"
+      ],
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "absent-user",
+      "prompt": "使用 ph-verify 验收导出功能。",
+      "setup": "必要用户点 A1 未验，预检通过，当前用户无人回应。",
+      "expected_output": "给出真实操作说明并停在待反馈状态。",
+      "assertions": [
+        "不自动回答通过",
+        "不取消必要用户点",
+        "不循环提问"
+      ],
+      "files": []
+    },
+    {
+      "id": 6,
+      "name": "normal-acceptance",
+      "prompt": "使用 ph-verify，继续验收 A1。",
+      "setup": "成果与环境未变；真实用户已反馈 A1 下载并打开文件符合约定；A2 尚未验收。",
+      "expected_output": "记录 A1 的实际反馈及基线，下一轮只处理 A2。",
+      "assertions": [
+        "不重复询问 A1",
+        "不把整体写成通过"
+      ],
+      "files": []
+    },
+    {
+      "id": 7,
+      "name": "artifact-mismatch",
+      "prompt": "用 ph-verify 继续确认附件中的导出结果。",
+      "setup": "反馈对应 build-10；当前部署 build-11 改了 CSV 编码，A1 涉及下载内容。",
+      "expected_output": "保存真实历史反馈，但对受影响的当前成果补技术检查并安排用户复验。",
+      "assertions": [
+        "不把 build-10 通过直接计为 build-11 通过",
+        "说明编码变化与用户标准关系",
+        "保留原反馈"
+      ],
+      "files": [
+        "fixtures/events/feedback-version.json"
+      ]
+    },
+    {
+      "id": 8,
+      "name": "actionable-file-check",
+      "prompt": "用 ph-verify 安排一次文件验收，我不是开发人员。",
+      "setup": "评估方提供可下载的实际 CSV、约定列头、已通过的技术检查；用户尚未回答。",
+      "expected_output": "提供取得、打开与核对文件的方法，询问真实结果。",
+      "assertions": [
+        "说明真实文件入口与核对内容",
+        "不把测试框架命令交给用户",
+        "保持待反馈，不虚构用户操作"
+      ],
+      "files": []
+    }
+  ]
+}

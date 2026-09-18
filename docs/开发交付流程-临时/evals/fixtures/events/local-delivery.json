@@ -1,0 +1,14 @@
+{
+  "fixture_only": true,
+  "target": "local",
+  "commit_authorized": false,
+  "user_acceptance": {
+    "status": "not_applicable",
+    "reason": "内部导出函数技术回归，本样例不含用户界面"
+  },
+  "criteria": [
+    "空输入列头",
+    "非空格式",
+    "拒绝越权"
+  ]
+}

@@ -1,0 +1,5 @@
+# implement-stale-config
+
+执行类型：真实文件变化检查，不是Git生命周期测试。执行者：当前主 Agent（作者自评，非独立模型）。
+
+配置摘要由 891b987d826a3cf34f43e007cf59f43f22c54bc2a28fb1504a3f353ba57faa24 变为 481812adb73e632c7f76edbe8c1e30ab85134db05dbe4c75664c52e2f1f968e5；旧UTF-8检查不能证明UTF-16当前内容，标记相关证据待更新。本演练未初始化Git，HEAD不变仅为事件夹具条件。

@@ -4,13 +4,13 @@
     {
       "id": 1,
       "prompt": "用 ph-worktree-exit 收口这个 PH worktree：跑门禁、提交并合回我进入时的主目录，清理前再问我。",
-      "expected_output": "触发 ph-worktree-exit；验证、按安全范围提交、合并到 session source、再次验证，清理另行确认。",
+      "expected_output": "触发 ph-worktree-exit；验证、受确认提交经统一脚本完成、合并到 session source、再次验证，清理另行确认。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "用 ph-worktree-exit 继续：合并出现冲突，我已经解决并 git add 了。",
-      "expected_output": "触发 ph-worktree-exit continue；确认无未解决条目后继续 merge 和验证，不自动清理。",
+      "prompt": "用 ph-worktree-exit 继续：合并出现冲突，我已经解决并 git add 了，请继续合回去。",
+      "expected_output": "触发 ph-worktree-exit continue；用户明确“已解决并暂存，请继续”，先只读核验无未合并条目、依据 session 合并快照核对 merge 身份（mergeSourceBranch / mergeSourceHead / mergeTaskHead 与现场一致）、session 与任务分支未变，再继续 merge 和验证，不重问固定冲突问句；continue 生成的是合并提交不是 WIP，不自动清理。",
       "files": []
     },
     {
@@ -23,6 +23,102 @@
       "id": 4,
       "prompt": "把普通 feature 分支 merge 到 main 并推送远端，这个分支不是 PH worktree 创建的。",
       "expected_output": "不触发 ph-worktree-exit；非 PH session 且包含普通 merge/push，按项目 Git 流程另行处理。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-worktree-exit 收口。任务树里我改了两个已跟踪文件，没有暂存，验证应该都能过。",
+      "expected_output": "触发 ph-worktree-exit，但只有 tracked unstaged 也不再默认普通提交：先只读列明任务树目录、分支与完整清单及拟用 wip 信息，再实际调用问答工具（只给“确认 WIP 并继续”“停止，保留现场”两个选择）征求授权；确认后以统一脚本 wip 子命令执行受确认提交，使脚本只见 clean 工作区，再 dry-run/--apply 继续交付；拒绝、取消或未回答时保留改动并暂停交付，不 stash、不丢弃。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-worktree-exit 收口：任务树里一部分文件我 git add 了，还有几个改了没 add，另有一个新脚本没跟踪，直接合回去。",
+      "expected_output": "触发 ph-worktree-exit；任务树 staged、unstaged 与 untracked 并存，先只读列明目录、分支与完整清单及拟用 wip 信息，再实际调用问答工具提固定问句（问的是是否采用 wip: 提交解决当前这次阻断，不是对文件内容的逐项审批），不开放式问“要包括哪些”；用户确认才以统一脚本执行这次 WIP 提交（staged、unstaged、untracked 一起收进，ignored 排除，不盲目 git add -A），使脚本只见 clean 工作区后继续交付；拒绝、取消或未回答时保留全部改动并暂停交付，不 stash、不丢弃、不改用其他提交方式。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "用 ph-worktree-exit 收口。主目录在我进 worktree 之后又改了别的文件没提交；worktree 里的活已经提交好了。",
+      "expected_output": "触发 ph-worktree-exit，合并被合并目标源工作区不干净阻断；在源工作区按统一 WIP 确认实际调用问答工具（只给“确认 WIP 并继续”“停止，保留现场”两个选择）征求本次授权，确认后把 wip: 提交做在源工作区（统一脚本 wip 子命令执行）再继续合并；拒绝、取消或未回答时保留改动并暂停交付，不 stash、不丢弃。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "用 ph-worktree-exit 收口，把任务树里所有没提交的东西都提交进去，包括新放的数据库备份 dump 和 id_rsa。",
+      "expected_output": "触发 ph-worktree-exit，但疑似密钥文件与异常大文件阻断：不得为 WIP 或任何提交收进，也不得绕过安全门禁；wip 脚本对无法纳入的非 ignored 变动整单拒绝、不部分提交，须如实列为剩余阻断由用户处置，其余改动仍按统一问句征求 WIP 授权，确认才提交；剩余阻断未处置前交付保持停止，即使其中部分路径已另行经授权提交，也不把任务树当作干净继续 --apply。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "用 ph-worktree-exit 收口。任务树里有 staged 和 unstaged 改动；你按固定问句问我 wip 时，我没有回答。",
+      "expected_output": "触发 ph-worktree-exit；问答工具未获回答视同未确认：保留全部改动并暂停交付，不 stash、不丢弃、不改用其他提交方式、不换问法重问，等用户明确指示后再重新走统一 WIP 确认。",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "用 ph-worktree-exit 收口。任务树的改动这一轮早些时候你问过、我确认过 wip，但还没实际提交；刚刚我又改了两个文件。",
+      "expected_output": "触发 ph-worktree-exit；该授权对应的 wip: 提交尚未执行，WIP 确认问的是是否采用 wip: 提交解决当前这次阻断、不是对文件内容的逐项审批：同一阻断场景内的普通内容变化不需要重新确认，也不与提问时的清单逐字绑定，按当时现场以统一脚本执行受确认的 wip: 提交（仍只收通过安全筛查的路径）后继续交付；该提交一经执行授权即消费。",
+      "files": []
+    },
+    {
+      "id": 11,
+      "prompt": "用 ph-worktree-exit 收口。之前你确认过的 wip 已经提交进去了，现在任务树又有两个新改动没提交，直接合吧。",
+      "expected_output": "触发 ph-worktree-exit，但旧授权已随其提交执行而消费，授权不是长期授权：按当前现场重新执行统一 WIP 确认（固定问句与两个固定选项），确认后才以统一脚本提交并继续交付；拒绝、取消或未回答保留改动并暂停交付，不沿用旧授权直接提交。",
+      "files": []
+    },
+    {
+      "id": 12,
+      "prompt": "用 ph-worktree-exit 收口。任务树有未提交改动；你按固定问句问我 wip 时，我拒绝了，不想用 wip 提交。",
+      "expected_output": "触发 ph-worktree-exit；用户拒绝采用 WIP 方案即停止：保留全部改动并暂停交付，不 stash、不丢弃、不改用其他提交方式、不换问法重问、不自动授权，等用户明确指示。",
+      "files": []
+    },
+    {
+      "id": 13,
+      "prompt": "用 ph-worktree-exit 收口：合并的时候冲突了，有几个文件都冲突，你看着处理一下。",
+      "expected_output": "触发 ph-worktree-exit；冲突态优先于 WIP 流程，不自动解决：先只读确认存在 MERGE_HEAD 与未合并条目并列明冲突清单、依据 session 合并快照核对 merge 身份，再实际调用问答工具提出固定冲突问句（模板原文只替换目录、任务分支、源分支、清单四个变量），只给“保留现场，我解决后继续”“撤销这次合并”两个选项，不添加 stash、丢弃、一键选 ours/theirs、Agent 代解决等其他预设选项；用户没有授权前不代改冲突文件。",
+      "files": []
+    },
+    {
+      "id": 14,
+      "prompt": "用 ph-worktree-exit 收口，合并冲突了；冲突问句弹出来我不回答。",
+      "expected_output": "触发 ph-worktree-exit；固定冲突问句取消、跳过或未回答时同样停止等待，不 abort、不做 WIP、不换问法重问，保留 Git 标准 merge 状态，等用户明确指示后再继续。",
+      "files": []
+    },
+    {
+      "id": 15,
+      "prompt": "用 ph-worktree-exit 收口遇到合并冲突，固定问句里我选撤销这次合并。",
+      "expected_output": "触发 ph-worktree-exit；该选择是仅本次 abort-merge --apply 的明确授权：执行前先说明冲突解决的编辑会被撤销，并只读核对 merge 身份确认撤销的正是本 session 发起的这次合并，再执行 abort-merge；任务分支提交和隔离目录仍保留，不自动重试 exit、不删除任务分支或隔离目录。",
+      "files": []
+    },
+    {
+      "id": 16,
+      "prompt": "用 ph-worktree-exit 收口：冲突我已经全部解决并 git add 了，请继续合回去。",
+      "expected_output": "触发 ph-worktree-exit；用户明确“已解决并暂存，请继续”，先只读核验无未合并条目、核对 merge 身份（session 与任务分支未变、merge 状态吻合），再 continue --apply 继续合并与验证，既有具体授权不重问；continue 生成的是合并提交不是 WIP，不自动清理。",
+      "files": []
+    },
+    {
+      "id": 17,
+      "prompt": "用 ph-worktree-exit 收口：冲突的文件我都改好了，没 commit。",
+      "expected_output": "触发 ph-worktree-exit；用户只口头说改好，没有明确说“已解决并暂存，请继续”，不构成继续授权：即使文件里已无冲突标记也不自动 continue，保持停止等待、不轮询；不换问法重问固定冲突问句，等用户明确要求继续并完成只读核验后再执行。",
+      "files": []
+    },
+    {
+      "id": 18,
+      "prompt": "用 ph-worktree-exit 收口：合并冲突了，你先把冲突文件 wip 提交一下，然后接着合。",
+      "expected_output": "触发 ph-worktree-exit；冲突态优先于脏工作区 WIP 流程：未合并条目不得为 WIP 或任何提交收进，不把冲突现场转成 WIP；按固定冲突问句问“保留现场，我解决后继续”还是“撤销这次合并”，等用户解决并暂存且明确“已解决并暂存，请继续”后才 continue，continue 生成的是合并提交不是 WIP。",
+      "files": []
+    },
+    {
+      "id": 19,
+      "prompt": "用 ph-worktree-exit 收口：上次交付在验证阶段失败了，我回去修好又提交了两个修复提交，现在重新交付。",
+      "expected_output": "触发 ph-worktree-exit；session 处于失败态且任务分支出现新提交时走重新交付，先核验再交付（redeliver）：核验 session 与任务分支、重跑验证命令，核验通过后才执行交付；不复用上次失败的证据、不跳过核验；重新交付前新增的未提交改动仍按统一 WIP 确认处理。",
+      "files": []
+    },
+    {
+      "id": 20,
+      "prompt": "用 ph-worktree-exit 收口：session 登记和仓库里的 merge 现场对不上，像是别的 merge；另外那个老 session 是旧版本 PH 建的，脚本说缺证据字段。你看着恢复一下。",
+      "expected_output": "触发 ph-worktree-exit；现场与登记不符属陌生 merge、旧 session 缺少新增证据字段：一律保守阻断，不猜测补齐、不把陌生 merge 当作本 session 的交付继续；先用 doctor 只读诊断 session、锁与 merge 状态（无 --apply，不做修复）；确需恢复登记时由 recover 显式执行，恢复目标与操作由用户显式指定（archive 仅限已清理或未登记残留，adopt 仅限 creating 记录且 worktree、分支与 initialTaskHead 吻合），两个动作之外的状态交用户处置；recover 不能恢复所有旧 merge，不编造恢复能力。",
       "files": []
     }
   ]

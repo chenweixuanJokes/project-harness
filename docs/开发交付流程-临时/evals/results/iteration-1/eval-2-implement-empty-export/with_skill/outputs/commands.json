@@ -1,0 +1,59 @@
+[
+  {
+    "step": "existing baseline",
+    "command": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-m",
+      "unittest",
+      "-v"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": "test_nonempty_format (test_exporter.ExportTests.test_nonempty_format) ... ok\ntest_permission (test_exporter.ExportTests.test_permission) ... ok\n\n----------------------------------------------------------------------\nRan 2 tests in 0.000s\n\nOK\n"
+  },
+  {
+    "step": "empty reproduction",
+    "command": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "from exporter import export_csv; print(export_csv([]))"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    from exporter import export_csv; print(export_csv([]))\n                                           ~~~~~~~~~~^^^^\n  File \"/private/var/folders/tk/zncck23s5_91pglh0jrlchnm0000gn/T/ph-skills-exercise-8y2rvajq/export-project/exporter.py\", line 10, in export_csv\n    rows[0]\n    ~~~~^^^\nIndexError: list index out of range\n"
+  },
+  {
+    "step": "fixed regression",
+    "command": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-m",
+      "unittest",
+      "-v"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": "test_empty_header (test_exporter.ExportTests.test_empty_header) ... ok\ntest_nonempty_format (test_exporter.ExportTests.test_nonempty_format) ... ok\ntest_permission (test_exporter.ExportTests.test_permission) ... ok\n\n----------------------------------------------------------------------\nRan 3 tests in 0.000s\n\nOK\n"
+  },
+  {
+    "step": "produce local artifact",
+    "command": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "from pathlib import Path; from exporter import export_csv; Path(\"empty.csv\").write_bytes(export_csv([]).encode(\"utf-8\"))"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "step": "actual environment blocker",
+    "command": [
+      "/opt/homebrew/opt/python@3.14/bin/python3.14",
+      "-c",
+      "from pathlib import Path; Path(\"missing-environment/input.csv\").read_text()"
+    ],
+    "exit_code": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    from pathlib import Path; Path(\"missing-environment/input.csv\").read_text()\n                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py\", line 787, in read_text\n    with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:\n         ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/opt/homebrew/Cellar/python@3.14/3.14.7/Frameworks/Python.framework/Versions/3.14/lib/python3.14/pathlib/__init__.py\", line 771, in open\n    return io.open(self, mode, buffering, encoding, errors, newline)\n           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: 'missing-environment/input.csv'\n"
+  }
+]

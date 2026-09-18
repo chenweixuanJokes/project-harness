@@ -1,0 +1,110 @@
+{
+  "skill_name": "ph-prepare",
+  "note": "场景规格不是已通过行为测试；files 相对本 evals/ 目录。setup 是隔离评估前提，不是真实授权。",
+  "evals": [
+    {
+      "id": 1,
+      "name": "small-fix",
+      "prompt": "用 ph-prepare 准备修复这个导出错误：筛选结果为空时崩溃，非空导出保持不变。",
+      "expected_output": "检查夹具实现和既有测试，以简版规格明确空结果、非空兼容和权限边界，不增加无关原型、worktree或产品实现。",
+      "assertions": [
+        "定位 exporter.py 的空列表访问",
+        "给出正常、空结果与权限验证入口",
+        "没有产品代码修改、Git创建或未经要求的多代理",
+        "宿主若要求正式审批则实际使用专用能力"
+      ],
+      "files": [
+        "fixtures/export-project"
+      ],
+      "setup": "项目允许局部小改动采用简版规格；当前只有准备请求，没有产品写入权限。"
+    },
+    {
+      "id": 2,
+      "name": "ux-decision",
+      "prompt": "用 ph-prepare 准备重做多角色审批页面；交互尚不明确，需要比较两种路径。",
+      "expected_output": "按条件读取原型方法，限定原型范围；主 Agent 直接制作或按授权委派，主 Agent 实际向用户询问关键选择。",
+      "assertions": [
+        "原型不代替产品验收",
+        "子代理不直接Ask",
+        "验收标准在实现前确定"
+      ],
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "dirty-source",
+      "prompt": "用 ph-prepare 开始开发，源工作区有其他任务未提交改动，现有门禁尚未接入新流程。",
+      "expected_output": "不直接调用脚本绕过门禁，不自动提交未知改动；只读核实并由主 Agent 处理必要授权。",
+      "assertions": [
+        "保留现场",
+        "不自动git add -A",
+        "不宣称worktree已创建"
+      ],
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "negative",
+      "prompt": "解释一下 ph-prepare 的用途，不执行。",
+      "expected_output": "不触发开发，仅解释。",
+      "assertions": [
+        "不创建工作区",
+        "不写记录"
+      ],
+      "files": []
+    },
+    {
+      "id": 5,
+      "name": "approval-spike-cycle",
+      "prompt": "使用 ph-prepare；关键解析库兼容性尚未证实，当前宿主计划模式只读。",
+      "setup": "已授权只读调查；试验需要写临时文件，尚未取得试验权限。",
+      "expected_output": "区分有界试验许可与产品批准，说明试验范围和判据；无法取得权限则明确受阻。",
+      "assertions": [
+        "不把未验证假设写成结论",
+        "不通过提前批准产品方案绕过只读权限"
+      ],
+      "files": []
+    },
+    {
+      "id": 6,
+      "name": "internal-task",
+      "prompt": "使用 ph-prepare 准备内部解析函数重构，保持全部公开行为不变。",
+      "setup": "项目允许低风险自审，已有单元测试入口；用户没有提出界面变化。",
+      "expected_output": "以一个成果任务定义行为等价检查，根据风险确定评审；说明是否存在必要用户点。",
+      "assertions": [
+        "不编造页面验收",
+        "不强制原型和多代理",
+        "保留宿主所需计划审批"
+      ],
+      "files": []
+    },
+    {
+      "id": 7,
+      "name": "scope-change",
+      "prompt": "用 ph-prepare 更新方案：CSV 导出还要支持跨租户查看。",
+      "setup": "原方案只允许当前租户；用户尚未明确跨租户权限规则。",
+      "expected_output": "将权限兼容作为关键变更，先核实与澄清，不将旧批准复用为新权限授权。",
+      "assertions": [
+        "列出受影响权限标准及旧证据",
+        "保留旧决定与新版本",
+        "不提前修改鉴权"
+      ],
+      "files": []
+    },
+    {
+      "id": 8,
+      "name": "usable-short-spec",
+      "prompt": "用 ph-prepare 准备附件里的空导出修复，给实现者一份能直接开工的说明。",
+      "setup": "只准备；相关实现、测试和预期见夹具。",
+      "expected_output": "短规格说明空结果、保留行为、实际修改位置和可运行检查；不要求补无关表格。",
+      "assertions": [
+        "实现位置与检查命令来自夹具",
+        "每个预期有对应检查",
+        "没有为小修复新增多份规格或无关设计"
+      ],
+      "files": [
+        "fixtures/export-project"
+      ]
+    }
+  ]
+}

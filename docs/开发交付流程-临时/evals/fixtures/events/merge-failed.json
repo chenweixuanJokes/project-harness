@@ -1,0 +1,15 @@
+{
+  "fixture_only": true,
+  "receipt": {
+    "operation": "merge",
+    "status": "completed",
+    "target": "test-main",
+    "commit": "fixture-abc"
+  },
+  "final_check": {
+    "command": "test-command",
+    "exit_code": 1
+  },
+  "release": "not_started",
+  "cleanup_authorized": false
+}

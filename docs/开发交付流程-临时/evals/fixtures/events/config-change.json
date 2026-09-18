@@ -1,0 +1,12 @@
+{
+  "fixture_only": true,
+  "head": "unchanged-fixture",
+  "task_file": "untracked-config.json",
+  "tested": {
+    "encoding": "utf-8"
+  },
+  "current": {
+    "encoding": "utf-16"
+  },
+  "criterion": "CSV编码保持UTF-8"
+}

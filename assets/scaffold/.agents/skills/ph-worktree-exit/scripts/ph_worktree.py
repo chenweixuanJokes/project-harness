@@ -29,6 +29,16 @@ SESSION_FIELDS = {
     "verifyCommands",
     "maxChangedFileBytes",
 }
+LIVE_PHASES = {
+    "creating",
+    "entered",
+    "committed",
+    "merge_conflict",
+    "merging",
+    "merged_unverified",
+    "merge_verify_failed",
+    "merged",
+}
 SAFE_BRANCH = re.compile(r"^[A-Za-z0-9._/-]+$")
 SECRET_NAME = re.compile(
     r"(^|/)(\.env(?:\..*)?|id_(?:rsa|dsa|ecdsa|ed25519)|credentials?|secrets?)(?:$|/)|"
@@ -299,15 +309,55 @@ def load_session(linked: Path) -> tuple[Path, dict[str, Any]]:
     return path, data
 
 
+def read_session_record(main: Path, path: Path) -> dict[str, Any]:
+    require_local_path(main, path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PHError(f"unreadable session record {path.name}; run doctor to inspect: {exc}") from exc
+    if not isinstance(data, dict):
+        raise PHError(f"session record must be a JSON object: {path.name}")
+    return data
+
+
+def reject_live_session_conflicts(main: Path, sessions: Path, branch: str, target: Path) -> None:
+    if not sessions.is_dir():
+        return
+    for path in sessions.glob("*.json"):
+        data = read_session_record(main, path)
+        if data.get("phase") not in LIVE_PHASES:
+            continue
+        same_branch = data.get("taskBranch") == branch
+        same_path = bool(data.get("taskPath")) and Path(str(data["taskPath"])).resolve() == target.resolve()
+        if same_branch or same_path:
+            raise PHError(
+                f"a live PH session for this task already exists ({path.name}, "
+                f"phase {data.get('phase')}); inspect it with doctor and deliver or "
+                "recover it instead of creating a duplicate"
+            )
+
+
 def load_worktree_policy(main: Path) -> tuple[list[list[str]], int]:
     path = main / ".agents" / "ph.json"
     if not path.is_file():
         return [], DEFAULT_MAX_CHANGED_FILE_BYTES
     try:
-        manifest = json.loads(path.read_text(encoding="utf-8"))
+        raw = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise PHError(f"cannot read .agents/ph.json: {exc}") from exc
+    try:
+        manifest = json.loads(raw)
     except json.JSONDecodeError as exc:
-        raise PHError(f"invalid .agents/ph.json: {exc}") from exc
+        raise PHError(f"invalid .agents/ph.json: JSON parse error at line {exc.lineno}: {exc.msg}") from exc
+    if not isinstance(manifest, dict):
+        raise PHError(
+            f"invalid .agents/ph.json: top level must be a JSON object, got {type(manifest).__name__}"
+        )
     worktree = manifest.get("worktree", {})
+    if not isinstance(worktree, dict):
+        raise PHError(
+            f"invalid .agents/ph.json: 'worktree' must be an object, got {type(worktree).__name__}"
+        )
     commands = worktree.get("verify_commands", [])
     if not isinstance(commands, list) or any(
         not isinstance(command, list)
@@ -384,63 +434,101 @@ def run_verification(repo: Path, commands: list[list[str]], phase: str) -> None:
         )
 
 
-def risky_changes(
+def added_lines(diff_text: str) -> str:
+    return "\n".join(
+        line[1:]
+        for line in diff_text.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+
+
+def screen_wip_changes(
     repo: Path,
-    paths: list[str],
+    staged: list[str],
+    unstaged: list[str],
+    untracked: list[str],
     size_limit: int,
-    staged: bool,
 ) -> list[str]:
+    """Screen every current non-ignored change before anything is staged."""
+
     risks: list[str] = []
-    for rel in sorted(set(paths)):
+    for rel in sorted(set(staged) | set(unstaged) | set(untracked)):
         normalized = rel.replace("\\", "/")
         if SECRET_NAME.search(normalized):
             risks.append(f"secret-like path: {rel}")
         path = repo / rel
         if path.is_file() and path.stat().st_size > size_limit:
             risks.append(f"large file ({path.stat().st_size} bytes): {rel}")
-    diff_args = ["diff"]
-    if staged:
-        diff_args.append("--cached")
-    diff_args.extend(["--no-ext-diff", "--unified=0", "--", *paths])
-    diff = git(repo, *diff_args, check=False).stdout
-    added = "\n".join(
-        line[1:]
-        for line in diff.splitlines()
-        if line.startswith("+") and not line.startswith("+++")
-    )
-    if SECRET_CONTENT.search(added):
-        risks.append("secret-like value in added content")
+    for label, args in (
+        ("staged", ("diff", "--cached", "--no-ext-diff", "--unified=0")),
+        ("unstaged", ("diff", "--no-ext-diff", "--unified=0")),
+    ):
+        if SECRET_CONTENT.search(added_lines(git(repo, *args, check=False).stdout)):
+            risks.append(f"secret-like value in {label} content")
+    for rel in sorted(untracked):
+        path = repo / rel
+        if path.is_symlink():
+            if SECRET_CONTENT.search(os.readlink(path)):
+                risks.append(f"secret-like value in symlink target: {rel}")
+        elif path.is_file():
+            with path.open("rb") as stream:
+                text = stream.read(size_limit).decode("utf-8", errors="ignore")
+            if SECRET_CONTENT.search(text):
+                risks.append(f"secret-like value in untracked file: {rel}")
     return risks
 
 
-def commit_task(linked: Path, message: str | None, size_limit: int, apply: bool) -> tuple[str, list[str]]:
+def command_wip(args: argparse.Namespace) -> dict[str, Any]:
+    linked = git_root(Path(args.repo).resolve())
+    main = main_worktree(linked)
+    _, size_limit = load_worktree_policy(main)
+    ensure_no_operation(linked)
     staged, unstaged, untracked = change_sets(linked)
+    result: dict[str, Any] = {
+        "action": "wip",
+        "apply": args.apply,
+        "repo": str(linked),
+        "branch": current_branch(linked),
+        "staged": staged,
+        "unstaged": unstaged,
+        "untracked": untracked,
+        "message": args.message,
+    }
     if not (staged or unstaged or untracked):
-        return "clean", []
-    if untracked:
-        raise PHError(f"untracked files require an explicit user decision: {untracked}")
-    if staged and unstaged:
-        raise PHError(
-            "staged and unstaged changes coexist; PH preserves partial staging and requires the user to choose"
-        )
-    changed = staged or unstaged
-    risks = risky_changes(linked, changed, size_limit, staged=bool(staged))
+        result["commit"] = "clean"
+        return result
+    risks = screen_wip_changes(linked, staged, unstaged, untracked, size_limit)
+    result["risks"] = risks
     if risks:
-        raise PHError("unsafe commit candidate: " + "; ".join(risks))
-    if not message:
-        raise PHError("a commit message is required when exit must create a commit")
-    if not apply:
-        return ("commit-staged" if staged else "stage-tracked-and-commit"), changed
-    if unstaged:
-        git(linked, "add", "-u", "--")
-    proc = git(linked, "commit", "-m", message, check=False)
+        raise PHError("unsafe WIP candidate; nothing was staged or committed: " + "; ".join(risks))
+    if not args.apply:
+        result["commit"] = (
+            "planned: stage every listed non-ignored change and create one WIP commit "
+            "with hooks and signing intact"
+        )
+        return result
+    to_add = sorted(set(unstaged) | set(untracked))
+    if to_add:
+        git(linked, "add", "--", *to_add)
+    proc = git(linked, "commit", "-m", args.message, check=False)
     if proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip()
         raise PHError(f"commit failed; hooks and signing were not bypassed: {detail}")
-    return "committed", changed
+    result["commit"] = current_head(linked)
+    result["files"] = sorted(set(staged) | set(unstaged) | set(untracked))
+    return result
 
 
-def validate_session_identity(linked: Path, data: dict[str, Any]) -> tuple[Path, str]:
+def validate_session_identity(
+    linked: Path,
+    data: dict[str, Any],
+    require_matching_head: bool = True,
+) -> tuple[Path, str]:
+    if data.get("phase") == "creating":
+        raise PHError(
+            "creation of this worktree was interrupted; inspect it with doctor and "
+            "adopt or archive it via recover instead of delivering"
+        )
     task_path = Path(data["taskPath"]).resolve()
     if linked.resolve() != task_path:
         raise PHError("current worktree does not match session taskPath")
@@ -455,9 +543,13 @@ def validate_session_identity(linked: Path, data: dict[str, Any]) -> tuple[Path,
         raise PHError("session task path is not the canonical PH worktree path")
     if data.get("phase") != "entered":
         ensure_clean(linked, "task worktree after session commit")
-        task_head = data.get("taskHead")
-        if not task_head or current_head(linked) != task_head:
-            raise PHError("task HEAD changed after the session commit; start a new delivery decision")
+        if require_matching_head:
+            task_head = data.get("taskHead")
+            if not task_head or current_head(linked) != task_head:
+                raise PHError(
+                    "task HEAD changed after the session commit; deliver the new state "
+                    "with the redeliver subcommand instead of retrying exit"
+                )
     return main, task_branch
 
 
@@ -478,6 +570,13 @@ def perform_merge(main: Path, data: dict[str, Any], session_path: Path) -> str:
         data["phase"] = "merged_unverified"
         save_session(session_path, data)
         return "already-contained"
+    # Record the pre-merge snapshot BEFORE the merge starts so an interruption
+    # is always recoverable from the session record plus Git state.
+    data["mergeSourceBranch"] = current_branch(main)
+    data["mergeSourceHead"] = current_head(main)
+    data["mergeTaskHead"] = git(main, "rev-parse", task_branch).stdout.strip()
+    data["phase"] = "merging"
+    save_session(session_path, data)
     proc = git(
         main,
         "-c",
@@ -491,11 +590,87 @@ def perform_merge(main: Path, data: dict[str, Any], session_path: Path) -> str:
             data["phase"] = "merge_conflict"
             save_session(session_path, data)
             raise PHError("merge conflict preserved; resolve and run continue, or run abort-merge")
+        data["phase"] = "committed"
+        save_session(session_path, data)
         detail = proc.stderr.strip() or proc.stdout.strip()
         raise PHError(f"merge failed without a resumable conflict: {detail}")
     data["phase"] = "merged_unverified"
     save_session(session_path, data)
     return "merged"
+
+
+def verify_merge_snapshot(main: Path, data: dict[str, Any]) -> None:
+    """Refuse to touch a merge that is not the one this session started."""
+
+    merge_task_head = data.get("mergeTaskHead") or data.get("taskHead")
+    merge_source_branch = data.get("mergeSourceBranch") or data.get("sourceBranch")
+    merge_source_head = data.get("mergeSourceHead")
+    if not merge_task_head:
+        raise PHError("session lacks the pre-merge task HEAD; evidence insufficient, refusing to guess")
+    if not merge_source_branch:
+        raise PHError("session lacks the pre-merge source branch; evidence insufficient, refusing to guess")
+    active_branch = current_branch(main)
+    if active_branch != merge_source_branch:
+        raise PHError(
+            f"a different merge is active: source branch is {active_branch}, "
+            f"the PH merge targeted {merge_source_branch}"
+        )
+    if not git_path(main, "MERGE_HEAD").exists():
+        raise PHError("MERGE_HEAD is gone; no PH merge conflict is active")
+    merge_head = git(main, "rev-parse", "MERGE_HEAD").stdout.strip()
+    if merge_head != merge_task_head:
+        raise PHError(
+            f"a different merge is active: MERGE_HEAD is {merge_head}, "
+            f"the PH merge was merging {merge_task_head}"
+        )
+    if merge_source_head:
+        if current_head(main) != merge_source_head:
+            raise PHError("source HEAD changed since the PH merge started; refusing to touch a different merge")
+        return
+    # Legacy record without a pre-merge source HEAD snapshot: reconstruct the
+    # evidence from Git's own merge state instead of claiming the merge by
+    # branch and task HEAD alone. Git records ORIG_HEAD when a merge starts,
+    # and HEAD stays on it until the merge commit is created.
+    orig_head_path = git_path(main, "ORIG_HEAD")
+    if not orig_head_path.exists():
+        raise PHError(
+            "session predates merge snapshots and Git has no ORIG_HEAD; "
+            "evidence insufficient, refusing to guess"
+        )
+    orig_head = git(main, "rev-parse", "ORIG_HEAD").stdout.strip()
+    if orig_head != current_head(main):
+        raise PHError(
+            "HEAD moved since the merge started; refusing to touch a different merge"
+        )
+    entered_source_head = data.get("sourceHead")
+    if entered_source_head and git(
+        main, "merge-base", "--is-ancestor", entered_source_head, orig_head, check=False
+    ).returncode != 0:
+        raise PHError(
+            "ORIG_HEAD is not on the recorded source history; "
+            "evidence insufficient, refusing to guess"
+        )
+
+
+def resolve_merging_phase(main: Path, data: dict[str, Any]) -> str:
+    """Classify an interrupted 'merging' phase from provable Git state (read-only)."""
+
+    merge_task_head = data.get("mergeTaskHead")
+    merge_source_head = data.get("mergeSourceHead")
+    if not merge_task_head or not merge_source_head:
+        raise PHError(
+            "interrupted merge record lacks its pre-merge snapshot; "
+            "inspect it with doctor instead of guessing"
+        )
+    if git_path(main, "MERGE_HEAD").exists():
+        if git(main, "rev-parse", "MERGE_HEAD").stdout.strip() != merge_task_head:
+            raise PHError("a different merge is active: MERGE_HEAD does not match the recorded snapshot")
+        return "merge_conflict"
+    head = current_head(main)
+    parents = git(main, "rev-parse", f"{head}^1", f"{head}^2", check=False)
+    if parents.returncode == 0 and parents.stdout.split() == [merge_source_head, merge_task_head]:
+        return "merged_unverified"
+    return "committed"
 
 
 def validate_merged_target(main: Path, data: dict[str, Any]) -> None:
@@ -557,6 +732,10 @@ def cleanup_session(main: Path, linked: Path, data: dict[str, Any], session_path
         raise PHError(f"safe worktree removal failed; PH will not force it: {detail}")
     data["phase"] = "cleaned"
     save_session(session_path, data)
+    archive_session(main, session_path)
+
+
+def archive_session(main: Path, session_path: Path) -> None:
     _, completed = session_dirs(main)
     completed.mkdir(parents=True, exist_ok=True)
     session_path.replace(completed / session_path.name)
@@ -565,11 +744,26 @@ def cleanup_session(main: Path, linked: Path, data: dict[str, Any], session_path
 def command_enter(args: argparse.Namespace) -> dict[str, Any]:
     main = ensure_main_repo(Path(args.repo).resolve())
     managed_root(main)
-    session_dirs(main)
+    sessions, _ = session_dirs(main)
+    # Policy errors are reported before cleanliness, so a broken manifest is
+    # diagnosed as a configuration problem rather than a dirty tree.
+    verify_commands, max_changed_file_bytes = load_worktree_policy(main)
     ensure_no_operation(main)
     ensure_clean(main, "source worktree")
     ensure_ignored(main)
     validate_branch(main, args.branch)
+    source_branch = current_branch(main)
+    source_head = current_head(main)
+    if args.expect_source_branch is not None and args.expect_source_branch != source_branch:
+        raise PHError(
+            f"source branch drifted: expected {args.expect_source_branch}, found {source_branch}"
+        )
+    if args.expect_source_head is not None and args.expect_source_head != source_head:
+        raise PHError(f"source HEAD drifted: expected {args.expect_source_head}, found {source_head}")
+    target = safe_task_path(main, args.branch)
+    # Duplicate diagnosis comes before branch-occupancy errors so an
+    # interrupted run is reported as a recoverable live session.
+    reject_live_session_conflicts(main, sessions, args.branch, target)
     exists = branch_exists(main, args.branch)
     if exists != args.existing:
         if exists:
@@ -578,12 +772,9 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
     occupied = occupied_branches(main)
     if args.branch in occupied:
         raise PHError(f"branch is already checked out at {occupied[args.branch]}")
-    target = safe_task_path(main, args.branch)
     if target.exists():
         raise PHError(f"target path already exists: {target}")
-    source_branch = current_branch(main)
-    source_head = current_head(main)
-    verify_commands, max_changed_file_bytes = load_worktree_policy(main)
+    initial_task_head = git(main, "rev-parse", args.branch).stdout.strip() if exists else source_head
     plan = {
         "action": "enter",
         "apply": args.apply,
@@ -593,16 +784,12 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
         "taskBranch": args.branch,
         "taskPath": str(target),
         "existingBranch": exists,
+        "initialTaskHead": initial_task_head,
         "verifyCommands": verify_commands,
         "maxChangedFileBytes": max_changed_file_bytes,
     }
     if not args.apply:
         return plan
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if exists:
-        git(main, "worktree", "add", str(target), args.branch)
-    else:
-        git(main, "worktree", "add", "-b", args.branch, str(target), source_head)
     session_id = str(uuid.uuid4())
     session = {
         "schemaVersion": 1,
@@ -613,12 +800,22 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
         "sourceHead": source_head,
         "taskBranch": args.branch,
         "taskPath": str(target),
-        "phase": "entered",
+        # Recoverable state: if creation is interrupted, doctor lists this
+        # record and recover adopts or archives it.
+        "phase": "creating",
+        "initialTaskHead": initial_task_head,
         "verifyCommands": verify_commands,
         "maxChangedFileBytes": max_changed_file_bytes,
     }
-    sessions, _ = session_dirs(main)
-    save_session(sessions / f"{session_id}.json", session)
+    session_path = sessions / f"{session_id}.json"
+    save_session(session_path, session)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if exists:
+        git(main, "worktree", "add", str(target), args.branch)
+    else:
+        git(main, "worktree", "add", "-b", args.branch, str(target), source_head)
+    session["phase"] = "entered"
+    save_session(session_path, session)
     plan["sessionId"] = session_id
     plan["status"] = "created"
     return plan
@@ -628,40 +825,58 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
     linked = git_root(Path(args.repo).resolve())
     session_path, data = load_session(linked)
     main, _ = validate_session_identity(linked, data)
-    commands, size_limit = session_policy(data)
+    commands, _ = session_policy(data)
     phase = data["phase"]
     result: dict[str, Any] = {"action": "exit", "apply": args.apply, "phase": phase}
 
+    if args.cleanup and phase != "merged":
+        raise PHError(
+            "cleanup must be a separate exit call after the session is merged and verified; "
+            "an interrupted archival is retried with the recover subcommand"
+        )
+    if phase == "merge_conflict":
+        raise PHError("a merge conflict is active; use continue or abort-merge")
+    if phase == "merging":
+        raise PHError("an interrupted merge is recorded; resolve it with continue or abort-merge first")
+
     if not args.apply:
-        if args.cleanup and phase != "merged":
-            raise PHError("cleanup must be a separate call after the session is merged and verified")
+        # Read-only plan gate: in every phase, dry-run never runs verification
+        # commands, never merges, never writes the session and never cleans.
         if phase == "entered":
             ensure_no_operation(linked)
-            result["commit"], result["files"] = commit_task(linked, args.message, size_limit, False)
+            staged, unstaged, untracked = change_sets(linked)
+            dirty = bool(staged or unstaged or untracked)
+            result["taskTree"] = {"staged": staged, "unstaged": unstaged, "untracked": untracked}
+            result["commit"] = (
+                "clean" if not dirty
+                else "blocked-dirty: commit via the wip subcommand after the unified WIP "
+                "confirmation, or make an explicitly authorized formal commit; PH does not infer commits"
+            )
             validate_merge_target(main, data)
         elif phase == "committed":
             validate_merge_target(main, data)
         elif phase in {"merged_unverified", "merge_verify_failed", "merged"}:
             validate_merged_target(main, data)
         else:
-            raise PHError(f"cannot plan exit from {phase}; use continue or abort-merge for conflicts")
+            raise PHError(f"cannot plan exit from {phase}")
         result["mergeTarget"] = f"{data['mainPath']}:{data['sourceBranch']}"
         result["verifyCommands"] = commands
         result["cleanupPlanned"] = bool(args.cleanup)
         return result
 
-    if args.cleanup and phase != "merged":
-        raise PHError(
-            "cleanup must be a separate call after exit has merged and verified the session"
-        )
-    if phase == "merge_conflict":
-        raise PHError("a merge conflict is active; use continue or abort-merge")
     if phase == "entered":
         ensure_no_operation(linked)
+        staged, unstaged, untracked = change_sets(linked)
+        if staged or unstaged or untracked:
+            raise PHError(
+                "task worktree is not clean; staged=" + json.dumps(staged)
+                + ", unstaged=" + json.dumps(unstaged)
+                + ", untracked=" + json.dumps(untracked)
+                + ". Commit via the wip subcommand after the unified WIP confirmation, "
+                "or make an explicitly authorized formal commit; PH does not infer "
+                "commits and never stashes or discards changes."
+            )
         run_verification(linked, commands, "pre-merge")
-        commit_action, files = commit_task(linked, args.message, size_limit, args.apply)
-        result["commit"] = commit_action
-        result["files"] = files
         data["phase"] = "committed"
         data["taskHead"] = current_head(linked)
         save_session(session_path, data)
@@ -669,8 +884,7 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
 
     if phase == "committed":
         validate_merge_target(main, data)
-        merge_action = perform_merge(main, data, session_path)
-        result["merge"] = merge_action
+        result["merge"] = perform_merge(main, data, session_path)
         phase = data["phase"]
 
     if phase in {"merged_unverified", "merge_verify_failed"}:
@@ -685,23 +899,93 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
     if phase == "merged":
         result["status"] = "merged"
         if args.cleanup:
-            if not args.apply:
-                result["cleanupPlanned"] = True
-            else:
-                cleanup_session(main, linked, data, session_path)
-                result["status"] = "cleaned"
+            cleanup_session(main, linked, data, session_path)
+            result["status"] = "cleaned"
         else:
             result["cleanupRequiredConfirmation"] = True
         return result
     raise PHError(f"unsupported session phase for exit: {phase}")
 
 
+def command_redeliver(args: argparse.Namespace) -> dict[str, Any]:
+    linked = git_root(Path(args.repo).resolve())
+    session_path, data = load_session(linked)
+    main, _ = validate_session_identity(linked, data, require_matching_head=False)
+    phase = data["phase"]
+    if phase not in {"committed", "merge_verify_failed"}:
+        raise PHError(
+            f"redeliver applies to committed or merge_verify_failed sessions, not {phase}"
+        )
+    old_head = data.get("taskHead")
+    if not old_head:
+        raise PHError("session has no recorded taskHead; evidence insufficient to redeliver")
+    new_head = current_head(linked)
+    result: dict[str, Any] = {
+        "action": "redeliver",
+        "apply": args.apply,
+        "phase": phase,
+        "fromTaskHead": old_head,
+        "toTaskHead": new_head,
+    }
+    if new_head == old_head:
+        raise PHError(
+            "no new commits since the delivered taskHead; retry the delivery with exit instead"
+        )
+    if git(linked, "merge-base", "--is-ancestor", old_head, new_head, check=False).returncode != 0:
+        raise PHError(
+            "new task HEAD is not a descendant of the delivered taskHead; "
+            "the task history was rewritten and cannot be redelivered"
+        )
+    validate_merge_target(main, data)
+    commands, _ = session_policy(data)
+    if not args.apply:
+        result["verifyCommands"] = commands
+        result["planned"] = (
+            "verify the task tree, record the old and new delivered versions, "
+            "then merge and verify as usual"
+        )
+        return result
+    ensure_no_operation(linked)
+    run_verification(linked, commands, "pre-merge")
+    ensure_clean(linked, "task worktree before recording the redelivery")
+    data["taskHead"] = new_head
+    data.setdefault("redeliveries", []).append(
+        {"from": old_head, "to": new_head, "at": datetime.now(timezone.utc).isoformat()}
+    )
+    data["phase"] = "committed"
+    save_session(session_path, data)
+    result["merge"] = perform_merge(main, data, session_path)
+    try:
+        complete_verification(main, data, session_path, commands)
+    except PHError:
+        data["phase"] = "merge_verify_failed"
+        save_session(session_path, data)
+        raise
+    result["status"] = "merged"
+    result["cleanupRequiredConfirmation"] = True
+    return result
+
+
 def command_continue(args: argparse.Namespace) -> dict[str, Any]:
     linked = git_root(Path(args.repo).resolve())
     session_path, data = load_session(linked)
     main, _ = validate_session_identity(linked, data)
-    if data["phase"] != "merge_conflict" or not git_path(main, "MERGE_HEAD").exists():
-        raise PHError("no PH merge conflict is ready to continue")
+    phase = data["phase"]
+    if phase == "merging":
+        resolved = resolve_merging_phase(main, data)
+        if not args.apply:
+            return {
+                "action": "continue",
+                "apply": False,
+                "mainPath": str(main),
+                "interruptedMergeResolvesTo": resolved,
+            }
+        data["phase"] = resolved
+        save_session(session_path, data)
+        phase = resolved
+    if phase != "merge_conflict":
+        raise PHError(f"no PH merge conflict is ready to continue (phase: {phase})")
+    verify_merge_snapshot(main, data)
     if git(main, "ls-files", "-u", check=False).stdout:
         raise PHError("unresolved merge entries remain")
     if not args.apply:
@@ -737,14 +1021,188 @@ def command_abort(args: argparse.Namespace) -> dict[str, Any]:
     linked = git_root(Path(args.repo).resolve())
     session_path, data = load_session(linked)
     main, _ = validate_session_identity(linked, data)
-    if data["phase"] != "merge_conflict" or not git_path(main, "MERGE_HEAD").exists():
-        raise PHError("no PH merge conflict is active")
+    phase = data["phase"]
+    if phase == "merging":
+        resolved = resolve_merging_phase(main, data)
+        if not args.apply:
+            return {
+                "action": "abort-merge",
+                "apply": False,
+                "mainPath": str(main),
+                "interruptedMergeResolvesTo": resolved,
+            }
+        data["phase"] = resolved
+        save_session(session_path, data)
+        phase = resolved
+    if phase != "merge_conflict":
+        raise PHError(f"no PH merge conflict is active (phase: {phase})")
+    verify_merge_snapshot(main, data)
     if not args.apply:
         return {"action": "abort-merge", "apply": False, "mainPath": str(main)}
     git(main, "merge", "--abort")
     data["phase"] = "committed"
     save_session(session_path, data)
     return {"action": "abort-merge", "apply": True, "status": "aborted", "phase": "committed"}
+
+
+def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
+    main = main_worktree(git_root(Path(args.repo).resolve()))
+    root = managed_root(main)
+    sessions, _ = session_dirs(main)
+    records: list[tuple[str, dict[str, Any]]] = []
+    corrupt: list[str] = []
+    if sessions.is_dir():
+        for path in sorted(sessions.glob("*.json")):
+            try:
+                data = read_session_record(main, path)
+                if not str(data.get("taskPath", "")):
+                    raise ValueError("record has no taskPath")
+                missing = sorted(SESSION_FIELDS - data.keys())
+                if missing:
+                    raise ValueError(f"missing fields: {', '.join(missing)}")
+            except PHError as exc:
+                corrupt.append(f"{path.name}: {exc}")
+                continue
+            records.append((path.name, data))
+    registered = {Path(row["worktree"]).resolve() for row in worktrees(main)}
+    by_task: dict[str, list[str]] = {}
+    orphans: list[str] = []
+    cleaned_not_archived: list[str] = []
+    interrupted_creating: list[str] = []
+    interrupted_merging: list[str] = []
+    session_tasks: set[Path] = set()
+    for name, data in records:
+        task_path = Path(str(data["taskPath"])).resolve()
+        session_tasks.add(task_path)
+        by_task.setdefault(str(task_path), []).append(name)
+        phase = data.get("phase")
+        if phase == "cleaned":
+            cleaned_not_archived.append(name)
+            continue
+        if phase == "creating":
+            interrupted_creating.append(name)
+        if phase == "merging":
+            interrupted_merging.append(name)
+        if task_path not in registered and not task_path.is_dir():
+            orphans.append(name)
+    phases_by_name = {name: data.get("phase") for name, data in records}
+    duplicates = [
+        {
+            "taskPath": task,
+            "sessions": [
+                {"session": name, "phase": phases_by_name[name]} for name in names
+            ],
+        }
+        for task, names in sorted(by_task.items())
+        if len(names) > 1
+    ]
+    unregistered: list[str] = []
+    for row in worktrees(main):
+        worktree_path = Path(row["worktree"]).resolve()
+        if worktree_path == main.resolve():
+            continue
+        try:
+            worktree_path.relative_to(root.resolve())
+        except ValueError:
+            continue
+        if worktree_path not in session_tasks:
+            unregistered.append(str(worktree_path))
+    return {
+        "action": "doctor",
+        "mainPath": str(main),
+        "orphans": orphans,
+        "duplicates": duplicates,
+        "unregisteredWorktrees": unregistered,
+        "cleanedNotArchived": cleaned_not_archived,
+        "interruptedCreating": interrupted_creating,
+        "interruptedMerging": interrupted_merging,
+        "corruptRecords": corrupt,
+    }
+
+
+def command_recover(args: argparse.Namespace) -> dict[str, Any]:
+    main = main_worktree(git_root(Path(args.repo).resolve()))
+    sessions, _ = session_dirs(main)
+    if args.session != Path(args.session).name or args.session in {".", ".."} or not args.session.endswith(".json"):
+        raise PHError("--session must be a session record file name like <sessionId>.json")
+    session_path = require_local_path(main, sessions / args.session)
+    if not session_path.is_file():
+        raise PHError(f"recovery target does not exist: {args.session}")
+    data = read_session_record(main, session_path)
+    missing = sorted(SESSION_FIELDS - data.keys())
+    if missing:
+        raise PHError(f"recovery target is missing fields: {', '.join(missing)}")
+    phase = data["phase"]
+    result: dict[str, Any] = {
+        "action": "recover",
+        "recoverAction": args.action,
+        "session": args.session,
+        "phase": phase,
+        "apply": args.apply,
+    }
+    task_path_raw = str(data.get("taskPath", ""))
+    if not task_path_raw:
+        raise PHError("recovery target has no taskPath; evidence insufficient")
+    task_path = Path(task_path_raw)
+    registered = {Path(row["worktree"]).resolve() for row in worktrees(main)}
+    on_disk = task_path.is_dir()
+    is_registered = task_path.resolve() in registered
+
+    if args.action == "archive":
+        if on_disk or is_registered:
+            raise PHError(
+                "the recorded worktree still exists or is still registered, so this "
+                "session is not provably dead; deliver, abort or clean it instead of "
+                "archiving"
+            )
+        if not args.apply:
+            result["planned"] = (
+                "archive the dead session record into .ph/completed/; "
+                "branches and directories are preserved"
+            )
+            return result
+        archive_session(main, session_path)
+        result["status"] = "archived"
+        return result
+
+    if phase != "creating":
+        raise PHError(f"adopt applies only to an interrupted creating record, not {phase}")
+    if not on_disk or not is_registered:
+        raise PHError(
+            "the recorded worktree does not exist; there is nothing to adopt "
+            "(archive the record instead)"
+        )
+    for other_path in sessions.glob("*.json"):
+        if other_path == session_path:
+            continue
+        other = read_session_record(main, other_path)
+        if str(other.get("taskPath", "")) and Path(str(other["taskPath"])).resolve() == task_path.resolve():
+            raise PHError(
+                f"duplicate records for this taskPath ({other_path.name}); archive the "
+                "stale one explicitly before adopting, otherwise delivery would find "
+                "two sessions"
+            )
+    expected = data.get("initialTaskHead")
+    if not expected:
+        raise PHError("creating record lacks initialTaskHead; evidence insufficient to adopt")
+    if require_local_path(main, task_path) != safe_task_path(main, str(data["taskBranch"])):
+        raise PHError("recovery target is not the canonical PH worktree path for its task branch")
+    branch = current_branch(task_path)
+    if branch != data["taskBranch"]:
+        raise PHError(f"worktree branch changed: expected {data['taskBranch']}, got {branch}")
+    head = current_head(task_path)
+    if head != expected:
+        raise PHError(
+            f"worktree HEAD {head} does not match the recorded initialTaskHead {expected}; "
+            "evidence is ambiguous, refusing to adopt"
+        )
+    if not args.apply:
+        result["planned"] = "mark the interrupted creation as entered so delivery can proceed"
+        return result
+    data["phase"] = "entered"
+    save_session(session_path, data)
+    result["status"] = "adopted"
+    return result
 
 
 def parser() -> argparse.ArgumentParser:
@@ -755,13 +1213,29 @@ def parser() -> argparse.ArgumentParser:
     enter.add_argument("--repo", required=True)
     enter.add_argument("--branch", required=True)
     enter.add_argument("--existing", action="store_true")
+    enter.add_argument("--expect-source-branch", dest="expect_source_branch")
+    enter.add_argument("--expect-source-head", dest="expect_source_head")
     enter.add_argument("--apply", action="store_true")
 
-    exit_cmd = sub.add_parser("exit", help="Verify, commit, merge, and optionally clean a PH worktree")
+    exit_cmd = sub.add_parser("exit", help="Verify, merge, and optionally clean a PH worktree")
     exit_cmd.add_argument("--repo", required=True)
+    # Deprecated and ignored: exit never commits. Dirty trees are blocked with
+    # guidance toward the wip subcommand or an explicitly authorized commit.
     exit_cmd.add_argument("--message")
     exit_cmd.add_argument("--cleanup", action="store_true")
     exit_cmd.add_argument("--apply", action="store_true")
+
+    wip = sub.add_parser("wip", help="Commit all current non-ignored changes as one WIP commit")
+    wip.add_argument("--repo", required=True)
+    wip.add_argument("--message", required=True)
+    wip.add_argument("--apply", action="store_true")
+
+    redeliver = sub.add_parser(
+        "redeliver",
+        help="Deliver supplementary task commits after an aborted or failed delivery",
+    )
+    redeliver.add_argument("--repo", required=True)
+    redeliver.add_argument("--apply", action="store_true")
 
     cont = sub.add_parser("continue", help="Continue a resolved PH merge conflict")
     cont.add_argument("--repo", required=True)
@@ -770,6 +1244,18 @@ def parser() -> argparse.ArgumentParser:
     abort = sub.add_parser("abort-merge", help="Abort the PH merge while preserving task commits")
     abort.add_argument("--repo", required=True)
     abort.add_argument("--apply", action="store_true")
+
+    doctor = sub.add_parser("doctor", help="Read-only report of PH session and worktree inconsistencies")
+    doctor.add_argument("--repo", required=True)
+
+    recover = sub.add_parser(
+        "recover",
+        help="Archive a provably dead session record or adopt an interrupted creation",
+    )
+    recover.add_argument("--repo", required=True)
+    recover.add_argument("--session", required=True)
+    recover.add_argument("--action", required=True, choices=("archive", "adopt"))
+    recover.add_argument("--apply", action="store_true")
     return root
 
 
@@ -777,15 +1263,19 @@ def dispatch(args: argparse.Namespace) -> dict[str, Any]:
     return {
         "enter": command_enter,
         "exit": command_exit,
+        "wip": command_wip,
+        "redeliver": command_redeliver,
         "continue": command_continue,
         "abort-merge": command_abort,
+        "doctor": command_doctor,
+        "recover": command_recover,
     }[args.command](args)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
-        if args.apply:
+        if getattr(args, "apply", False):
             main_repo = main_worktree(git_root(Path(args.repo).resolve()))
             with delivery_lock(main_repo):
                 result = dispatch(args)

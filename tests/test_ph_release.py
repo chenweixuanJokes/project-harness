@@ -44,6 +44,7 @@ DEFAULT_SKILLS = [
     "ph-intent-drop",
     "ph-merge-update",
     "ph-docs-sync",
+    "ph-sure",
 ]
 REAL_MIGRATIONS = {
     "format_version": 1,

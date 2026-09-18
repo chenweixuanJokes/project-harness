@@ -1,0 +1,6 @@
+{
+  "eval_id": 4,
+  "eval_name": "implement-environment-blocked",
+  "prompt": "真实失败命令",
+  "assertions": []
+}
