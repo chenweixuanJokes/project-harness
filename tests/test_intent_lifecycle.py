@@ -29,12 +29,9 @@ if str(REPO_ROOT / "scripts") not in sys.path:
 
 import ph_init  # noqa: E402
 MD_LINK = re.compile(r"(?<!!)\[.*?\]\(([^)]+)\)")
-REQUIRED_SKILLS = (
-    "ph-init", "ph-worktree-enter", "ph-worktree-exit",
-    "ph-memory-capture", "ph-memory-archive", "ph-memory-ask",
-    "ph-intent-new", "ph-intent-impl", "ph-intent-verify", "ph-intent-drop",
-    "ph-merge-update", "ph-docs-sync", "ph-sure",
-)
+# The scaffold skills plus the ten spec-kit skills that init installs from the
+# pinned upstream release; both sets must exist in every freshly installed repo.
+REQUIRED_SKILLS = ph_init.REQUIRED_SKILLS + ph_init.SPECKIT_SKILL_NAMES
 STATUS_DIRS = (
     "docs/意图/待办/新特性", "docs/意图/待办/问题记录",
     "docs/意图/实施/新特性", "docs/意图/实施/问题记录",
@@ -200,7 +197,7 @@ class IntentLifecycleTests(unittest.TestCase):
             self.assertTrue(description)
             self.assertLessEqual(len(description), 1024, name)
             names.append(name)
-        self.assertEqual(sorted(names), sorted(REQUIRED_SKILLS))
+        self.assertEqual(sorted(names), sorted(ph_init.REQUIRED_SKILLS))
         seen = []
         for path in [REPO_ROOT / "evals/evals.json",
                      *sorted((SCAFFOLD / ".agents/skills").glob("*/evals/evals.json"))]:

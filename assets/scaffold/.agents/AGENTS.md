@@ -70,7 +70,7 @@ docs/
 
 - 普通手工开特性分支时从仓库声明的基线检出。用户明确要求创建 worktree 时，源分支取主工作区当前分支，任务分支由代理结合任务语义与项目规则自行确定；正常创建不再次问询。分支名用英文 `<类型>/<主题>`，禁止中文。
 - 并行任务默认进入 `.worktrees/<slug>--<hash>/`，该目录由仓库根 `.gitignore` 的 PH marker 忽略。
-- 禁止 `git stash`。进入 / 退出 worktree 的源工作区或任务工作区有未提交改动时，停止推进并执行统一 WIP 确认：先只读列明目录、分支与完整改动清单（用于说明现场与安全筛查结果），再实际调用问答工具问是否采用 `wip: <说明>` 提交解决当前这次阻断（不是对文件内容的逐项审批），只给“确认 WIP 并继续”“停止，保留现场”两个选择；同一阻断场景内的普通内容变化不重问、不与清单逐字绑定，授权不是长期授权：该提交一经执行授权即消费，新的阻断按当时现场重新确认；受确认提交由统一脚本 `wip` 子命令执行，Agent 不手写拼装，只收进通过安全筛查的路径（staged、unstaged、untracked 一起收进，ignored 排除，敏感 / 异常大文件 / 未解决冲突整单拒绝、不部分提交），不得自动收纳未知文件。
+- 禁止 `git stash`。进入 / 退出 worktree 的源工作区或任务工作区有未提交改动时，停止推进并执行统一 WIP 确认：先只读列明目录、分支与完整改动清单（用于说明现场与安全筛查结果），再实际调用问答工具问是否采用 `wip: <说明>` 提交解决当前这次阻断（不是对文件内容的逐项审批），两个选项字面为“是”“否”，不添加其他预设选项；答“是”授权本次组合调用：进入与退出的受确认 WIP 提交及后续动作在单次 `enter --apply` / `exit --apply` 内由运行时脚本一次完成，绑定 dry-run 快照的分支、HEAD 与拟提交路径/状态集合（`--wip-message` 连同各 `--expect-*`），漂移整单拒绝并重新预检，技能流程不拆成“先 wip 再进入/退出”两次调用，独立 `wip` 子命令保留给用户直接使用；同一已展示路径的普通内容修改不重问（不逐字节比对文件内容）；分支、HEAD 或拟提交路径/状态集合发生变化（新增、删除或状态转移）时阻断并重新预检、重新确认，不沿用已消费的确认覆盖新变更，授权不是长期授权：该提交一经执行授权即消费，新的阻断按当时现场重新确认；提交把 staged、unstaged、untracked 一起收进，ignored 排除，敏感 / 异常大文件 / 未解决冲突整单拒绝、不部分提交，Agent 不手写 `git add` / `git commit` 拼装，不得自动收纳未知文件。
 - 合并冲突时保留 Git 标准 merge 状态，不自动解决：先只读确认冲突态并列明冲突清单，再实际调用问答工具按固定冲突问句问“保留现场，我解决后继续”还是“撤销这次合并”，不预设 stash、丢弃、一键选 ours/theirs 或 Agent 代解决。保留现场即停止等待，不轮询；用户明确“已解决并暂存，请继续”且只读核验无未合并条目、session 与 merge 状态吻合才 `continue`，不重问；仅文件无冲突标记或口头说已解决不是继续授权。撤销是仅本次 `abort-merge` 的单独授权，事前说明冲突解决编辑会被撤销；取消或未回答同样停止，不 abort、不做 WIP、不换问法重问。冲突态优先于 WIP 流程，未合并条目不得为 WIP 收进，冲突解决后 `continue` 生成的是合并提交不是 WIP；清理仍单独确认。`continue` 与 `abort-merge` 执行前依据 session 合并快照核对 merge 身份；现场与登记不符或旧 session 缺少新增证据字段时保守阻断，不猜测补齐，用只读 `doctor` 诊断、显式 `recover` 恢复（recover 不能恢复所有旧 merge）。
 - 进入 / 退出流程由 `ph-worktree-enter` / `ph-worktree-exit` 执行：用户当轮点名对应技能并要求使用才进入该流程，用户明确要求创建 worktree 已构成本次创建授权，正常计划审查通过后直接创建；异常安全门禁仍须停止。退出按“验证、受控提交、合并回进入时记录的源分支、再次验证”交付；清理本次隔离工作区前必须另行确认，对用户说“这次任务的工作目录”，不要把内部会话名当问句。
 
@@ -103,7 +103,7 @@ docs/
 
 ## PH Skills
 
-十三名固定，目录名与 `name` 一致且均为 kebab-case；所有 Skill 都以 `.agents/skills/<name>/SKILL.md` 为唯一人工编辑源。**调用门禁：每个 PH 技能仅在用户当轮明确点名该技能（如「用 ph-xxx …」）并要求使用时才调用；普通描述任务、上下文提及或讨论技能名称都不触发，技能之间也不自动串联——一个技能的调用不推导出调用另一技能的授权。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。唯一例外：`ph-init` 会话执行用户已请求的升级时，读发行根 `ph-merge-update` 步骤属于该次升级的内部步骤。** 升官方发行版仍由 `ph-init` 会话按 `ph-merge-update` 步骤做完，不要用 `ph-init --apply` 覆盖本文件已填事实。升级进度在 `.agents/updates/<版本>/`（`state.json` 与 `report.md`），不是业务文档。
+十四名固定，目录名与 `name` 一致且均为 kebab-case；所有 Skill 都以 `.agents/skills/<name>/SKILL.md` 为唯一人工编辑源。技能分两个来源：`ph-init`、`ph-merge-update`、`ph-worktree-enter`、`ph-worktree-exit` 是 PH 自身技能，由 PH 发行版安装与升级；`ph-analyze`、`ph-checklist`、`ph-clarify`、`ph-constitution`、`ph-converge`、`ph-implement`、`ph-plan`、`ph-specify`、`ph-tasks`、`ph-taskstoissues` 十个由 GitHub Spec Kit（`github/spec-kit`，固定正式 tag 与 commit，见 `.agents/ph.json` 的 `speckit` 节）的官方生成器产出后统一改名安装，原名与来源映射记录在安装来源标记与 `.agents/ph.json` 中，升级时一并更新。**调用门禁：每个 PH 技能仅在用户当轮明确点名该技能（如「用 ph-xxx …」）并要求使用时才调用；普通描述任务、上下文提及或讨论技能名称都不触发，技能之间也不自动串联——一个技能的调用不推导出调用另一技能的授权。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。唯一例外：`ph-init` 会话执行用户已请求的升级时，读发行根 `ph-merge-update` 步骤属于该次升级的内部步骤。** 升官方发行版仍由 `ph-init` 会话按 `ph-merge-update` 步骤做完，不要用 `ph-init --apply` 覆盖本文件已填事实。升级进度在 `.agents/updates/<版本>/`（`state.json` 与 `report.md`），不是业务文档。
 
 | Skill | 何时用 |
 | --- | --- |
@@ -111,14 +111,15 @@ docs/
 | `.agents/skills/ph-merge-update/SKILL.md` | 已接入项目按正式发行版合并升级的步骤（由 ph-init 会话执行），验收后再推进版本 |
 | `.agents/skills/ph-worktree-enter/SKILL.md` | 为已授权的并行任务创建 `.worktrees/` 隔离环境 |
 | `.agents/skills/ph-worktree-exit/SKILL.md` | 前置验证、受控提交、合并、合并后验证，并在确认后清理本次 worktree |
-| `.agents/skills/ph-memory-capture/SKILL.md` | 用户要求“记住”时写入 `memory/temporary/` |
-| `.agents/skills/ph-memory-archive/SKILL.md` | 把临时记忆合并进 `memory/structured/` 并移入 `archive/` |
-| `.agents/skills/ph-memory-ask/SKILL.md` | 只读检索记忆并标注来源与有效性 |
-| `.agents/skills/ph-intent-new/SKILL.md` | 录入或补充意图及访谈纪要；新建入待办，补充保持原目录 |
-| `.agents/skills/ph-intent-impl/SKILL.md` | 可写时先迁实施，再准备交接并进入原生计划模式 |
-| `.agents/skills/ph-intent-verify/SKILL.md` | 实现完成后由用户逐点验收唯一意图，结论写入该意图「记录」节；启动推进不等于实现完成 |
-| `.agents/skills/ph-intent-drop/SKILL.md` | 明确原因后从待办或实施废弃意图并修复引用 |
-| `.agents/skills/ph-docs-sync/SKILL.md` | 对照当前代码、配置、锁文件与 CI 核验 README、docs 配置说明、使用示例与 Wiki；检查默认只读，明确授权后才修可直接证实的不一致 |
-| `.agents/skills/ph-sure/SKILL.md` | 任务收尾四问核查（实现 / 测试 / 合并 / 尾巴）：逐项以当前真实证据取证，不凭口头宣称；只核实与报告，不构成提交合并发布删除授权 |
+| `.agents/skills/ph-specify/SKILL.md` | 由自然语言描述创建或更新功能规格（Spec Kit 规格驱动开发起点） |
+| `.agents/skills/ph-clarify/SKILL.md` | 规格含糊处做结构化澄清问答，在规划前消歧 |
+| `.agents/skills/ph-plan/SKILL.md` | 从规格生成技术实现方案 |
+| `.agents/skills/ph-tasks/` | 把实现方案拆解为可执行任务清单 |
+| `.agents/skills/ph-implement/` | 按任务清单执行实现 |
+| `.agents/skills/ph-analyze/` | 规格与方案、任务清单间做跨产物一致性分析 |
+| `.agents/skills/ph-checklist/` | 生成质量检查清单，校验需求完整性与清晰度 |
+| `.agents/skills/ph-constitution/` | 创建或更新项目治理原则（`.specify/memory/constitution.md`） |
+| `.agents/skills/ph-converge/` | 对照规格与方案评估代码库现状，把剩余工作补进任务清单 |
+| `.agents/skills/ph-taskstoissues/` | 把任务清单转换为 GitHub issues |
 
-发现、触发与 frontmatter 约定遵循 Agent Skills：`name` + `description`（含触发与排除），`description` 不超过 1024 字符。意图字段与纪要规则见 `docs/约束规范/工程规范/意图与访谈.md`。
+发现、触发与 frontmatter 约定遵循 Agent Skills：`name` + `description`（含触发与排除），`description` 不超过 1024 字符。Worktree 提交与冲突恢复由统一脚本 `.agents/scripts/ph_worktree.py` 执行，两个 worktree 技能共享该脚本，不各自携带副本。

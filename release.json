@@ -4,17 +4,8 @@
   "repository": "https://github.com/chenweixuanJokes/ph-init.git",
   "required_skills": [
     "ph-init",
-    "ph-worktree-enter",
-    "ph-worktree-exit",
-    "ph-memory-capture",
-    "ph-memory-archive",
-    "ph-memory-ask",
-    "ph-intent-new",
-    "ph-intent-impl",
-    "ph-intent-verify",
-    "ph-intent-drop",
     "ph-merge-update",
-    "ph-docs-sync",
-    "ph-sure"
+    "ph-worktree-enter",
+    "ph-worktree-exit"
   ]
 }

@@ -11,22 +11,40 @@ description: 为当前 Git 项目创建 PH 管理的隔离 worktree；默认以�
 
 1. 先读项目根 `.agents/AGENTS.md` 与 [`docs/约束规范/工程规范/Git与并行开发.md`](../../../docs/约束规范/工程规范/Git与并行开发.md)。
 2. 创建 Git worktree 是有副作用的操作；用户没有明确要求时只说明方案，不执行。
-3. 禁止 `git stash`、`--force`、`reset --hard`。源工作区有 staged、unstaged 或 untracked 内容时停止创建，执行统一 WIP 确认：先只读检查，列明源工作区目录、当前分支、staged / unstaged / untracked 完整清单与拟用的 `wip: <说明>` 提交信息，用于说明现场与安全筛查结果；随后按 [`Git与并行开发`](../../../docs/约束规范/工程规范/Git与并行开发.md) 第 2 节的固定问句模板实际调用问答工具提问，只替换目录、分支、清单、wip 说明与后续动作（提交后继续创建本隔离工作区）五个变量。WIP 确认问的是是否采用 `wip:` 提交解决当前这次阻断，不是对文件内容的逐项审批；两个选项固定为“确认 WIP 并继续”“停止，保留现场”，不添加其他预设选项，也不禁用宿主自带的自由输入（如 Other）；没有可用问答工具或工具故障时，按 [对用户提问](../../../docs/约束规范/工程规范/对用户提问.md) 的降级规则用可见文字提出同一模板并等待回答，不开放式问“怎么办”。用户确认后才执行这次 WIP 提交：先以运行时脚本的 `wip --repo <main-worktree> --message "wip: <说明>"` 只读 dry-run 审查计划，再显式加 `--apply` 执行，不由 Agent 手写 `git add` / `git commit` 拼装这次提交；提交把 staged、unstaged、untracked 一起收进，ignored 排除，不盲目 `git add -A`，疑似密钥文件或内容、异常大文件与未解决的冲突不得为 WIP 收进，脚本整单拒绝、不部分提交，也不得绕过安全门禁，要如实列为剩余阻断由用户处置；存在无法纳入的非 ignored 变动时，创建在其被用户处置之前保持阻断，即使其中部分路径已另行经授权提交，也不得把源工作区当作干净继续创建。确认后到这次提交实际执行前，同一阻断场景内的普通内容变化不需要重新确认，也不与提问时的清单逐字绑定；授权不是长期授权：该提交一经执行授权即消费，该阻断场景结束后再次被未提交改动阻断（包括后续步骤或源工作区再次变脏），按当时的现场重新确认。用户拒绝、取消或未回答时保留全部改动并停止创建，不 stash、不丢弃、不自动授权、不换问法重问。WIP 确认只覆盖这次 `wip:` 提交，不授权普通提交、清理或任何安全检查豁免。确认提交后源工作区已干净，再回到本技能继续审查计划与创建。
+3. 禁止 `git stash`、`--force`、`reset --hard`。合并状态先检查：主工作区存在 `MERGE_HEAD` 或未合并条目（合并进行中或冲突未决）时不问 WIP、不创建隔离工作区，直接告诉用户当前处于合并状态，等合并完成之后才能做 WIP 与创建；由用户自行完成合并后重新调用本技能，不代为转交其他技能、不自动弹冲突处理问句。脚本对这类状态直接报错时同样按此处理，不把报错当作重试入口。源工作区有 staged、unstaged 或 untracked 内容时停止创建，执行统一 WIP 确认：dry-run 会只读报告 `sourceDirty` 清单与安全筛查结果；随后按 [`Git与并行开发`](../../../docs/约束规范/工程规范/Git与并行开发.md) 第 2 节的固定问句模板实际调用问答工具提问，只替换目录、分支、清单、wip 说明与后续动作（提交后创建本隔离工作区）五个变量，两个选项字面为“是”“否”。WIP 确认问的是是否采用 `wip:` 提交解决当前这次阻断，不是对文件内容的逐项审批；没有可用问答工具或工具故障时按 [对用户提问](../../../docs/约束规范/工程规范/对用户提问.md) 的降级规则用可见文字提出同一模板并等待回答，不开放式问“怎么办”。用户答“是”后才执行：单次 `enter --apply --wip-message "wip: <说明>"` 连同 `--expect-source-branch`、`--expect-source-head`、`--expect-staged`、`--expect-unstaged`、`--expect-untracked`（取自 dry-run 快照）一次完成受确认的 WIP 提交与隔离工作区创建，不拆成两次脚本调用，也不由 Agent 手写 `git add` / `git commit`；提交把 staged、unstaged、untracked 一起收进，ignored 排除，不盲目 `git add -A`，疑似密钥、异常大文件与未解决的冲突整单拒绝、不部分提交；只要安全筛查发现无法纳入的非 ignored 变动，创建在其被用户处置之前保持阻断，即使其中部分路径已另行经授权提交，也不得把该工作区当作干净继续操作。独立 `wip` 子命令仅供用户直接使用。答“否”、取消或未回答时保留全部改动并停止创建，不 stash、不丢弃、不自动授权、不换问法重问。确认后到提交实际执行前：分支、HEAD 或拟提交路径/状态集合发生变化（新增、删除或状态转移）时脚本阻断并重新预检、重新确认，不沿用已消费的确认覆盖新变更；同一已展示路径的普通内容修改不需要重新确认（不逐字节比对文件内容）。授权不是长期授权：该提交一经执行授权即消费，该阻断场景结束后再次被未提交改动阻断（包括后续步骤、下一次交付或该工作区再次变脏），按当时的现场重新确认。WIP 确认只覆盖这次 `wip:` 提交，不授权普通提交、清理或任何安全检查豁免。确认提交后源工作区已干净，直接继续创建。
 4. 首版只支持从仓库的 main worktree、attached branch 创建一级 linked worktree；裸仓库、子模块 superproject 和 linked worktree 再嵌套均阻断。
 
 ## 执行步骤
 
 1. 源分支默认取主工作区当前所在分支（attached branch），新任务分支从该分支当前 HEAD 检出；这里的 main worktree 指主工作区，不代表 main 分支。不要自动改用 main、master、develop、远端默认分支或其他基线，也不向用户再次确认或切换源分支。代理结合当前任务语义与仓库已有命名规则自行生成简短任务分支名；未声明规则时使用 `feature/<topic>`、`fix/<topic>`、`docs/<topic>`、`refactor/<topic>` 或 `chore/<topic>`。分支名只能使用 ASCII 字母、数字、`.`、`_`、`-`、`/`，并先用 Git 检查格式、是否已存在及是否被其它 worktree 占用。默认创建新分支；若名称冲突则由代理换一个清晰且未占用的名字，不向用户二次问询。只有用户明确要求复用某个已有分支时才增加 `--existing`；该分支不存在或已被占用时停止并说明原因，不擅自改成另一条已有分支。
-2. 先运行只读计划：
+2. 先运行只读计划（脏工作区不报错，计划只读列出 `sourceDirty` 与筛查结果）：
 
    ```bash
-   python3 .agents/skills/ph-worktree-enter/scripts/ph_worktree.py \
+   python3 .agents/scripts/ph_worktree.py \
      enter --repo <main-worktree> --branch <task-branch>
    ```
 
-   脚本支持 `--expect-source-branch <分支>` 与 `--expect-source-head <提交>` 显式校验期望源；期望与实际不符时停止，不静默改用其他来源。
+3. 审查计划中的来源分支（`sourceBranch`）、来源提交（`sourceHead`）、任务分支、隔离工作区路径及验收命令。验收命令会作为仓库代码执行，必须确认它们与项目规范和用户任务一致。用户已经明确要求创建 worktree 时，该请求同时授权按无异常计划实际创建：工作区干净时，`--apply` 必须带上 `--expect-source-branch <计划的 sourceBranch>` 与 `--expect-source-head <计划的 sourceHead>`（两者缺一脚本直接拒绝；漂移阻断并重新 dry-run）；工作区脏时，先完成执行前约束 3 的统一 WIP 确认，答“是”后单次调用一次完成 WIP 提交与创建：
 
-3. 审查计划中的来源分支、来源提交、任务分支、隔离工作区路径及验收命令。验收命令会作为仓库代码执行，必须确认它们与项目规范和用户任务一致。用户已经明确要求创建 worktree 时，该请求同时授权按无异常计划实际创建；审查通过后直接加 `--apply`，不再询问来源分支、任务分支或是否真正创建。发现路径不安全、分支占用、验收命令可疑或计划与用户意图不一致时仍须停止，并如实说明阻断原因；源工作区此时仍脏或再次变脏时，回到执行前约束 3 的统一 WIP 确认。
+   ```bash
+   # 干净源工作区：一次 apply 直接创建
+   python3 .agents/scripts/ph_worktree.py \
+     enter --repo <main-worktree> --branch <task-branch> \
+     --expect-source-branch <计划的 sourceBranch> \
+     --expect-source-head <计划的 sourceHead> --apply
+
+   # 脏源工作区、用户已答“是”：一次 apply 内完成 WIP 提交 + 创建
+   python3 .agents/scripts/ph_worktree.py \
+     enter --repo <main-worktree> --branch <task-branch> \
+     --expect-source-branch <计划的 sourceBranch> \
+     --expect-source-head <计划的 sourceHead> \
+     --wip-message "wip: <说明>" \
+     --expect-staged <计划的 sourceDirty.staged> \
+     --expect-unstaged <计划的 sourceDirty.unstaged> \
+     --expect-untracked <计划的 sourceDirty.untracked> --apply
+   ```
+
+   发现路径不安全、分支占用、验收命令可疑或计划与用户意图不一致时仍须停止，并如实说明阻断原因。
 4. 进入脚本输出的 `taskPath` 开发。不要手工移动该目录或修改 `.worktrees/.ph/sessions/`。
 5. 任务完成后的交付由用户当轮明确点名 `ph-worktree-exit` 并要求退出时执行；在那之前不要自行把任务分支合并到另一个临时目标。
 

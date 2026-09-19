@@ -133,8 +133,10 @@
       "path": "migrations/1.1.13-to-1.1.14.md",
       "items": [
         "worktree-wip-confirm",
-        "intent-verify-acceptance-contract",
-        "sure-skill"
+        "retire-legacy-skills",
+        "speckit-core-integration",
+        "constitution-governance-zone",
+        "intent-to-spec"
       ]
     }
   ]

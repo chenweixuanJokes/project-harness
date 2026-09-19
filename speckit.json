@@ -1,0 +1,21 @@
+{
+  "schema": "ph.speckit-contract/1",
+  "repository": "https://github.com/github/spec-kit.git",
+  "tag": "v1.0.8",
+  "commit": "0cc9a6a1159471a3108b9bad718ba17006dd6039",
+  "version": "1.0.8",
+  "skills": [
+    "analyze",
+    "checklist",
+    "clarify",
+    "constitution",
+    "converge",
+    "implement",
+    "plan",
+    "specify",
+    "tasks",
+    "taskstoissues"
+  ],
+  "integration": "zcode",
+  "script": "sh"
+}

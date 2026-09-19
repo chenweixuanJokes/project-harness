@@ -39,10 +39,33 @@ OFFICIAL_PAGE = "https://github.com/chenweixuanJokes/project-harness"
 OFFICIAL_FULL_NAME = f"{OFFICIAL_OWNER}/{OFFICIAL_NAME}"
 GITHUB_API = "https://api.github.com"
 FORMAT_VERSION = 1
+# Core Spec Kit skills installed from the pinned upstream release; they are
+# generated at install time, never scaffold content. Derived from the bundled
+# speckit.json — the single maintenance source for the pinned spec-kit
+# contract (release.json keeps required_skills for the four PH scaffold
+# skills; speckit.json travels as its own top-level release file because the
+# published pre-1.1.14 validators whitelist their release.json keys and must
+# keep being able to prepare this release). No script may re-spell the list;
+# the static pin guarding accidental edits lives in tests/test_ph_speckit.py.
+_BUNDLED_SPECKIT_JSON = json.loads(
+    (Path(__file__).resolve().parents[1] / "speckit.json").read_text(encoding="utf-8")
+)
+SPECKIT_CORE_SKILLS = tuple(
+    _BUNDLED_SPECKIT_JSON.get("skills") or ()
+    if isinstance(_BUNDLED_SPECKIT_JSON, dict)
+    else ()
+)
+if not SPECKIT_CORE_SKILLS or len(set(SPECKIT_CORE_SKILLS)) != len(SPECKIT_CORE_SKILLS):
+    raise SystemExit("speckit.json skills must be a non-empty list of unique names")
 # Releases at or after this version publish no independent schema_version:
 # release.json and the manifest must not carry the field, and the schema $id
 # is fixed without a version suffix. Older tags keep the legacy shape.
 NO_SCHEMA_VERSION_AT = (1, 1, 8)
+# Releases at or after this version require the pinned spec-kit contract file
+# speckit.json at the release root (and the speckit provenance in the
+# manifest). Earlier tags predate the GitHub Spec Kit integration and stay
+# valid as published.
+SPECKIT_REQUIRED_AT = (1, 1, 14)
 SCHEMA_ID = "urn:ph:schema:project-harness"
 SCHEMA_ID_PREFIX = f"{SCHEMA_ID}:"
 GIT_OBJECT_ID = re.compile(r"^[0-9a-f]{40}$")
@@ -701,6 +724,45 @@ def _require_file(root: Path, rel: str, label: str) -> Path:
     return path
 
 
+def _validate_speckit_section(section: object) -> None:
+    if not isinstance(section, dict):
+        raise PHReleaseError("illegal speckit.json: the pinned spec-kit contract is required")
+    speckit_extra = set(section) - {"schema", "repository", "tag", "commit", "version", "skills", "integration", "script"}
+    if speckit_extra:
+        raise PHReleaseError(
+            f"illegal speckit.json: unsupported keys {sorted(speckit_extra)}"
+        )
+    for key in ("repository", "tag", "commit", "version"):
+        value = section.get(key)
+        if not isinstance(value, str) or not value:
+            raise PHReleaseError(f"illegal speckit.json: {key} must be a non-empty string")
+    if section.get("tag") != f"v{section.get('version')}":
+        raise PHReleaseError("illegal speckit.json: tag must match version")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(section.get("commit"))):
+        raise PHReleaseError("illegal speckit.json: commit must be a 40-hex commit id")
+    core = section.get("skills")
+    if not isinstance(core, list) or sorted(str(c) for c in core) != sorted(SPECKIT_CORE_SKILLS):
+        raise PHReleaseError("illegal speckit.json: skills must list the pinned core skills")
+    if section.get("integration") != "zcode" or section.get("script") != "sh":
+        raise PHReleaseError("illegal speckit.json: the zcode integration with sh scripts must be pinned")
+
+
+def validate_speckit_contract(root: Path) -> None:
+    """Validate the top-level speckit.json contract file of a prepared tree.
+
+    The contract travels as its own release file (not inside release.json) so
+    the published pre-1.1.14 validators - whose release.json key whitelist is
+    frozen - keep being able to prepare this release.
+    """
+    path = root / "speckit.json"
+    if path.is_symlink() or not path.is_file():
+        raise PHReleaseError("the prepared release is missing the speckit.json contract")
+    data = read_json_object(path, "speckit.json")
+    if data.get("schema") != "ph.speckit-contract/1":
+        raise PHReleaseError("illegal speckit.json: schema must be ph.speckit-contract/1")
+    _validate_speckit_section(data)
+
+
 def validate_release_meta(data: dict, expected_version: str) -> list[str]:
     """Validate current release metadata and return the required skills."""
 
@@ -756,8 +818,31 @@ def _validate_manifest_versions(
     if not isinstance(skill_block, dict):
         raise PHReleaseError("illegal manifest: skills must be an object")
     names = skill_block.get("required_names")
-    if names != skills:
-        raise PHReleaseError("illegal manifest: skills.required_names mismatch")
+    if _parse_semver(expected_version) >= SPECKIT_REQUIRED_AT:
+        if names != list(skills) + [f"ph-{core}" for core in SPECKIT_CORE_SKILLS]:
+            raise PHReleaseError("illegal manifest: skills.required_names mismatch")
+        section = data.get("speckit")
+        if not isinstance(section, dict):
+            raise PHReleaseError("illegal manifest: speckit section is required")
+        contract = read_json_object(
+            Path(__file__).resolve().parents[1] / "speckit.json", "speckit.json"
+        )
+        expected_section = {
+            "repository": contract.get("repository"),
+            "tag": contract.get("tag"),
+            "commit": contract.get("commit"),
+            "version": contract.get("version"),
+            "skills": {f"ph-{core}": f"speckit-{core}" for core in SPECKIT_CORE_SKILLS},
+        }
+        if section != expected_section:
+            raise PHReleaseError("illegal manifest: speckit section must match the release contract")
+    else:
+        if names != list(skills):
+            raise PHReleaseError("illegal manifest: skills.required_names mismatch")
+        if "speckit" in data:
+            raise PHReleaseError(
+                "illegal manifest: speckit section predates the spec-kit integration"
+            )
 
 
 def validate_manifest(
@@ -900,6 +985,8 @@ def validate_prepared_tree(root: Path, expected_version: str) -> None:
     else:
         validate_manifest(manifest, expected_version, skills)
         validate_schema(schema)
+    if _parse_semver(expected_version) >= SPECKIT_REQUIRED_AT:
+        validate_speckit_contract(root)
     migrations = read_json_object(root / MIGRATIONS_INDEX, "migrations/index.json")
     validate_migrations_index(migrations, root)
 

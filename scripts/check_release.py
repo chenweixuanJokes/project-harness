@@ -25,12 +25,13 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import ph_release  # noqa: E402
+import ph_init  # noqa: E402
 
 
 FORMAT_VERSION = 1
 STABLE_TAG = re.compile(r"^v([0-9]+)\.([0-9]+)\.([0-9]+)$")
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
-# Strict kebab-case for the thirteen distributed skills: lowercase alphanumeric
+# Strict kebab-case for the distributed skills: lowercase alphanumeric
 # segments joined by single hyphens, no leading/trailing/double hyphen.
 SKILL_NAME = re.compile(r"^ph-[a-z0-9]+(?:-[a-z0-9]+)*$")
 ITEM_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
@@ -41,7 +42,7 @@ FRONTMATTER = re.compile(r"\A---\n(.*?)\n---\n", re.S)
 YAML_SCALAR = re.compile(
     r"^(?P<key>[A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(?P<value>.*)$"
 )
-SKIP_DIR_NAMES = {".git", "__pycache__", ".zcode"}
+SKIP_DIR_NAMES = {".git", "__pycache__", ".zcode", ".idea"}
 SKIP_FILE_NAMES = {".DS_Store"}
 SKIP_SUFFIXES = {".pyc", ".pyo"}
 NON_PAYLOAD_TOP = frozenset(
@@ -199,13 +200,42 @@ def load_release(root: Path) -> dict:
         not isinstance(item, str) or not SKILL_NAME.match(item) for item in skills
     ):
         raise CheckError("illegal release.json: required_skills must be ph-* names")
-    if len(skills) != 13 or len(set(skills)) != 13:
-        raise CheckError("illegal release.json: required_skills must list 13 unique names")
+    if len(skills) != 4 or len(set(skills)) != 4:
+        raise CheckError("illegal release.json: required_skills must list 4 unique names")
     if skills[0] != "ph-init":
         raise CheckError("illegal release.json: required_skills[0] must be ph-init")
+    # The pinned spec-kit contract travels as its own top-level release file:
+    # the published pre-1.1.14 validators whitelist their release.json keys
+    # and must keep being able to prepare this release.
+    contract_path = root / "speckit.json"
+    if contract_path.is_symlink() or not contract_path.is_file():
+        raise CheckError("the release root is missing the speckit.json contract")
+    section = read_json_object(contract_path, "speckit.json")
+    if section.get("schema") != "ph.speckit-contract/1":
+        raise CheckError("illegal speckit.json: schema must be ph.speckit-contract/1")
+    extra = set(section) - {"schema", "repository", "tag", "commit", "version", "skills", "integration", "script"}
+    if extra:
+        raise CheckError(f"illegal speckit.json: unsupported keys {sorted(extra)}")
+    for key in ("repository", "tag", "commit", "version"):
+        value = section.get(key)
+        if not isinstance(value, str) or not value:
+            raise CheckError(f"illegal speckit.json: {key} must be a non-empty string")
+    if section.get("tag") != f"v{section.get('version')}" or not STABLE_TAG.match(str(section.get("tag"))):
+        raise CheckError("illegal speckit.json: tag must be v<version>")
+    if not re.fullmatch(r"[0-9a-f]{40}", str(section.get("commit"))):
+        raise CheckError("illegal speckit.json: commit must be a 40-hex commit id")
+    core = section.get("skills")
+    if (
+        not isinstance(core, list)
+        or sorted(str(c) for c in core) != sorted(ph_init.SPECKIT_CORE_SKILLS)
+    ):
+        raise CheckError("illegal speckit.json: skills must list exactly the ten core skills")
+    if section.get("integration") != "zcode" or section.get("script") != "sh":
+        raise CheckError("illegal speckit.json: the zcode integration with sh scripts must be pinned")
     return {
         "version": version,
         "required_skills": list(skills),
+        "speckit": dict(section),
         "repository": repository,
     }
 
@@ -487,8 +517,28 @@ def validate_manifest(root: Path, release: Mapping[str, object]) -> None:
     if not isinstance(skills, dict):
         raise CheckError("illegal manifest: skills must be an object")
     names = skills.get("required_names")
-    if names != list(release["required_skills"]):
+    expected_names = list(release["required_skills"]) + [
+        f"ph-{core}" for core in release["speckit"]["skills"]
+    ]
+    if names != expected_names:
         raise CheckError("illegal manifest: skills.required_names mismatch")
+    canonical = data.get("canonical")
+    if not isinstance(canonical, dict) or canonical.get("scripts") != ".agents/scripts":
+        raise CheckError("illegal manifest: canonical.scripts must be .agents/scripts")
+    speckit = data.get("speckit")
+    if not isinstance(speckit, dict):
+        raise CheckError("illegal manifest: speckit section is required")
+    expected_section = {
+        "repository": release["speckit"]["repository"],
+        "tag": release["speckit"]["tag"],
+        "commit": release["speckit"]["commit"],
+        "version": release["speckit"]["version"],
+        "skills": {
+            f"ph-{core}": f"speckit-{core}" for core in release["speckit"]["skills"]
+        },
+    }
+    if speckit != expected_section:
+        raise CheckError("illegal manifest: speckit section must match the release contract")
 
 
 def validate_skills_and_docs(root: Path, skills: list[str]) -> None:
@@ -521,6 +571,12 @@ def validate_skills_and_docs(root: Path, skills: list[str]) -> None:
         raise CheckError(f"missing required scaffold skills: {missing}")
     if (skill_root / "ph-init").exists():
         raise CheckError("scaffold must not nest ph-init")
+    script = root / "assets" / "scaffold" / ".agents" / "scripts" / "ph_worktree.py"
+    if script.is_symlink() or not script.is_file():
+        raise CheckError("scaffold must ship the shared .agents/scripts/ph_worktree.py")
+    for name in ph_init.SPECKIT_SKILL_NAMES:
+        if (skill_root / name).exists():
+            raise CheckError(f"scaffold must not ship generated spec-kit skill {name}")
 
     for path in iter_files(root):
         if path.suffix == ".json":
@@ -651,6 +707,9 @@ def is_payload_path(rel: str) -> bool:
     if rel == ".agents/AGENTS.md":
         return False
     top = rel.split("/", 1)[0]
+    # IDE-private state is never release payload, whether tracked or not.
+    if top == ".idea":
+        return False
     if top in NON_PAYLOAD_TOP:
         return False
     if rel == "scripts/check_release.py" or rel.startswith("scripts/check_release.py/"):

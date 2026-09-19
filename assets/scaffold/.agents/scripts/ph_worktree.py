@@ -484,16 +484,79 @@ def command_wip(args: argparse.Namespace) -> dict[str, Any]:
     _, size_limit = load_worktree_policy(main)
     ensure_no_operation(linked)
     staged, unstaged, untracked = change_sets(linked)
+    branch = current_branch(linked)
+    head = current_head(linked)
     result: dict[str, Any] = {
         "action": "wip",
         "apply": args.apply,
         "repo": str(linked),
-        "branch": current_branch(linked),
+        "branch": branch,
+        "head": head,
         "staged": staged,
         "unstaged": unstaged,
         "untracked": untracked,
         "message": args.message,
     }
+    if not args.apply:
+        if not (staged or unstaged or untracked):
+            result["commit"] = "clean"
+            return result
+        risks = screen_wip_changes(linked, staged, unstaged, untracked, size_limit)
+        result["risks"] = risks
+        if risks:
+            raise PHError("unsafe WIP candidate; nothing was staged or committed: " + "; ".join(risks))
+        result["commit"] = (
+            "planned: stage every listed non-ignored change and create one WIP commit "
+            "with hooks and signing intact"
+        )
+        return result
+    # The apply run carries the reviewed dry-run snapshot forward: branch,
+    # HEAD, and the to-be-committed path/status sets - checked before anything
+    # else, so a drifted scene is never screened or committed under a stale
+    # authorization. A set change (a path added, removed, or moved between
+    # staged/unstaged/untracked) or a HEAD/branch change blocks and forces a
+    # fresh precheck plus a fresh confirmation. Ordinary content modification
+    # of an already-listed path stays allowed (no per-file hashing). The
+    # message is validated in the same pre-staging block: an empty one never
+    # stages anything.
+    if not args.message.strip():
+        raise PHError("wip --apply requires a non-empty --message; nothing was staged or committed")
+    missing = [
+        flag
+        for flag, value in (
+            ("--expect-branch", args.expect_branch),
+            ("--expect-head", args.expect_head),
+            ("--expect-staged", args.expect_staged),
+            ("--expect-unstaged", args.expect_unstaged),
+            ("--expect-untracked", args.expect_untracked),
+        )
+        if value is None
+    ]
+    if missing:
+        raise PHError(
+            "wip --apply requires the reviewed dry-run snapshot bindings: "
+            + ", ".join(missing)
+            + "; re-run the dry-run and carry its values forward"
+        )
+    if branch != args.expect_branch:
+        raise PHError(f"branch drifted: expected {args.expect_branch}, found {branch}")
+    if head != args.expect_head:
+        raise PHError(f"HEAD drifted: expected {args.expect_head}, found {head}")
+    expected = {
+        "staged": sorted(p for p in args.expect_staged.split(",") if p),
+        "unstaged": sorted(p for p in args.expect_unstaged.split(",") if p),
+        "untracked": sorted(p for p in args.expect_untracked.split(",") if p),
+    }
+    current = {"staged": sorted(staged), "unstaged": sorted(unstaged), "untracked": sorted(untracked)}
+    for kind in ("staged", "unstaged", "untracked"):
+        if expected[kind] != current[kind]:
+            added = sorted(set(current[kind]) - set(expected[kind]))
+            removed = sorted(set(expected[kind]) - set(current[kind]))
+            raise PHError(
+                f"change-set drifted since the reviewed dry-run ({kind}: "
+                f"added {added or 'none'}, removed {removed or 'none'}); re-run the dry-run "
+                "and reconfirm with the user - a stale authorization cannot cover new changes"
+            )
     if not (staged or unstaged or untracked):
         result["commit"] = "clean"
         return result
@@ -501,12 +564,6 @@ def command_wip(args: argparse.Namespace) -> dict[str, Any]:
     result["risks"] = risks
     if risks:
         raise PHError("unsafe WIP candidate; nothing was staged or committed: " + "; ".join(risks))
-    if not args.apply:
-        result["commit"] = (
-            "planned: stage every listed non-ignored change and create one WIP commit "
-            "with hooks and signing intact"
-        )
-        return result
     to_add = sorted(set(unstaged) | set(untracked))
     if to_add:
         git(linked, "add", "--", *to_add)
@@ -553,15 +610,25 @@ def validate_session_identity(
     return main, task_branch
 
 
-def validate_merge_target(main: Path, data: dict[str, Any]) -> None:
+def validate_merge_target_identity(main: Path, data: dict[str, Any]) -> None:
+    """Check the merge target's identity without demanding a clean tree.
+
+    Dry-runs use this so a dirty merge target shows up as read-only plan
+    data (``sourceDirty``) instead of an error; the apply path still goes
+    through ``validate_merge_target``, which enforces the clean tree.
+    """
     if current_branch(main) != data["sourceBranch"]:
         raise PHError(
             f"source branch changed: expected {data['sourceBranch']}, got {current_branch(main)}"
         )
-    ensure_clean(main, "source worktree")
     ensure_no_operation(main)
     if git(main, "merge-base", "--is-ancestor", data["sourceHead"], "HEAD", check=False).returncode != 0:
         raise PHError("source history was rewritten; enter-time sourceHead is no longer an ancestor")
+
+
+def validate_merge_target(main: Path, data: dict[str, Any]) -> None:
+    validate_merge_target_identity(main, data)
+    ensure_clean(main, "source worktree")
 
 
 def perform_merge(main: Path, data: dict[str, Any], session_path: Path) -> str:
@@ -741,6 +808,86 @@ def archive_session(main: Path, session_path: Path) -> None:
     session_path.replace(completed / session_path.name)
 
 
+def confirm_wip_commit(
+    repo: Path,
+    message: str,
+    *,
+    expect_branch: str,
+    expect_head: str,
+    expect_staged: str | None,
+    expect_unstaged: str | None,
+    expect_untracked: str | None,
+    size_limit: int,
+) -> tuple[str, list[str], list[str], list[str]]:
+    """Stage and create the one confirmed `wip:` commit inside a single apply.
+
+    The bindings are the reviewed precheck snapshot (branch, HEAD, and the
+    path/status sets): a set change (path added, removed, or moved between
+    staged/unstaged/untracked) or a HEAD/branch change blocks and forces a
+    fresh precheck plus a fresh confirmation - a stale authorization must
+    never cover new changes. Ordinary content modification of an
+    already-listed path stays allowed (no per-file hashing). Returns the new
+    HEAD plus the committed sets.
+    """
+
+    # Every parameter is validated before anything is staged: the message
+    # joins the binding list, so a missing or empty message refuses the
+    # whole order up front, never `git add` first and then fail at commit.
+    staged, unstaged, untracked = change_sets(repo)
+    branch = current_branch(repo)
+    head = current_head(repo)
+    missing = [
+        flag
+        for flag, value in (
+            ("--wip-message", message if isinstance(message, str) and message.strip() else None),
+            ("--expect-branch", expect_branch),
+            ("--expect-head", expect_head),
+            ("--expect-staged", expect_staged),
+            ("--expect-unstaged", expect_unstaged),
+            ("--expect-untracked", expect_untracked),
+        )
+        if value is None
+    ]
+    if missing:
+        raise PHError(
+            "the in-apply WIP commit requires the reviewed precheck snapshot bindings: "
+            + ", ".join(missing)
+            + "; re-run the dry-run and carry its values forward"
+        )
+    if branch != expect_branch:
+        raise PHError(f"branch drifted: expected {expect_branch}, found {branch}")
+    if head != expect_head:
+        raise PHError(f"HEAD drifted: expected {expect_head}, found {head}")
+    expected = {
+        "staged": sorted(p for p in expect_staged.split(",") if p),
+        "unstaged": sorted(p for p in expect_unstaged.split(",") if p),
+        "untracked": sorted(p for p in expect_untracked.split(",") if p),
+    }
+    current = {"staged": sorted(staged), "unstaged": sorted(unstaged), "untracked": sorted(untracked)}
+    for kind in ("staged", "unstaged", "untracked"):
+        if expected[kind] != current[kind]:
+            added = sorted(set(current[kind]) - set(expected[kind]))
+            removed = sorted(set(expected[kind]) - set(current[kind]))
+            raise PHError(
+                f"change-set drifted since the reviewed precheck ({kind}: "
+                f"added {added or 'none'}, removed {removed or 'none'}); re-run the dry-run "
+                "and reconfirm with the user - a stale authorization cannot cover new changes"
+            )
+    if not (staged or unstaged or untracked):
+        raise PHError("the tree is clean; the confirmed WIP commit has nothing to commit")
+    risks = screen_wip_changes(repo, staged, unstaged, untracked, size_limit)
+    if risks:
+        raise PHError("unsafe WIP candidate; nothing was staged or committed: " + "; ".join(risks))
+    to_add = sorted(set(unstaged) | set(untracked))
+    if to_add:
+        git(repo, "add", "--", *to_add)
+    proc = git(repo, "commit", "-m", message, check=False)
+    if proc.returncode != 0:
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise PHError(f"commit failed; hooks and signing were not bypassed: {detail}")
+    return current_head(repo), staged, unstaged, untracked
+
+
 def command_enter(args: argparse.Namespace) -> dict[str, Any]:
     main = ensure_main_repo(Path(args.repo).resolve())
     managed_root(main)
@@ -749,17 +896,33 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
     # diagnosed as a configuration problem rather than a dirty tree.
     verify_commands, max_changed_file_bytes = load_worktree_policy(main)
     ensure_no_operation(main)
-    ensure_clean(main, "source worktree")
     ensure_ignored(main)
     validate_branch(main, args.branch)
     source_branch = current_branch(main)
     source_head = current_head(main)
+    source_dirty = change_sets(main)
+    dirty = any(source_dirty)
+    if args.apply and (args.expect_source_branch is None or args.expect_source_head is None):
+        raise PHError(
+            "enter --apply requires --expect-source-branch and --expect-source-head bound to "
+            "the reviewed precheck snapshot; re-run the dry-run and carry its sourceBranch/"
+            "sourceHead forward so drift is blocked instead of silently accepted"
+        )
     if args.expect_source_branch is not None and args.expect_source_branch != source_branch:
         raise PHError(
             f"source branch drifted: expected {args.expect_source_branch}, found {source_branch}"
         )
     if args.expect_source_head is not None and args.expect_source_head != source_head:
         raise PHError(f"source HEAD drifted: expected {args.expect_source_head}, found {source_head}")
+    if not dirty:
+        if args.wip_message is not None:
+            raise PHError("--wip-message was passed but the source worktree is clean")
+    elif args.apply and args.wip_message is None:
+        raise PHError(
+            "source worktree is not clean and no confirmed WIP was bound; ask the unified "
+            "WIP question (是/否), and on 是 re-run enter --apply with --wip-message and the "
+            "precheck bindings so one invocation commits the WIP and creates the worktree"
+        )
     target = safe_task_path(main, args.branch)
     # Duplicate diagnosis comes before branch-occupancy errors so an
     # interrupted run is reported as a recoverable live session.
@@ -788,8 +951,36 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
         "verifyCommands": verify_commands,
         "maxChangedFileBytes": max_changed_file_bytes,
     }
+    if dirty:
+        plan["sourceDirty"] = {
+            "staged": source_dirty[0],
+            "unstaged": source_dirty[1],
+            "untracked": source_dirty[2],
+        }
+        plan["wipPlanned"] = True
+        plan["wipRisks"] = screen_wip_changes(main, *source_dirty, max_changed_file_bytes)
     if not args.apply:
         return plan
+    wip_commit = None
+    if dirty:
+        # One apply does the confirmed WIP commit and the creation: the user
+        # answered 是 to the unified question and the precheck snapshot is
+        # bound, so no separate wip invocation exists in this flow.
+        wip_commit, _, _, _ = confirm_wip_commit(
+            main,
+            args.wip_message,
+            expect_branch=args.expect_source_branch,
+            expect_head=args.expect_source_head,
+            expect_staged=args.expect_staged,
+            expect_unstaged=args.expect_unstaged,
+            expect_untracked=args.expect_untracked,
+            size_limit=max_changed_file_bytes,
+        )
+        source_head = wip_commit
+        initial_task_head = wip_commit if not exists else initial_task_head
+        plan["sourceHead"] = source_head
+        plan["initialTaskHead"] = initial_task_head
+        plan["wipCommit"] = wip_commit
     session_id = str(uuid.uuid4())
     session = {
         "schemaVersion": 1,
@@ -807,6 +998,8 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
         "verifyCommands": verify_commands,
         "maxChangedFileBytes": max_changed_file_bytes,
     }
+    if wip_commit is not None:
+        session["sourceWipCommit"] = wip_commit
     session_path = sessions / f"{session_id}.json"
     save_session(session_path, session)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -825,7 +1018,7 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
     linked = git_root(Path(args.repo).resolve())
     session_path, data = load_session(linked)
     main, _ = validate_session_identity(linked, data)
-    commands, _ = session_policy(data)
+    commands, size_limit = session_policy(data)
     phase = data["phase"]
     result: dict[str, Any] = {"action": "exit", "apply": args.apply, "phase": phase}
 
@@ -847,14 +1040,30 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
             staged, unstaged, untracked = change_sets(linked)
             dirty = bool(staged or unstaged or untracked)
             result["taskTree"] = {"staged": staged, "unstaged": unstaged, "untracked": untracked}
-            result["commit"] = (
-                "clean" if not dirty
-                else "blocked-dirty: commit via the wip subcommand after the unified WIP "
-                "confirmation, or make an explicitly authorized formal commit; PH does not infer commits"
-            )
-            validate_merge_target(main, data)
+            if dirty:
+                result["wipPlanned"] = True
+                result["wipRisks"] = screen_wip_changes(linked, staged, unstaged, untracked, size_limit)
+                result["commit"] = (
+                    "planned: one confirmed exit --apply with --wip-message commits the WIP "
+                    "and delivers in the same invocation"
+                )
+            else:
+                result["commit"] = "clean"
+            result["taskBranch"] = current_branch(linked)
+            result["taskHead"] = current_head(linked)
+            validate_merge_target_identity(main, data)
+            staged_s, unstaged_s, untracked_s = change_sets(main)
+            if staged_s or unstaged_s or untracked_s:
+                result["sourceDirty"] = {
+                    "staged": staged_s, "unstaged": unstaged_s, "untracked": untracked_s
+                }
         elif phase == "committed":
-            validate_merge_target(main, data)
+            validate_merge_target_identity(main, data)
+            staged_s, unstaged_s, untracked_s = change_sets(main)
+            if staged_s or unstaged_s or untracked_s:
+                result["sourceDirty"] = {
+                    "staged": staged_s, "unstaged": unstaged_s, "untracked": untracked_s
+                }
         elif phase in {"merged_unverified", "merge_verify_failed", "merged"}:
             validate_merged_target(main, data)
         else:
@@ -866,16 +1075,31 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
 
     if phase == "entered":
         ensure_no_operation(linked)
+        # The merge target is validated BEFORE the confirmed WIP commit: an
+        # undeliverable target (a main worktree mid-merge, dirty, or moved to
+        # another branch) must block the whole apply with nothing staged or
+        # committed in the task tree first.
+        validate_merge_target(main, data)
         staged, unstaged, untracked = change_sets(linked)
         if staged or unstaged or untracked:
-            raise PHError(
-                "task worktree is not clean; staged=" + json.dumps(staged)
-                + ", unstaged=" + json.dumps(unstaged)
-                + ", untracked=" + json.dumps(untracked)
-                + ". Commit via the wip subcommand after the unified WIP confirmation, "
-                "or make an explicitly authorized formal commit; PH does not infer "
-                "commits and never stashes or discards changes."
+            # One apply does the confirmed WIP commit and the delivery: the
+            # user answered 是 to the unified question and the task-tree
+            # snapshot is bound, so no separate wip invocation exists here.
+            # The merge-conflict phases above never reach this: a conflict is
+            # reported first and never answered with a WIP question.
+            wip_commit, _, _, _ = confirm_wip_commit(
+                linked,
+                args.wip_message,
+                expect_branch=args.expect_branch,
+                expect_head=args.expect_head,
+                expect_staged=args.expect_staged,
+                expect_unstaged=args.expect_unstaged,
+                expect_untracked=args.expect_untracked,
+                size_limit=size_limit,
             )
+            result["taskWipCommit"] = wip_commit
+            data["taskWipCommit"] = wip_commit
+            save_session(session_path, data)
         run_verification(linked, commands, "pre-merge")
         data["phase"] = "committed"
         data["taskHead"] = current_head(linked)
@@ -1215,6 +1439,27 @@ def parser() -> argparse.ArgumentParser:
     enter.add_argument("--existing", action="store_true")
     enter.add_argument("--expect-source-branch", dest="expect_source_branch")
     enter.add_argument("--expect-source-head", dest="expect_source_head")
+    enter.add_argument(
+        "--wip-message",
+        dest="wip_message",
+        help="confirmed `wip:` message; on a dirty source tree one apply commits the "
+        "WIP and creates the worktree",
+    )
+    enter.add_argument(
+        "--expect-staged",
+        dest="expect_staged",
+        help="comma-joined staged paths of the reviewed dry-run; required with --wip-message",
+    )
+    enter.add_argument(
+        "--expect-unstaged",
+        dest="expect_unstaged",
+        help="comma-joined unstaged paths of the reviewed dry-run; required with --wip-message",
+    )
+    enter.add_argument(
+        "--expect-untracked",
+        dest="expect_untracked",
+        help="comma-joined untracked paths of the reviewed dry-run; required with --wip-message",
+    )
     enter.add_argument("--apply", action="store_true")
 
     exit_cmd = sub.add_parser("exit", help="Verify, merge, and optionally clean a PH worktree")
@@ -1223,11 +1468,47 @@ def parser() -> argparse.ArgumentParser:
     # guidance toward the wip subcommand or an explicitly authorized commit.
     exit_cmd.add_argument("--message")
     exit_cmd.add_argument("--cleanup", action="store_true")
+    exit_cmd.add_argument(
+        "--wip-message",
+        dest="wip_message",
+        help="confirmed `wip:` message; on a dirty task tree one apply commits the WIP "
+        "and delivers",
+    )
+    exit_cmd.add_argument("--expect-branch", dest="expect_branch", help="task branch of the reviewed dry-run; required with --wip-message")
+    exit_cmd.add_argument("--expect-head", dest="expect_head", help="task HEAD of the reviewed dry-run; required with --wip-message")
+    exit_cmd.add_argument("--expect-staged", dest="expect_staged", help="comma-joined staged paths of the reviewed dry-run; required with --wip-message")
+    exit_cmd.add_argument("--expect-unstaged", dest="expect_unstaged", help="comma-joined unstaged paths of the reviewed dry-run; required with --wip-message")
+    exit_cmd.add_argument("--expect-untracked", dest="expect_untracked", help="comma-joined untracked paths of the reviewed dry-run; required with --wip-message")
     exit_cmd.add_argument("--apply", action="store_true")
 
     wip = sub.add_parser("wip", help="Commit all current non-ignored changes as one WIP commit")
     wip.add_argument("--repo", required=True)
     wip.add_argument("--message", required=True)
+    wip.add_argument(
+        "--expect-branch",
+        dest="expect_branch",
+        help="branch of the reviewed dry-run; required for --apply",
+    )
+    wip.add_argument(
+        "--expect-head",
+        dest="expect_head",
+        help="HEAD of the reviewed dry-run; required for --apply",
+    )
+    wip.add_argument(
+        "--expect-staged",
+        dest="expect_staged",
+        help="comma-joined staged paths of the reviewed dry-run; required for --apply",
+    )
+    wip.add_argument(
+        "--expect-unstaged",
+        dest="expect_unstaged",
+        help="comma-joined unstaged paths of the reviewed dry-run; required for --apply",
+    )
+    wip.add_argument(
+        "--expect-untracked",
+        dest="expect_untracked",
+        help="comma-joined untracked paths of the reviewed dry-run; required for --apply",
+    )
     wip.add_argument("--apply", action="store_true")
 
     redeliver = sub.add_parser(

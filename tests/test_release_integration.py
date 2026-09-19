@@ -186,6 +186,9 @@ class ReleaseIntegrationTests(unittest.TestCase):
                     record.mkdir(parents=True)
                     (record / "state.json").write_text(json.dumps(state) + "\n")
                     (record / "report.md").write_text("# Local fixture\nPost-merge structural test, not public GitHub verification.\n")
+                    # the mandatory intent-to-spec item's artifacts are part of
+                    # the applied state verify checks; run the real item
+                    command(sys.executable, str(merge), "migrate-intents", "--repo", str(repo), "--apply")
                     command(sys.executable, str(merge), "verify", "--repo", str(repo))
                     before = digest(repo)
                     command(sys.executable, str(merge), "finalize", "--repo", str(repo))

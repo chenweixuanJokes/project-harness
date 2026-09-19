@@ -133,16 +133,9 @@ class AppliedContractClausesTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.intent_new = (SCAFFOLD / ".agents/skills/ph-intent-new/SKILL.md").read_text(encoding="utf-8")
+        # The intent skills were retired with 1.1.14: the interview loop is
+        # now governed by 意图与访谈.md alone, so only that file is checked.
         cls.interview = (SCAFFOLD / "docs/约束规范/工程规范/意图与访谈.md").read_text(encoding="utf-8")
-
-    def test_intent_new_requires_actual_tool_call(self):
-        # ph-intent-new: the interview loop invokes the available question
-        # tool for real; text options or promises do not substitute the call
-        self.assertIn("实际调用可用问答工具", self.intent_new)
-        self.assertIn("不能以文字选项或承诺代替", self.intent_new)
-        self.assertIn("#通过正确通道实际提问", self.intent_new)
-        self.assertNotIn("可用时改用问答工具", self.intent_new)
 
     def test_interview_one_question_one_answer_requires_actual_call(self):
         # 意图与访谈 §3: same actual-call rule with the semantic anchor

@@ -25,8 +25,8 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = REPO_ROOT / "assets/scaffold/.agents/skills/ph-worktree-enter/scripts/ph_worktree.py"
-EXIT_SCRIPT = REPO_ROOT / "assets/scaffold/.agents/skills/ph-worktree-exit/scripts/ph_worktree.py"
+SCRIPT = REPO_ROOT / "assets/scaffold/.agents/scripts/ph_worktree.py"
+EXIT_SCRIPT = SCRIPT
 TRASH = Path.home() / ".Trash"
 
 DEFAULT_MANIFEST = {"worktree": {"verify_commands": []}}
@@ -78,13 +78,16 @@ class RuntimeFixture(unittest.TestCase):
             self.fail(f"git {' '.join(args)} failed: {proc.stderr or proc.stdout}")
         return proc
 
-    def invoke(self, *args: str) -> tuple[subprocess.CompletedProcess[str], dict]:
-        proc = subprocess.run(
+    def invoke_raw(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
             [sys.executable, str(SCRIPT), *args],
             text=True,
             capture_output=True,
             timeout=120,
         )
+
+    def invoke(self, *args: str) -> tuple[subprocess.CompletedProcess[str], dict]:
+        proc = self.invoke_raw(*args)
         try:
             payload = json.loads(proc.stdout)
         except json.JSONDecodeError:
@@ -124,7 +127,22 @@ class RuntimeFixture(unittest.TestCase):
     def enter(self, branch: str, *, apply: bool = False, extra: list[str] | None = None):
         args = ["enter", "--repo", str(self.repo), "--branch", branch, *(extra or [])]
         if apply:
-            args.append("--apply")
+            # --apply is bound to the reviewed precheck snapshot. When the
+            # dry-run itself is expected to block (live session, drift), the
+            # snapshot equals the current branch/HEAD the precheck would
+            # report, so the intended block still surfaces.
+            proc = self.invoke_raw(*args)
+            if proc.returncode == 0:
+                plan = json.loads(proc.stdout)
+                source_branch, source_head = plan["sourceBranch"], plan["sourceHead"]
+            else:
+                source_branch = self.git("branch", "--show-current").stdout.strip()
+                source_head = self.git("rev-parse", "HEAD").stdout.strip()
+            args += [
+                "--expect-source-branch", source_branch,
+                "--expect-source-head", source_head,
+                "--apply",
+            ]
         return self.invoke(*args)
 
     def run_exit(self, task_path: Path, *, apply: bool = False, extra: list[str] | None = None):
@@ -136,7 +154,31 @@ class RuntimeFixture(unittest.TestCase):
     def wip(self, repo_path: Path, message: str, *, apply: bool = False):
         args = ["wip", "--repo", str(repo_path), "--message", message]
         if apply:
-            args.append("--apply")
+            # --apply carries the reviewed dry-run snapshot forward (branch,
+            # HEAD, and the path/status sets). When the dry-run is expected to
+            # block (risk screening), the binding equals what the precheck
+            # would report, so the intended screening verdict still surfaces.
+            proc = self.invoke_raw(*args)
+            if proc.returncode == 0:
+                plan = json.loads(proc.stdout)
+                binding = (plan["branch"], plan["head"], plan["staged"], plan["unstaged"], plan["untracked"])
+            else:
+                binding = (
+                    self.git("branch", "--show-current", cwd=repo_path, check=False).stdout.strip(),
+                    self.git("rev-parse", "HEAD", cwd=repo_path, check=False).stdout.strip(),
+                    self.git("diff", "--name-only", "--cached", cwd=repo_path, check=False).stdout.split(),
+                    self.git("diff", "--name-only", cwd=repo_path, check=False).stdout.split(),
+                    self.git("ls-files", "--others", "--exclude-standard", cwd=repo_path, check=False).stdout.split(),
+                )
+            branch, head, staged, unstaged, untracked = binding
+            args += [
+                "--expect-branch", branch,
+                "--expect-head", head,
+                "--expect-staged", ",".join(sorted(staged)),
+                "--expect-unstaged", ",".join(sorted(unstaged)),
+                "--expect-untracked", ",".join(sorted(untracked)),
+                "--apply",
+            ]
         return self.invoke(*args)
 
     def make_task(self, branch: str = "fix/timeout") -> Path:
@@ -178,6 +220,71 @@ class RuntimeFixture(unittest.TestCase):
 
 
 class WipCommandTests(RuntimeFixture):
+    def test_wip_apply_binds_branch_head_and_change_sets(self):
+        # The apply run carries the reviewed dry-run snapshot forward: branch,
+        # HEAD, and the path/status sets. A set change or a HEAD/branch change
+        # blocks (a stale authorization must never cover new changes), while
+        # ordinary content modification of an already-listed path stays
+        # allowed without per-file hashing.
+        task = self.make_task()
+        (task / "a.txt").write_text("a\n", encoding="utf-8")
+        self.git("add", "a.txt", cwd=task)
+        (task / "b.txt").write_text("b\n", encoding="utf-8")
+        _, plan = self.assert_ok(*self.invoke("wip", "--repo", str(task), "--message", "wip: bind"))
+        self.assertEqual(plan["staged"], ["a.txt"])
+        self.assertEqual(plan["untracked"], ["b.txt"])
+
+        # missing bindings are rejected outright
+        proc, payload = self.invoke("wip", "--repo", str(task), "--message", "wip: x", "--apply")
+        self.assert_blocked(proc, payload, "requires the reviewed dry-run snapshot bindings")
+
+        binding = [
+            "--expect-branch", plan["branch"],
+            "--expect-head", plan["head"],
+            "--expect-staged", ",".join(plan["staged"]),
+            "--expect-unstaged", ",".join(plan["unstaged"]),
+            "--expect-untracked", ",".join(plan["untracked"]),
+        ]
+        # ordinary content modification of the already-listed path is allowed
+        (task / "b.txt").write_text("b with more content\n", encoding="utf-8")
+        proc, payload = self.assert_ok(*self.invoke("wip", "--repo", str(task), "--message", "wip: content", *binding, "--apply"))
+        self.assertEqual(payload["files"], ["a.txt", "b.txt"])
+        self.assertEqual(self.status_set(task), [])
+
+        # a new path after the reviewed plan blocks the apply
+        _, plan2 = self.assert_ok(*self.invoke("wip", "--repo", str(task), "--message", "wip: again"))
+        (task / "c.txt").write_text("sneaked in\n", encoding="utf-8")
+        stale = [
+            "--expect-branch", plan2["branch"],
+            "--expect-head", plan2["head"],
+            "--expect-staged", ",".join(plan2["staged"]),
+            "--expect-unstaged", ",".join(plan2["unstaged"]),
+            "--expect-untracked", ",".join(plan2["untracked"]),
+        ]
+        proc, payload = self.invoke("wip", "--repo", str(task), "--message", "wip: drift", *stale, "--apply")
+        self.assert_blocked(proc, payload, "change-set drifted since the reviewed dry-run")
+        self.assertIn("c.txt", payload["error"])
+        self.assertTrue((task / "c.txt").exists(), "a blocked wip must not delete anything")
+
+        # a HEAD change (an intervening commit) also blocks the apply: the
+        # tree is committed after the reviewed plan, so the stale head and
+        # the emptied change sets both fail the binding.
+        self.git("add", "c.txt", cwd=task)
+        self.git("commit", "-qm", "intervening commit", cwd=task)
+        (task / "d.txt").write_text("d\n", encoding="utf-8")
+        _, plan3 = self.assert_ok(*self.invoke("wip", "--repo", str(task), "--message", "wip: after commit"))
+        self.git("add", "-A", cwd=task)
+        self.git("commit", "-qm", "second commit", cwd=task)
+        stale3 = [
+            "--expect-branch", plan3["branch"],
+            "--expect-head", plan3["head"],
+            "--expect-staged", ",".join(plan3["staged"]),
+            "--expect-unstaged", ",".join(plan3["unstaged"]),
+            "--expect-untracked", ",".join(plan3["untracked"]),
+        ]
+        proc, payload = self.invoke("wip", "--repo", str(task), "--message", "wip: head drift", *stale3, "--apply")
+        self.assert_blocked(proc, payload, "HEAD drifted")
+
     def test_wip_dry_run_is_read_only(self):
         (self.repo / "a.txt").write_text("a\n", encoding="utf-8")
         self.git("add", "a.txt")
@@ -287,16 +394,110 @@ class ExitDeliveryTests(RuntimeFixture):
         self.assertEqual(self.git("rev-parse", "HEAD^1").stdout.strip(), source_head)
         self.assertEqual(self.git("rev-parse", "HEAD^2").stdout.strip(), commit)
 
-    def test_exit_dirty_blocked_and_dry_run_reports_lists(self):
+    def wip_bindings(self, task: Path, message: str = "wip: confirmed task tree") -> list[str]:
+        proc, plan = self.invoke("exit", "--repo", str(task))
+        self.assert_ok(proc, plan)
+        tree = plan["taskTree"]
+        branch = self.git("branch", "--show-current", cwd=task).stdout.strip()
+        head = self.git("rev-parse", "HEAD", cwd=task).stdout.strip()
+        return [
+            "--wip-message", message,
+            "--expect-branch", branch,
+            "--expect-head", head,
+            "--expect-staged", ",".join(tree["staged"]),
+            "--expect-unstaged", ",".join(tree["unstaged"]),
+            "--expect-untracked", ",".join(tree["untracked"]),
+        ]
+
+    def test_exit_dirty_task_single_apply_commits_wip_and_delivers(self):
+        task = self.make_task()
+        (task / "README.md").write_text("# dirty task\n", encoding="utf-8")
+        (task / "note.txt").write_text("note\n", encoding="utf-8")
+        head_before = self.git("rev-parse", "HEAD", cwd=task).stdout.strip()
+        proc, payload = self.assert_ok(
+            *self.run_exit(task, apply=True, extra=self.wip_bindings(task))
+        )
+        self.assertEqual(payload["status"], "merged")
+        self.assertEqual(self.status_set(task), [], "the single apply leaves the task tree clean")
+        self.assertIn("taskWipCommit", payload)
+        # The WIP commit is a real `wip:` commit and the delivery builds on it.
+        wip_commit = payload["taskWipCommit"]
+        self.assertNotEqual(wip_commit, head_before)
+        subject = self.git("log", "-1", "--format=%s", wip_commit, cwd=task).stdout.strip()
+        self.assertEqual(subject, "wip: confirmed task tree")
+        self.assertEqual(
+            self.git("merge-base", "--is-ancestor", wip_commit, "HEAD").returncode, 0
+        )
+
+    def test_exit_dirty_apply_without_wip_message_blocks_before_staging(self):
+        # A dirty task tree with complete bindings but no --wip-message used
+        # to `git add` first and then crash with a TypeError; it must refuse
+        # the whole order before staging anything.
+        task = self.make_task()
+        (task / "README.md").write_text("# dirty task\n", encoding="utf-8")
+        (task / "note.txt").write_text("note\n", encoding="utf-8")
+        before = self.status_set(task)
+        proc, plan = self.invoke("exit", "--repo", str(task))
+        self.assert_ok(proc, plan)
+        tree = plan["taskTree"]
+        branch = self.git("branch", "--show-current", cwd=task).stdout.strip()
+        head = self.git("rev-parse", "HEAD", cwd=task).stdout.strip()
+        extra = [
+            "--expect-branch", branch,
+            "--expect-head", head,
+            "--expect-staged", ",".join(tree["staged"]),
+            "--expect-unstaged", ",".join(tree["unstaged"]),
+            "--expect-untracked", ",".join(tree["untracked"]),
+            "--apply",
+        ]
+        proc, payload = self.run_exit(task, apply=True, extra=extra)
+        self.assert_blocked(proc, payload, "--wip-message")
+        self.assertIn("precheck snapshot bindings", payload["error"])
+        self.assertEqual(self.status_set(task), before, "a blocked exit must not stage or commit anything")
+        self.assertEqual(len(self.session_paths()), 1)
+
+    def test_exit_apply_with_undeliverable_source_blocks_before_task_wip(self):
+        # A source worktree with an active merge (MERGE_HEAD) is not a
+        # deliverable target: the apply must block before the task-tree WIP
+        # commit instead of committing first and failing afterwards.
+        task = self.make_task()
+        (task / "README.md").write_text("# dirty task\n", encoding="utf-8")
+        # Bind the reviewed dry-run while the source is still deliverable,
+        # then put the main worktree into a merge.
+        bindings = self.wip_bindings(task, "wip: must not happen")
+        self.source_conflict_change()
+        self.git("checkout", "-q", "-b", "side", "HEAD~1")
+        (self.repo / "README.md").write_text("# side\n", encoding="utf-8")
+        self.git("commit", "-qam", "side change")
+        self.git("checkout", "-q", "main")
+        self.git("merge", "side", check=False)  # conflict: main keeps MERGE_HEAD
+        self.assertTrue((self.repo / ".git" / "MERGE_HEAD").exists())
+        before = self.status_set(task)
+        head_before = self.git("rev-parse", "HEAD", cwd=task).stdout.strip()
+        proc, payload = self.run_exit(task, apply=True, extra=bindings)
+        self.assert_blocked(proc, payload, "Git operation already in progress")
+        # Nothing happened in the task tree: no WIP commit, no staging.
+        self.assertEqual(self.status_set(task), before)
+        self.assertEqual(self.git("rev-parse", "HEAD", cwd=task).stdout.strip(), head_before)
+        _, session = self.session_data()
+        self.assertEqual(session["phase"], "entered")
+        self.assertNotIn("taskWipCommit", session)
+
+    def test_exit_dirty_dry_run_plans_the_combined_call_and_apply_requires_bindings(self):
+        # The dirty task tree is no longer a hard block: the dry-run reports
+        # the read-only snapshot and plans the combined call, and a bare
+        # --apply (no confirmed WIP bindings) is refused without any change.
         task = self.make_task()
         (task / "README.md").write_text("# dirty\n", encoding="utf-8")
         (task / "note.txt").write_text("note\n", encoding="utf-8")
         before_status = self.status_set(task)
         proc, payload = self.assert_ok(*self.run_exit(task))
         self.assertTrue(payload["taskTree"]["untracked"])
-        self.assertIn("blocked-dirty", payload["commit"])
+        self.assertTrue(payload["wipPlanned"])
+        self.assertIn("commits the WIP", payload["commit"])
+        self.assertIn("and delivers in the same invocation", payload["commit"])
         proc, payload = self.run_exit(task, apply=True)
-        self.assert_blocked(proc, payload, "wip subcommand")
+        self.assert_blocked(proc, payload, "precheck snapshot bindings")
         self.assertEqual(self.status_set(task), before_status)
 
     def test_exit_accepts_deprecated_message_argument(self):
@@ -790,10 +991,16 @@ class EnterGuardTests(RuntimeFixture):
         )
         self.assert_ok(proc, payload)
 
-        # Source drift after the plan was taken is caught before writing.
+        # Source drift after the plan was taken is caught at apply time: the
+        # apply carries a complete snapshot (both values), the branch still
+        # matches, but the advanced HEAD fails the binding before any write.
         self.source_advance()
-        proc, payload = self.enter(
-            "fix/beta", apply=True, extra=["--expect-source-head", head]
+        branch = self.git("branch", "--show-current").stdout.strip()
+        proc, payload = self.invoke(
+            "enter", "--repo", str(self.repo), "--branch", "fix/beta",
+            "--expect-source-branch", branch,
+            "--expect-source-head", head,
+            "--apply",
         )
         self.assert_blocked(proc, payload, "source HEAD drifted")
         self.assertEqual(len(self.session_paths()), 0)

@@ -28,18 +28,9 @@ import check_release  # noqa: E402
 TRASH_ROOT = Path.home() / "trash"
 REQUIRED_SKILLS = [
     "ph-init",
+    "ph-merge-update",
     "ph-worktree-enter",
     "ph-worktree-exit",
-    "ph-memory-capture",
-    "ph-memory-archive",
-    "ph-memory-ask",
-    "ph-intent-new",
-    "ph-intent-impl",
-    "ph-intent-verify",
-    "ph-intent-drop",
-    "ph-merge-update",
-    "ph-docs-sync",
-    "ph-sure",
 ]
 # The pre-1.1.8 era shipped exactly these ten skills (ph-docs-sync arrived in
 # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14); the synthetic legacy
@@ -184,13 +175,13 @@ class CheckReleaseTests(unittest.TestCase):
         # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14) instead of
         # slicing the current list, so new release skills never leak into
         # legacy fixtures.
-        self.assertEqual(len(REQUIRED_SKILLS), 13)
+        self.assertEqual(len(REQUIRED_SKILLS), 4)
         self.assertEqual(len(LEGACY_TEN_SKILLS), 10)
         self.assertNotIn("ph-docs-sync", LEGACY_TEN_SKILLS)
         self.assertNotIn("ph-intent-verify", LEGACY_TEN_SKILLS)
         self.assertNotIn("ph-sure", LEGACY_TEN_SKILLS)
-        self.assertIn("ph-intent-verify", REQUIRED_SKILLS)
-        self.assertIn("ph-sure", REQUIRED_SKILLS)
+        self.assertIn("ph-merge-update", REQUIRED_SKILLS)
+        self.assertIn("ph-worktree-exit", REQUIRED_SKILLS)
 
     def test_cli_current_tree(self):
         buf = io.StringIO()

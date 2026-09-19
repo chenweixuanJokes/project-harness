@@ -13,7 +13,8 @@
     "adapters",
     "worktree",
     "memory",
-    "skills"
+    "skills",
+    "speckit"
   ],
   "$defs": {
     "semver": {
@@ -33,14 +34,15 @@
     "canonical": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["root", "agents", "manifest", "schema", "memory", "skills"],
+      "required": ["root", "agents", "manifest", "schema", "memory", "skills", "scripts"],
       "properties": {
         "root": { "const": ".agents" },
         "agents": { "const": ".agents/AGENTS.md" },
         "manifest": { "const": ".agents/ph.json" },
         "schema": { "const": ".agents/ph.schema.json" },
         "memory": { "const": ".agents/memory" },
-        "skills": { "const": ".agents/skills" }
+        "skills": { "const": ".agents/skills" },
+        "scripts": { "const": ".agents/scripts" }
       }
     },
     "adapters": {
@@ -153,6 +155,30 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^ph-[a-z0-9]+(?:-[a-z0-9]+)*$" }
+        }
+      }
+    },
+    "speckit": {
+      "type": "object",
+      "description": "Upstream GitHub Spec Kit integration provenance: the pinned official release the ten ph-* spec skills were generated from.",
+      "additionalProperties": false,
+      "required": ["repository", "tag", "commit", "version", "skills"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "skills": {
+          "type": "object",
+          "description": "Installed skill name to upstream speckit-* name mapping, kept for future upgrades.",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "pattern": "^speckit-[a-z0-9]+(?:-[a-z0-9]+)*$" }
+        },
+        "files": {
+          "type": "object",
+          "description": "Per-file content baselines recorded by the last ph_speckit install: managed repository-relative path to the sha256 of the installed bytes. A future upgrade may overwrite a differing file only while its current bytes still match this baseline; markers alone never prove the file was not edited.",
+          "minProperties": 1,
+          "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
         }
       }
     }

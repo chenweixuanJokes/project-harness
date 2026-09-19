@@ -4,6 +4,8 @@ import json
 import re
 import unittest
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 ROOT = Path(__file__).resolve().parents[1]
 SCAFFOLD = ROOT / "assets/scaffold"
 DOCS = SCAFFOLD / "docs"
@@ -62,14 +64,23 @@ class DocsTemplateTests(unittest.TestCase):
         release = json.loads((ROOT / "release.json").read_text())
         self.assertEqual(release["version"], "1.1.14")
         self.assertNotIn("schema_version", release)  # single PH version since 1.1.8
-        self.assertEqual(len(release["required_skills"]), 13)
-        self.assertIn("ph-docs-sync", release["required_skills"])
-        self.assertIn("ph-intent-verify", release["required_skills"])
-        self.assertIn("ph-sure", release["required_skills"])
+        self.assertEqual(len(release["required_skills"]), 4)
+        self.assertIn("ph-merge-update", release["required_skills"])
+        self.assertIn("ph-worktree-exit", release["required_skills"])
+        speckit = json.loads((REPO_ROOT / "speckit.json").read_text(encoding="utf-8"))
+        self.assertEqual(speckit["tag"], "v1.0.8")
+        self.assertEqual(len(speckit["skills"]), 10)
         manifest = json.loads((SCAFFOLD / ".agents/ph.json").read_text())
         self.assertNotIn("schema_version", manifest)
         self.assertEqual(manifest["template_version"], "1.1.14")
-        self.assertEqual(manifest["skills"]["required_names"], release["required_skills"])
+        self.assertEqual(
+            manifest["skills"]["required_names"],
+            release["required_skills"] + [f"ph-{core}" for core in speckit["skills"]],
+        )
+        self.assertEqual(
+            manifest["speckit"]["skills"],
+            {f"ph-{core}": f"speckit-{core}" for core in speckit["skills"]},
+        )
         schema = json.loads((SCAFFOLD / ".agents/ph.schema.json").read_text())
         self.assertEqual(schema["$id"], "urn:ph:schema:project-harness")  # fixed, versionless
         self.assertNotIn("schema_version", schema.get("required", []))
@@ -100,7 +111,9 @@ class DocsTemplateTests(unittest.TestCase):
         self.assertEqual(hop_1114["to_version"], "1.1.14")
         self.assertEqual(hop_1114["path"], "migrations/1.1.13-to-1.1.14.md")
         self.assertEqual(hop_1114["items"],
-                         ["worktree-wip-confirm", "intent-verify-acceptance-contract", "sure-skill"])
+                         ["worktree-wip-confirm", "retire-legacy-skills",
+                          "speckit-core-integration", "constitution-governance-zone",
+                          "intent-to-spec"])
 
     def test_single_ph_version_migration_documented(self):
         doc = (ROOT / "migrations/1.1.7-to-1.1.8.md").read_text(encoding="utf-8")
@@ -158,15 +171,16 @@ class DocsTemplateTests(unittest.TestCase):
                         "## preserve", "## conflict", "## verify"):
             self.assertIn(heading, doc)
         for term in ("worktree-wip-confirm", "1.1.13", "1.1.14",
-                     "统一 WIP 确认", "确认 WIP 并继续", "停止，保留现场",
+                     "统一 WIP 确认", '两个选项文案固定为字面"是""否"', "单次 `enter --apply`",
+                     "exit --apply", '不拆成"先 wip 再进入 / 退出"两次脚本调用',
                      "实际调用问答工具", "wip: <说明>", "ph-worktree-enter", "ph-worktree-exit",
                      "Git与并行开发.md", "不再按分级默认普通提交", "源工作区",
-                     "不盲目 `git add -A`", "ignored", "未解决的冲突", "不重问",
-                     "拒绝、取消或未回答", "不构成 WIP 或任何提交确认",
+                     "不盲目 `git add -A`", "ignored", "未解决的冲突", "不换问法重问",
+                     '答"否"、取消或未回答', "调用本技能本身不构成任何提交确认",
                      "是否采用 `wip:` 提交解决当前这次阻断", "不是对文件内容的逐项审批",
-                     "普通内容变化不需要重新确认", "不与提问时的清单逐字绑定",
+                     "同一已展示路径的普通内容修改不需要重新确认", "不逐字节比对文件内容",
                      "授权不是长期授权", "不部分提交",
-                     "wip --repo", "只读 dry-run", "显式加 `--apply`",
+                     "--wip-message", "只读 dry-run", "整单拒绝",
                      "脚本无能力证明真实用户确认", "绝不据此提交",
                      "doctor", "recover", "redeliver", "--expect-source-head",
                      "mergeSourceBranch", "recover 不能恢复所有旧 merge",
@@ -174,134 +188,40 @@ class DocsTemplateTests(unittest.TestCase):
                      "冲突恢复", "MERGE_HEAD", "冲突清单", "未合并条目",
                      "保留现场，我解决后继续", "撤销这次合并", "已解决并暂存，请继续",
                      "冲突态优先", "不是 WIP",
-                     "运行时脚本", "blocked", "adapter mode", "逐字节一致", "template_version"):
+                     "运行时脚本", "blocked", "adapter mode", "逐字节一致", "template_version",
+                     ".agents/scripts/ph_worktree.py", "sourceDirty"):
             self.assertIn(term, doc)
 
-    def test_intent_verify_acceptance_contract_migration_documented(self):
+    def test_retire_and_speckit_migration_documented(self):
         doc = (ROOT / "migrations/1.1.13-to-1.1.14.md").read_text(encoding="utf-8")
         for heading in ("## why", "## from", "## to", "## affected",
                         "## preserve", "## conflict", "## verify"):
             self.assertIn(heading, doc)
-        for term in ("intent-verify-acceptance-contract", "1.1.13", "1.1.14",
-                     "ph-intent-verify", "正式入口优先", "127.0.0.1", "无入口",
-                     "另行授权", "不代替正式入口", "不扩张标准", "逐端逐角色",
-                     "受理", "实际取得", "深链", "导航", "预检证据", "澄清",
-                     "不替用户编造", "脚本与配置实现", "付费", "副产物",
-                     "已知构建", "入口", "角色", "不准备写操作", "「记录」",
-                     "只重验受影响点", "调用门禁", "blocked", "adapter mode",
-                     "evals", "template_version"):
+        for term in ("retire-legacy-skills", "speckit-core-integration",
+                     "constitution-governance-zone", "intent-to-spec",
+                     "ph-memory-capture", "ph-intent-new", "ph-docs-sync",
+                     "备份", "docs/意图/", ".agents/memory/", "业务 docs",
+                     "由代理按本文执行",
+                     "github/spec-kit", "正式 tag+commit", "官方生成器", "隔离 venv",
+                     "x-ph-upstream", "speckit.json", "自定义技能", "不得覆盖",
+                     "specify init", "zcode", "ph-",
+                     "constitution-template.md", "覆盖机制", "待确认",
+                     "docs/约束规范", "相对链接", "不复制规范正文",
+                     "重试续装", "不推进版本", "template_version",
+                     # intent-to-spec contract terms
+                     "必过", "不接受 `not_applicable`", "specs/.ph-intent-ledger.json",
+                     "NEEDS CLARIFICATION", "不编造优先级", "不生成 plan / tasks",
+                     "历史索引", "只读历史", "select-intent-spec",
+                     "SPECIFY_FEATURE_DIRECTORY", "重复源 intent_id", "幂等"):
             self.assertIn(term, doc)
-
-    def test_sure_skill_migration_documented(self):
-        doc = (ROOT / "migrations/1.1.13-to-1.1.14.md").read_text(encoding="utf-8")
-        for heading in ("## why", "## from", "## to", "## affected",
-                        "## preserve", "## conflict", "## verify"):
-            self.assertIn(heading, doc)
-        for term in ("sure-skill", "1.1.13", "1.1.14", "ph-sure",
-                     "第十三个必需 Skill", "收尾", "已证实", "未证实", "不适用",
-                     "未测试", "口头宣称", "不等于已合并", "目标分支", "不擅自推断",
-                     "验收门禁", "不构成", "删除", "未决事项", "blocked",
-                     "同名自定义", "不迁移任何业务"):
-            self.assertIn(term, doc)
-
-    def test_sure_skill_shipped_indexed_and_contract(self):
-        skill = SCAFFOLD / ".agents/skills/ph-sure/SKILL.md"
-        self.assertTrue(skill.is_file())
-        text = skill.read_text(encoding="utf-8")
-        for term in ("name: ph-sure", "明确点名", "不触发", "已显式启动",
-                     "不要求每轮重复点名", "不触发其他技能",
-                     # four-question scope
-                     "实现", "测试", "合并", "尾巴", "遗漏",
-                     # evidence rules: no reliance on verbal claims
-                     "口头宣称", "已证实", "未证实", "不适用", "未测试", "失败",
-                     # merge semantics: clean tree is not merged, no target-branch guessing
-                     "不等于已合并", "目标分支",
-                     # authorization boundary
-                     "不构成", "提交", "推送", "发布", "删除", "验收门禁",
-                     "未决事项", "不空泛保证"):
-            self.assertIn(term, text)
-        evals = json.loads(
-            (SCAFFOLD / ".agents/skills/ph-sure/evals/evals.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(evals["skill_name"], "ph-sure")
-        self.assertTrue(evals["evals"])
-        blob = json.dumps(evals, ensure_ascii=False)
-        for topic in ("口头宣称", "未测试", "失败", "不适用", "不等于已合并",
-                      "目标分支", "授权", "未决事项"):
-            self.assertIn(topic, blob, topic)
-        agents = (SCAFFOLD / ".agents/AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("ph-sure", agents)
-        guide = (ENGINEERING / "初始化与文档补全.md").read_text(encoding="utf-8")
-        self.assertIn("十三个固定 Skill", guide)
-        self.assertIn("ph-sure", guide)
-
-    def test_docs_sync_skill_shipped_and_indexed(self):
-        skill = SCAFFOLD / ".agents/skills/ph-docs-sync/SKILL.md"
-        self.assertTrue(skill.is_file())
-        text = skill.read_text(encoding="utf-8")
-        for term in ("name: ph-docs-sync", "只读", "可直接证实", "近 7 天提交只",
-                     "规范冲突不降级规范", "五字段", "不自动",
-                     # command examples: full preconditions, static basis
-                     "前置条件", "构建产物", "工作目录", "步骤依赖", "静态依据",
-                     # config claims: name / configurability / default, no guessing
-                     "可配置性", "默认值", "框架印象",
-                     # evidence handling: search coverage, commit range, default scope
-                     "搜索覆盖不足", "指定区间", "默认范围",
-                     # post-repair diff and link re-check step
-                     "diff 与链接复核"):
-            self.assertIn(term, text)
-        evals = json.loads(
-            (SCAFFOLD / ".agents/skills/ph-docs-sync/evals/evals.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(evals["skill_name"], "ph-docs-sync")
-        self.assertTrue(evals["evals"])
-        # Governance and the completion guide register the skill instead of
-        # denying its existence.
-        governance = (ENGINEERING / "文档治理.md").read_text(encoding="utf-8")
-        self.assertIn("ph-docs-sync", governance)
-        self.assertIn("规则源", governance)
-        self.assertNotIn("不是 Skill", governance)
-        guide = (ENGINEERING / "初始化与文档补全.md").read_text(encoding="utf-8")
-        self.assertIn("ph-docs-sync", guide)
-        self.assertNotIn("无独立 Skill", guide)
-        agents = (SCAFFOLD / ".agents/AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("十三名固定", agents)
-        self.assertIn("ph-docs-sync", agents)
-
-    def test_intent_verify_skill_shipped_and_indexed(self):
-        skill = SCAFFOLD / ".agents/skills/ph-intent-verify/SKILL.md"
-        self.assertTrue(skill.is_file())
-        text = skill.read_text(encoding="utf-8")
-        for term in ("name: ph-intent-verify", "明确点名", "一轮", "验收点",
-                     "通过 / 不通过 / 阻断 / 未验收", "记录", "只读", "隔离浏览器",
-                     "问答工具", "环境", "证据", "不调用其他技能", "意图",
-                     # 1.1.14 acceptance-contract semantics
-                     "正式入口优先", "127.0.0.1", "无入口", "另行授权",
-                     "不代替正式入口", "不扩张标准", "逐端逐角色", "受理",
-                     "实际取得", "深链", "预检证据", "不准备写操作",
-                     "已知构建", "只重验受影响点"):
-            self.assertIn(term, text)
-        self.assertNotIn("完成时调用", text)  # no auto-chaining wording
-        self.assertNotIn("只读不写。", text)  # ambiguous read-only wording removed
-        evals = json.loads(
-            (SCAFFOLD / ".agents/skills/ph-intent-verify/evals/evals.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(evals["skill_name"], "ph-intent-verify")
-        prompts = [e["prompt"] for e in evals["evals"]]
-        # trigger coverage: named-skill positives and non-naming negatives
-        self.assertTrue(any("ph-intent-verify" in p for p in prompts))
-        self.assertTrue(any("ph-intent-verify" not in p for p in prompts))
-        agents = (SCAFFOLD / ".agents/AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn("ph-intent-verify", agents)
-        interview = (ENGINEERING / "意图与访谈.md").read_text(encoding="utf-8")
-        self.assertIn("ph-intent-verify", interview)
 
     def test_explicit_invocation_gate_registered_everywhere(self):
-        # The gate sentence lives in the rule index and the intent spec; the
-        # auto-trigger phrasings are gone from all twelve skills.
-        for rel in (".agents/AGENTS.md", "docs/约束规范/工程规范/意图与访谈.md"):
-            text = (SCAFFOLD / rel).read_text(encoding="utf-8")
-            self.assertIn("点名", text, rel)
+        # The gate sentence lives in the rule index; since 1.1.14 the intent
+        # spec has no per-skill invocation wording (the intent skills were
+        # retired), so it is checked for its no-auto-trigger statement instead.
+        self.assertIn("点名", (SCAFFOLD / ".agents/AGENTS.md").read_text(encoding="utf-8"))
+        interview = (SCAFFOLD / "docs/约束规范/工程规范/意图与访谈.md").read_text(encoding="utf-8")
+        self.assertIn("不自动触发", interview)
         banned = ("即使没点名本技能——都必须使用", "即使没说出归档二字——都必须使用",
                   "或调用 ph-worktree-exit，都必须使用本技能", "完成时调用 `ph-worktree-exit`",
                   "启动推进属于 `ph-intent-impl`", "才按要求处理分支或调用 `ph-worktree-enter`")

@@ -12,6 +12,7 @@ No third-party deps. No schema upgrade / history migration.
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -40,6 +41,52 @@ PH_GITIGNORE_BLOCK = (
 RELEASE = json.loads((Path(__file__).resolve().parent.parent / "release.json").read_text(encoding="utf-8"))
 RELEASE_VERSION = RELEASE["version"]
 REQUIRED_SKILLS = tuple(RELEASE["required_skills"])
+# The pinned spec-kit contract travels as its own top-level release file
+# (speckit.json), not inside release.json: the published pre-1.1.14
+# validators whitelist their release.json keys and must keep being able to
+# prepare this release.
+SPECKIT_CONTRACT = json.loads(
+    (Path(__file__).resolve().parent.parent / "speckit.json").read_text(encoding="utf-8")
+)
+
+
+def _speckit_core_names(contract: dict) -> tuple:
+    """The ten upstream core names, derived from the bundled speckit.json.
+
+    speckit.json is the single maintenance source for the pinned spec-kit
+    contract (release.json keeps `required_skills` for the four PH scaffold
+    skills; speckit.json lists the spec-kit cores that install-time generation
+    converts to `ph-*`). No script may re-spell either list; the static pin
+    guarding accidental edits lives in tests/test_ph_speckit.py, and a wrong
+    name fails loudly at install time because the pinned official generator
+    does not produce it.
+    """
+
+    skills = contract.get("skills")
+    if (
+        not isinstance(skills, list)
+        or not skills
+        or not all(isinstance(name, str) and name for name in skills)
+        or len(set(skills)) != len(skills)
+    ):
+        raise SystemExit("speckit.json skills must be a non-empty list of unique names")
+    return tuple(skills)
+
+
+# The ten spec-driven skills are not scaffold content: PH installs them from the
+# pinned GitHub Spec Kit release with the official generator. Their ph-* names
+# are fixed here and mirrored by `.agents/ph.json` skills.required_names.
+SPECKIT_CORE_SKILLS = _speckit_core_names(SPECKIT_CONTRACT)
+SPECKIT_SKILL_NAMES = tuple(f"ph-{core}" for core in SPECKIT_CORE_SKILLS)
+ALL_REQUIRED_SKILL_NAMES = REQUIRED_SKILLS + SPECKIT_SKILL_NAMES
+SPECIFY_DIR = ".specify"
+SPECIFY_MANAGED_MINIMUM = (
+    ".specify/scripts/bash/check-prerequisites.sh",
+    ".specify/scripts/bash/resolve-template.sh",
+    ".specify/templates/spec-template.md",
+    ".specify/memory/constitution.md",
+    ".specify/templates/overrides/constitution-template.md",
+)
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 REL_PATH = re.compile(
     r"^(?!\/)(?!\~\/)(?![A-Za-z]:)(?![a-zA-Z][a-zA-Z0-9+.-]*:)"
@@ -333,6 +380,7 @@ def validate_manifest(data: dict) -> None:
         "worktree",
         "memory",
         "skills",
+        "speckit",
     ):
         _need(data, key, "")
     _const(data["$schema"], "./ph.schema.json", "$schema")
@@ -359,6 +407,7 @@ def validate_manifest(data: dict) -> None:
         "schema": ".agents/ph.schema.json",
         "memory": ".agents/memory",
         "skills": ".agents/skills",
+        "scripts": ".agents/scripts",
     }.items():
         _const(_need(canonical, key, "canonical"), expected, f"canonical.{key}")
 
@@ -454,8 +503,23 @@ def validate_manifest(data: dict) -> None:
         raise PHError("illegal manifest: skills must be an object")
     _const(_need(skills, "root", "skills"), ".agents/skills", "skills.root")
     names = _need(skills, "required_names", "skills")
-    if names != list(REQUIRED_SKILLS):
+    if names != list(ALL_REQUIRED_SKILL_NAMES):
         raise PHError("illegal manifest: skills.required_names mismatch")
+
+    section = data["speckit"]
+    if not isinstance(section, dict):
+        raise PHError("illegal manifest: speckit must be an object")
+    contract = SPECKIT_CONTRACT
+    for key in ("repository", "tag", "commit", "version"):
+        expected = contract.get(key)
+        if not isinstance(expected, str) or not expected:
+            raise PHError(f"release.json speckit.{key} must be a non-empty string")
+        _const(_need(section, key, "speckit"), expected, f"speckit.{key}")
+    mapping = _need(section, "skills", "speckit")
+    if not isinstance(mapping, dict) or mapping != {
+        f"ph-{core}": f"speckit-{core}" for core in SPECKIT_CORE_SKILLS
+    }:
+        raise PHError("illegal manifest: speckit.skills must map the ten ph-* names to their upstream speckit-* names")
 
 
 def ensure_canonical_root(repo: Path) -> None:
@@ -496,6 +560,33 @@ def ensure_canonical_layout(repo: Path) -> None:
         reject_nested_links(root, label=f"canonical skill {name}")
 
 
+def speckit_section_with_baselines(disk_manifest: dict) -> dict:
+    """The pinned speckit section plus the disk manifest's per-file baselines.
+
+    The per-file content baselines (`speckit.files`, sha256 of every managed
+    file as last installed by ph_speckit) are project state, not release
+    provenance: a manifest rewrite keeps them exactly as they are on disk,
+    and a manifest without them stays without them. Dropping the baselines
+    here would silently turn every future speckit upgrade into a conflict,
+    because the baselines are the only proof a differing file was not edited
+    since the last install.
+    """
+
+    contract = SPECKIT_CONTRACT
+    section = {
+        "repository": contract["repository"],
+        "tag": contract["tag"],
+        "commit": contract["commit"],
+        "version": contract["version"],
+        "skills": {f"ph-{core}": f"speckit-{core}" for core in SPECKIT_CORE_SKILLS},
+    }
+    disk = disk_manifest.get("speckit") if isinstance(disk_manifest.get("speckit"), dict) else {}
+    files = disk.get("files")
+    if isinstance(files, dict) and files:
+        section["files"] = files
+    return section
+
+
 def load_repo_manifest(repo: Path, *, candidate: dict | None = None) -> dict:
     # Only the merge-update verifier supplies a candidate; normal commands
     # reject old versions before checking for newly required skills.
@@ -511,7 +602,14 @@ def load_repo_manifest(repo: Path, *, candidate: dict | None = None) -> dict:
         expected = dict(actual)
         expected.pop("schema_version", None)
         expected["template_version"] = RELEASE_VERSION
-        expected["skills"] = dict(actual.get("skills", {}), required_names=list(REQUIRED_SKILLS))
+        expected["skills"] = dict(actual.get("skills", {}), required_names=list(ALL_REQUIRED_SKILL_NAMES))
+        # Upgrades adopt the canonical scripts directory and the pinned spec-kit
+        # provenance section; everything else in the disk manifest stays fixed.
+        expected["canonical"] = dict(actual.get("canonical") or {}, scripts=".agents/scripts")
+        # The speckit per-file content baselines recorded on disk are project
+        # state and survive the rewrite (they are the ownership proof for the
+        # next upgrade); a manifest without them stays without them.
+        expected["speckit"] = speckit_section_with_baselines(actual)
         # Upgrading a pre-1.1.9 manifest additionally removes the retired
         # codex_skills adapter. The target candidate must use that minimal
         # three-adapter topology; every other difference stays a rejection.
@@ -519,9 +617,10 @@ def load_repo_manifest(repo: Path, *, candidate: dict | None = None) -> dict:
         expected["adapters"].pop("codex_skills", None)
         if candidate != expected:
             raise PHError(
-                "candidate may change only template_version and required skills, "
-                "and may only delete the removed schema_version field "
-                "and the removed adapters.codex_skills adapter"
+                "candidate may change only template_version, the canonical scripts "
+                "directory, and the required skills list; it may also delete the "
+                "removed schema_version field and the removed adapters.codex_skills "
+                "adapter, and it must carry the pinned speckit provenance section"
             )
     validate_manifest(data)
     ensure_canonical_layout(repo)
@@ -864,7 +963,7 @@ def ph_init_payload_files() -> list[Path]:
         raise PHError("ph-init installation payload is incomplete")
     files.append(skill_md)
     files.append(script)
-    for rel in ("release.json", "scripts/ph_release.py", "scripts/ph_merge_update.py"):
+    for rel in ("release.json", "speckit.json", "scripts/ph_release.py", "scripts/ph_merge_update.py", "scripts/ph_speckit.py"):
         resource = root / rel
         if not resource.is_file() or resource.is_symlink():
             raise PHError(f"ph-init payload missing regular file: {rel}")
@@ -940,8 +1039,117 @@ def apply_self_install(repo: Path) -> None:
         copy_file_bytes(src, dest)
 
 
+def speckit_script_path() -> Path:
+    return Path(__file__).resolve().parent / "ph_speckit.py"
+
+
+def run_speckit(*args: str) -> dict:
+    """Invoke the spec-kit integration script in a separate process.
+
+    A separate process keeps the heavy prepare path (git clone, isolated venv,
+    pip install of the official CLI) out of this process, so a network or
+    dependency failure is a clean reported error, never a half-applied write.
+    """
+
+    script = speckit_script_path()
+    if not script.is_file():
+        raise PHError("ph_speckit.py is missing from the release root; spec-kit integration is unavailable")
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(script), *args],
+            capture_output=True,
+            text=True,
+            timeout=3600,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise PHError("ph_speckit.py timed out; the generation can be retried and nothing was committed") from exc
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
+        tail = detail[-5:] if detail else ["no output"]
+        raise PHError("ph_speckit.py failed: " + " | ".join(tail))
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise PHError(f"ph_speckit.py produced unreadable output: {exc}") from exc
+
+
+def plan_speckit(report: Report, repo: Path) -> None:
+    """Plan (and, at apply time, first apply) the spec-kit integration.
+
+    The spec-kit step runs BEFORE any scaffold or adopt write: a failure leaves
+    no adopt-plan hash drift behind, the repository manifest is not advanced,
+    and the same command can simply be retried.
+    """
+
+    try:
+        payload = run_speckit("install", "--repo", str(repo))
+    except PHError as exc:
+        report.add("error", ".agents/skills", f"spec-kit plan failed: {exc}")
+        return
+    for item in payload.get("items") or []:
+        kind = item.get("kind")
+        if kind not in {"write", "skip", "conflict"}:
+            kind = "block"
+        report.add(kind, item.get("path", "."), item.get("reason", "spec-kit integration"))
+    if payload.get("blocked"):
+        report.add("block", ".", "spec-kit integration has conflicts; resolve them and re-run")
+
+
+def apply_speckit(report: Report, repo: Path) -> str | None:
+    """Apply the spec-kit install; return the content proof of the override
+    it wrote (the sha256 of the constitution override bytes), for the
+    post-scaffold baseline recording to bind its refresh against."""
+    try:
+        payload = run_speckit("install", "--repo", str(repo), "--apply")
+    except PHError as exc:
+        report.add("error", ".agents/skills", f"spec-kit install failed before any scaffold write; retry after fixing: {exc}")
+        return None
+    if payload.get("blocked"):
+        report.add("block", ".", "spec-kit install reported conflicts; nothing else was applied")
+        return None
+    # The plan entries already describe every path and outcome (write/skip),
+    # mirroring how scaffold keeps its planned entries at apply time; adding
+    # applied duplicates here would make the apply report diverge from the
+    # dry-run plan for the same set.
+    override_sha = None
+    for item in payload.get("items") or []:
+        if item.get("kind") == "conflict":
+            report.add("block", item.get("path", "."), item.get("reason", "spec-kit conflict during apply"))
+        if item.get("path") == ".specify/templates/overrides/constitution-template.md":
+            override_sha = item.get("sha256")
+    return override_sha if isinstance(override_sha, str) else None
+
+
+def record_speckit_baselines(report: Report, repo: Path, override_sha: str | None) -> None:
+    """Re-record the speckit per-file baselines after the scaffold deploy.
+
+    A fresh init runs the speckit install first (which records the per-file
+    content baselines into .agents/ph.json) and then deploys the scaffold,
+    whose manifest template carries no baselines - the deploy would erase
+    them, and the next upgrade would then conflict on every differing file
+    instead of proving ownership. This cache-only call restores the
+    baselines. The scaffold deploy also changes the docs/约束规范 tree the
+    constitution override's zone references, so the override the install
+    wrote moments earlier needs a refresh; `override_sha` (the sha of what
+    the install just wrote) is the content proof that the on-disk file is
+    still this run's own output, without which the refresh stays refused.
+    A failure is reported but does not undo the finished init, because its
+    absence only makes future upgrades more conservative, never less safe.
+    """
+
+    argv = ["record-baselines", "--repo", str(repo)]
+    if override_sha is not None:
+        argv += ["--refresh-override-sha", override_sha]
+    try:
+        payload = run_speckit(*argv)
+        if payload.get("blocked"):
+            report.add("error", ".agents/ph.json", f"speckit baseline recording blocked: {payload.get('conflicts', [])}")
+    except PHError as exc:
+        report.add("error", ".agents/ph.json", f"speckit baseline recording failed: {exc}")
+
+
 def extra_skill_sources() -> dict[str, Path]:
-    """The eight canonical skills installed alongside ph-init."""
+    """The canonical scaffold skills installed alongside ph-init."""
 
     mapping: dict[str, Path] = {}
     for name in REQUIRED_SKILLS:
@@ -987,6 +1195,42 @@ def manifest_bytes_for_mode(mode: str) -> bytes:
     )
     validate_manifest(data)
     return (json.dumps(data, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
+def manifest_is_template_with_baselines(dest: Path, template: bytes) -> bool:
+    """True when the manifest equals the scaffold template plus only the
+    recorded speckit per-file content baselines.
+
+    The baselines `ph_speckit install` records into `speckit.files` are
+    project state, not manifest drift: a repeat init must treat that one
+    additive key as identical instead of conflicting (or worse, erasing the
+    ownership proof the next upgrade needs) - and any other difference,
+    including a malformed baseline, stays what it was before.
+    """
+
+    try:
+        disk = json.loads(dest.read_text(encoding="utf-8"))
+        tpl = json.loads(template.decode("utf-8"))
+    except (OSError, ValueError):
+        return False
+    if not isinstance(disk, dict) or not isinstance(tpl, dict):
+        return False
+    speckit = disk.get("speckit")
+    if not isinstance(speckit, dict) or "files" not in speckit:
+        return False
+    files = speckit["files"]
+    if not isinstance(files, dict) or not files:
+        return False
+    if not all(
+        isinstance(key, str)
+        and isinstance(value, str)
+        and re.fullmatch(r"[0-9a-f]{64}", value)
+        for key, value in files.items()
+    ):
+        return False
+    disk = copy.deepcopy(disk)
+    del disk["speckit"]["files"]
+    return disk == tpl
 
 
 def is_docs_rel(rel: str) -> bool:
@@ -1331,6 +1575,14 @@ def plan_scaffold(report: Report, repo: Path, mode: str, *, skip_rels: frozenset
             continue
         data = manifest_bytes_for_mode(mode) if rel == ".agents/ph.json" else src.read_bytes()
         dest = repo / rel
+        if rel == ".agents/ph.json" and dest.exists() and manifest_is_template_with_baselines(dest, data):
+            # The recorded speckit baselines are project state, not drift.
+            report.add(
+                "skip",
+                rel,
+                "scaffold: identical (recorded speckit per-file baselines are project state)",
+            )
+            continue
         if rel == ADOPT_CANONICAL:
             kind, reason, problem = classify_canonical_scaffold(repo, dest, data)
             report.add(kind, rel, reason, problem)
@@ -1350,6 +1602,10 @@ def apply_scaffold(repo: Path, mode: str, *, skip_rels: frozenset[str] = frozens
             continue
         dest = repo / rel
         data = manifest_bytes_for_mode(mode) if rel == ".agents/ph.json" else src.read_bytes()
+        if rel == ".agents/ph.json" and dest.exists() and manifest_is_template_with_baselines(dest, data):
+            # The recorded speckit baselines are project state, not drift:
+            # never erase them by re-deploying the template.
+            continue
         if rel == ADOPT_CANONICAL:
             kind, reason, _problem = classify_canonical_scaffold(repo, dest, data)
             if kind == "skip":
@@ -1820,6 +2076,24 @@ def check_common(report: Report, repo: Path, *, candidate: dict | None = None) -
             report.add("error", f".agents/skills/{name}/SKILL.md", "required skill missing")
         else:
             report.add("ok", f".agents/skills/{name}/SKILL.md", "present")
+    # The spec-driven skills come from the pinned spec-kit generation; their
+    # absence is a broken/unfinished install, not a scaffold drift.
+    for name in SPECKIT_SKILL_NAMES:
+        skill = repo / ".agents" / "skills" / name / "SKILL.md"
+        if not skill.is_file():
+            report.add("error", f".agents/skills/{name}/SKILL.md", "spec-kit skill missing (run ph_speckit install --apply)")
+        else:
+            report.add("ok", f".agents/skills/{name}/SKILL.md", "present (spec-kit)")
+    for rel in SPECIFY_MANAGED_MINIMUM:
+        if not (repo / rel).is_file():
+            report.add("error", rel, "spec-kit shared infrastructure missing")
+        else:
+            report.add("ok", rel, "present (spec-kit)")
+    script = repo / ".agents" / "scripts" / "ph_worktree.py"
+    if not script.is_file():
+        report.add("error", ".agents/scripts/ph_worktree.py", "shared worktree script missing")
+    else:
+        report.add("ok", ".agents/scripts/ph_worktree.py", "present")
     gitignore = repo / ".gitignore"
     if not gitignore.is_file() or not gitignore_has_entry(gitignore.read_text(encoding="utf-8")):
         report.add("error", ".gitignore", "missing PH worktree marker")
@@ -1865,6 +2139,7 @@ def cmd_init(repo: Path, mode: str, apply: bool, adopt: dict | None = None) -> R
         applied = cmd_init(repo, mode, True, adopt=adopt)
         applied.items[:0] = report.items
         return applied
+    plan_speckit(report, repo)
     plan_scaffold(report, repo, mode, skip_rels=skip_rels)
     plan_self_install(report, repo)
     plan_gitignore(report, repo)
@@ -1889,6 +2164,11 @@ def cmd_init(repo: Path, mode: str, apply: bool, adopt: dict | None = None) -> R
             except PHError as exc:
                 report.add("block", ".", str(exc))
                 return report
+        # Spec-kit first: a failure here leaves no scaffold/adopt writes and no
+        # manifest advancement behind; the run is retryable as-is.
+        override_sha = apply_speckit(report, repo)
+        if report.blocked:
+            return report
         if adopt is not None:
             apply_adopt_files(repo, adopt)
         apply_scaffold(repo, mode, skip_rels=skip_rels)
@@ -1898,6 +2178,11 @@ def cmd_init(repo: Path, mode: str, apply: bool, adopt: dict | None = None) -> R
             apply_portable_adapters(repo)
         else:
             apply_symlink_adapters(repo)
+        # Last: the scaffold deploy replaced the manifest with its template
+        # (no per-file speckit baselines) and changed the docs tree the
+        # constitution override's zone references, so re-record the baselines
+        # and refresh the override, bound to what this run's install wrote.
+        record_speckit_baselines(report, repo, override_sha)
     return report
 
 
@@ -1909,7 +2194,7 @@ def plan_init_adapters(report: Report, repo: Path, mode: str, adopt: dict | None
         if root.is_symlink() or is_disallowed_reparse(root) or (root.exists() and not root.is_dir()):
             report.add("conflict", rel, "skill adapter parent must be a real directory", PROBLEM_NOT_DIRECTORY)
             return
-    virtual_skills = set(skill_names(repo)) | set(REQUIRED_SKILLS)
+    virtual_skills = set(skill_names(repo)) | set(ALL_REQUIRED_SKILL_NAMES)
     if mode == "portable":
         if adopt is not None:
             # Adapters derive from the reviewed candidate canonical, not the

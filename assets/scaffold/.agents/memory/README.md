@@ -57,18 +57,10 @@ topics:
 - 身份证、手机号、个人邮箱、家庭地址等个人信息
 - 可直接冒用的账号口令组合
 
-`ph-memory-capture` 发现即停并拒绝落盘，只给出脱敏后的可记表述供确认。`ph-memory-archive` 发现待归档原件含此类内容时立刻阻断该条所属的本次归档：不新建 structured、不把原件移入受 Git 管理的 `archive/`，源文件保持原处；只报告脱敏 / 撤销凭据等处理要求，不擅自改写、不复制秘密。需要记住“用了哪类凭证、存在哪里”时，只写位置与种类，不写值。
+发现此类内容立即停止写入或归档该条：不落盘、不移入受 Git 管理的 `archive/`，源文件保持原处；只报告脱敏 / 撤销凭据等处理要求，不擅自改写、不复制秘密。需要记住“用了哪类凭证、存在哪里”时，只写位置与种类，不写值。
 
 ## 效力与核验
 
 - 问“以前记过什么”：按记忆回答，并标注路径、日期与参考性质。
 - 要据此改代码、改规范、部署、删除或对外发送：先核验当前 `AGENTS.md`、`docs/约束规范/` 与代码；核验失败则停止询问，不得用记忆补齐。对用户开口前先读 `docs/约束规范/工程规范/对用户提问.md`，问句用日常用语。
 - 记忆过期或冲突时并列列出，不擅自裁定当前真相。
-
-## Skills
-
-| Skill | 定位 |
-| --- | --- |
-| [ph-memory-capture](../skills/ph-memory-capture/SKILL.md) | 写入 `temporary/` |
-| [ph-memory-archive](../skills/ph-memory-archive/SKILL.md) | 合并进 `structured/`，原件移入 `archive/` |
-| [ph-memory-ask](../skills/ph-memory-ask/SKILL.md) | 只读检索与参考问答 |

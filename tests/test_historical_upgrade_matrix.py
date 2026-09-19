@@ -33,19 +33,17 @@ byte-identically with the release root (unified ``wip`` subcommand with a
 read-only dry-run, read-only ``doctor``, explicit ``recover``, ``redeliver``
 and the enter expectation flags, while existing sessions stay untouched and
 old sessions lacking new evidence block conservatively), and existing
-confirmed WIP decisions are never re-asked;
-``intent-verify-acceptance-contract`` merges the acceptance-contract semantics
-(formal entry first per target user, remote-localhost honesty, no-entry/no
-page plus separately-authorized auxiliary tools, per-client/per-role coverage,
-async accept-vs-complete and file standards, deep links never proving
-navigation-permission standards, user feedback separated from pre-check
-evidence with contradiction clarification, read-only prepares no writes,
-recovery re-verifies only affected points) into ``ph-intent-verify``; and
-``sure-skill`` installs the new thirteenth skill ``ph-sure`` (wrap-up
-verification of implemented / tested / merged / leftovers from current
-evidence, no reliance on verbal claims, clean-tree-is-not-merged, no
-target-branch guessing, no new commit/merge/publish/delete authorization)
-from the release scaffold.
+confirmed WIP decisions are never re-asked. The 1.1.14 hop's remaining
+items: ``retire-legacy-skills`` archives the nine retired helper skills
+(eight published plus the unshipped ph-sure draft sibling) out of the
+managed install with recoverable backups; ``speckit-core-integration``
+installs the ten spec-kit skills and ``.specify`` from the shared real
+generation seed; ``constitution-governance-zone`` renders the PH
+constitution governance override; and ``intent-to-spec`` runs the real
+prepared migration script over the fixture intent tree. The 1.1.13 draft
+items ``intent-verify-acceptance-contract`` and ``sure-skill`` were
+withdrawn before publication and no longer exist in
+``migrations/index.json`` (see the handler notes below).
 
 The semantic merge is performed by explicit per-migration-item handlers. A
 migration item that is not in the handler registry fails the test instead of
@@ -104,6 +102,11 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import ph_release  # noqa: E402  (dev-tree module, used only to prepare the target offline)
+import ph_init  # noqa: E402  (expected_rel_link for the codex-mirror retirement proof)
+import ph_merge_update  # noqa: E402  (dev-tree module: retired-skill contract for the 1.1.14 items)
+if str(REPO_ROOT / "tests") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "tests"))
+import _speckit_seed  # noqa: E402  (shared real spec-kit install seed)
 
 TRASH_ROOT = Path.home() / "trash"
 SKIP_DIRS = {"__pycache__", ".git"}
@@ -129,13 +132,20 @@ BASE_SKILLS = ("ph-init",) + CORE_NON_INIT
 OLD_ALIASES = ("ph-intent-capture", "ph-intent-plan", "ph-intent-abandon")
 NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
 # Historical 1.1.10-1.1.12 releases ship exactly these eleven; 1.1.13 added
-# ph-intent-verify, so the tagged 1.1.13 release ships the twelve. The
-# unreleased 1.1.14 target adds ph-sure as the thirteenth; the historical
-# twelve stay pinned to their actual values so new target skills never leak
-# into historical fixture verification.
+# ph-intent-verify, so the tagged 1.1.13 release ships the twelve. The 1.1.14
+# target retires those helpers and ships four scaffold skills; the ten
+# spec-driven skills are generated from the pinned upstream release at install
+# time (the matrix seeds them from a real ph_speckit install). Historical
+# sets stay pinned to their actual values so target skills never leak into
+# historical fixture verification.
 HISTORICAL_ELEVEN_SKILLS = BASE_SKILLS + NEW_INTENT + ("ph-merge-update", "ph-docs-sync")
 HISTORICAL_TWELVE_SKILLS = HISTORICAL_ELEVEN_SKILLS + ("ph-intent-verify",)
-TARGET_SKILLS = HISTORICAL_TWELVE_SKILLS + ("ph-sure",)
+TARGET_SCAFFOLD_SKILLS = ("ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit")
+# Skills 1.1.14 removes from the managed install (the unshipped ph-sure draft
+# sibling included): same membership as scripts/ph_merge_update.RETIRED_SKILLS.
+RETIRED_TARGET_SKILLS = set(HISTORICAL_TWELVE_SKILLS) - set(TARGET_SCAFFOLD_SKILLS) | {"ph-sure"}
+SPECKIT_TARGET_SKILLS = tuple(f"ph-{core}" for core in _speckit_seed.contract()["skills"])
+TARGET_SKILLS = TARGET_SCAFFOLD_SKILLS  # retained name for scope-coverage reads
 LAYOUT_SKILLS = {
     "twelve-skills": HISTORICAL_TWELVE_SKILLS,
     "eleven-skills": HISTORICAL_ELEVEN_SKILLS,
@@ -692,7 +702,9 @@ ENGINE_ENSURE = {
         # installs the skill and merges the rule indexes only; business
         # documents are never synced by this item - the matrix asserts the
         # fixture's wiki/backend bodies survive byte-for-byte.
-        "payload": True, "skills": ("ph-docs-sync", "ph-merge-update"),
+        # 1.1.14 supersedes the ph-docs-sync install (the skill is retired),
+        # so this item's skill scope keeps only the merge-update refresh.
+        "payload": True, "skills": ("ph-merge-update",),
         "agents": True,
         "docs": [f"{W}/文档治理.md", f"{W}/初始化与文档补全.md"],
     },
@@ -718,9 +730,10 @@ ENGINE_ENSURE = {
             f"{W}/Git与并行开发.md", f"{W}/README.md", ".agents/memory/README.md",
         ],
         "overwrite": (f"{W}/对用户提问.md",),
-        "skills": ("ph-intent-new", "ph-intent-impl", "ph-intent-drop",
-                   "ph-memory-capture", "ph-memory-ask", "ph-worktree-exit",
-                   "ph-merge-update"),
+        # The intent/memory skill deltas this item once owned are superseded
+        # by the 1.1.14 retirement; the target ships only the worktree/merge
+        # skills of this scope.
+        "skills": ("ph-worktree-exit", "ph-merge-update"),
         "agents": True,
     },
     "explicit-invocation-rules": {
@@ -742,20 +755,20 @@ ENGINE_ENSURE = {
             f"{W}/初始化与文档补全.md", f"{W}/文档治理.md",
             f"{W}/README.md", "docs/意图/_模板.md",
         ],
-        "skills": CORE_NON_INIT + NEW_INTENT + ("ph-merge-update", "ph-docs-sync"),
+        # The pre-1.1.14 skill scope it once refreshed is superseded by the
+        # 1.1.14 retirement; the target ships only the worktree/merge skills.
+        "skills": ("ph-worktree-enter", "ph-worktree-exit", "ph-merge-update"),
         "agents": True,
     },
     "intent-verify-skill": {
-        # 1.1.13 release deltas this item owns: the new twelfth skill
-        # ph-intent-verify (SKILL.md + evals) installed from the release
-        # scaffold, its twelfth row in the canonical AGENTS skill table and
-        # the intent spec's duty table, and the payload refresh. No business
-        # intent, lifecycle status, directory or interview purpose is added;
-        # a live same-name custom skill on an older project blocks the item
-        # upstream (release_skill_name_conflicts) instead of being replaced.
+        # 1.1.13 release deltas this item owns: the intent spec's duty-table
+        # refresh and the payload version refs. The ph-intent-verify skill
+        # install it originally owned is superseded: 1.1.14 retires the
+        # skill, so the target scaffold no longer ships it (retire-legacy-
+        # skills removes the live copy). No business intent, lifecycle
+        # status, directory or interview purpose is added.
         "payload": True,
         "docs": [f"{W}/意图与访谈.md"],
-        "skills": ("ph-intent-verify",),
         "agents": True,
     },
     "worktree-wip-confirm": {
@@ -793,59 +806,81 @@ ENGINE_ENSURE = {
         # WIP or cleanup decisions are never re-asked.
         "payload": True,
         "skills": ("ph-worktree-enter", "ph-worktree-exit", "ph-merge-update"),
-        "docs": [f"{W}/Git与并行开发.md"],
+        "docs": [f"{W}/Git与并行开发.md", ".agents/scripts/ph_worktree.py"],
+        "embedded_scripts": True,
         "agents": True,
     },
-    "intent-verify-acceptance-contract": {
-        # 1.1.14 release deltas this item owns: the ph-intent-verify skill's
-        # acceptance-contract semantics - entry chosen per the intent's actual
-        # target users with the formal entry first (web page, user-terminal
-        # command, minimal API call; business users never handed only a curl
-        # command), remote localhost/127.0.0.1 never claimed as user-side
-        # address, opening distinguished as provided vs request-accepted vs
-        # user-side-loaded, missing entries reported honestly as delivery
-        # defects (no default demo pages; auxiliary tools only after separate
-        # authorization as a separate task, never mocking business results,
-        # real calls only), one independent result per round possibly spanning
-        # steps without expanding the standard and written into the
-        # user-visible message, per-client and per-role coverage, async
-        # observed as accepted-or-completed per the standard with no invented
-        # timeout failure, file standards actually obtaining the file, deep
-        # links never proving navigation/permission standards, user feedback
-        # (four states) separated from pre-check evidence with contradiction
-        # clarification over object/environment/input/role and no fabricated
-        # failures, docs verified against scripts/configs within
-        # authorization, cache/log byproducts scoped to authorized operations
-        # (read-only sessions start no writing preparations), records carrying
-        # entry / role / known build (never fabricated) / pre-check evidence
-        # and excluding secrets, sensitive inputs and credentialed URLs,
-        # non-read-only writes limited to appending the target intent's 记录
-        # section (read-only also prepares no writes), and recovery
-        # re-verifying only affected points. The invocation gate is unchanged
-        # by this item.
-        "skills": ("ph-intent-verify",),
+    # The 1.1.13 items intent-verify-acceptance-contract and sure-skill were
+    # withdrawn from the release before publication and no longer exist in
+    # migrations/index.json; their skill scope is superseded by the 1.1.14
+    # retirement (retire-legacy-skills below).
+
+    "retire-legacy-skills": {
+        # 1.1.14 release deltas this item owns: the nine retired helper
+        # skills (eight published + the unshipped ph-sure draft sibling)
+        # leave the managed install - canonical directories and their Claude
+        # mirrors - each original first backed up to the recoverable trash;
+        # the rule documents referencing them switch to agent-executes-text
+        # wording (owned by worktree-wip-confirm's doc refresh in the same
+        # hop); provably-managed .codex mirrors of the retired skills are
+        # archived in the same step - after the canonical copy is gone the
+        # 1.1.9 mechanism's proof (mirror == canonical) is unavailable, and a
+        # live mirror would block verify forever. The runtime-material version refs that
+        # follow the release bump (release.json, migrations register this
+        # item) ride with worktree-wip-confirm's payload refresh in the same
+        # hop. This item also owns the rule-document rewrites that replace
+        # retired-skill call sites with agent-executes-the-document wording
+        # (the engineering specs, the intent template, and the three memory
+        # READMEs).
+        "retire_managed": sorted(RETIRED_TARGET_SKILLS),
+        "docs": [
+            f"{W}/意图与访谈.md", f"{W}/文档治理.md", f"{W}/初始化与文档补全.md",
+            "docs/意图/_模板.md",
+            ".agents/memory/README.md",
+            ".agents/memory/structured/README.md",
+            ".agents/memory/temporary/README.md",
+        ],
     },
-    "sure-skill": {
-        # 1.1.14 release deltas this item owns: the new thirteenth skill
-        # ph-sure (SKILL.md + evals) installed from the release scaffold, its
-        # thirteenth row in the canonical AGENTS.md skill table, the fixed
-        # skill-count wording in the completion guide, and the runtime
-        # material version refs that follow the release bump (release.json,
-        # migrations register this item; the canonical AGENTS merge itself is
-        # owned by worktree-wip-confirm's payload/agents refresh in the same
-        # hop). The skill verifies the four wrap-up questions (implemented,
-        # tested, merged, leftovers) from current evidence only: verbal
-        # claims are re-verified, untested/failed/not-applicable are kept
-        # apart, a clean worktree is not a merge, and the target branch is
-        # never guessed; the check itself grants no commit/merge/publish/
-        # delete authorization and never crosses the user acceptance gate.
-        # No business intent, lifecycle status, directory or interview
-        # purpose is added; a live same-name custom skill on an older project
-        # blocks the item upstream (release_skill_name_conflicts) instead of
-        # being replaced.
-        "payload": True,
-        "docs": [f"{W}/初始化与文档补全.md"],
-        "skills": ("ph-sure",),
+    "speckit-core-integration": {
+        # 1.1.14 release deltas this item owns: the ten spec-driven skills
+        # installed from the pinned GitHub Spec Kit release with the official
+        # generator and renamed to ph-* (directory, frontmatter name, and
+        # every inter-skill handoff reference; upstream provenance recorded
+        # in x-ph-upstream and the ph.json speckit section), the .specify
+        # shared infrastructure (scripts, templates, manifests, initial
+        # constitution; workflow-engine assets excluded by contract), and the
+        # rule-document speckit wording. The matrix installs a real
+        # ph_speckit generation from the shared seed instead of any scaffold
+        # copy: these skills are never scaffold content. The schema delta
+        # (canonical.scripts and the speckit provenance block) is owned here.
+        "speckit": True,
+        "schema": True,
+    },
+    "constitution-governance-zone": {
+        # 1.1.14 release deltas this item owns: the PH constitution
+        # governance override at .specify/templates/overrides/ - the upstream
+        # skeleton verbatim plus the PH navigation zone that references every
+        # live docs/约束规范 document with scope, reading moment, and an
+        # explicit 待确认 fallback, never copying rule bodies. The ph-
+        # constitution skill keeps reading it through the official override
+        # priority on later constitution updates.
+        "constitution": True,
+    },
+    "intent-to-spec": {
+        # 1.1.14 release deltas this item owns: the legacy intent mechanism
+        # becomes read-only history while every business intent entry under
+        # 待办/实施 (plus the early 进行中/已完成 layouts) gains a spec under
+        # the upstream-default specs/ root. The real migration runs from the
+        # prepared release's own ph_merge_update.py (never a fixture twin):
+        # verbatim extraction of the four template sections with NEEDS
+        # CLARIFICATION fallbacks, no fabricated priorities/metrics, no
+        # plan/tasks files, the persistent specs/.ph-intent-ledger.json
+        # mapping, the human history index declaring the single future
+        # maintenance location, untouched original bytes, and no write to
+        # .specify/feature.json. The rule-document banner marking the intent
+        # tree read-only history is owned here as well.
+        "intent_spec": True,
+        "docs": [f"{W}/意图与访谈.md"],
     },
 }
 SPECIAL_SCAFFOLD_RELS = {".gitignore", ".agents/ph.json", ".agents/ph.schema.json", ".agents/AGENTS.md"}
@@ -1046,6 +1081,15 @@ class MergeEngine:
     def ensure_skill(self, name: str):
         if name == "ph-init":
             return self.ensure_payload()
+        if not (self.prepared.scaffold_dir / ".agents" / "skills" / name).is_dir():
+            # The target release retired this skill: its semantic-merge work
+            # is superseded (the migration README allows merging intermediate
+            # states that later hops supersede); retire-legacy-skills removes
+            # the live copy, so syncing nothing here is correct.
+            assert name in RETIRED_TARGET_SKILLS, (
+                f"ensure_skill references {name} which the target scaffold no longer ships"
+            )
+            return
         hist_dir = self.hist.scaffold_dir / ".agents" / "skills" / name
         changed = self._sync_tree(
             self.repo / ".agents" / "skills" / name,
@@ -1185,6 +1229,188 @@ class MergeEngine:
             self.mutations.append("retire legacy skill entries: " + ", ".join(retired))
         return retired
 
+    def retire_managed_skill(self, name: str) -> list[str]:
+        """1.1.14 retirement: remove the retired skill from the canonical tree
+        and its Claude mirrors, and archive the matching .codex mirror when it
+        is provably the same managed content.
+
+        The .codex mirror must be retired in the same step: the 1.1.9
+        tool-neutral mechanism proved and left live mirrors by comparing them
+        to the canonical skill, and once the canonical copy is gone that proof
+        is unavailable, so a live mirror of a retired skill would block verify
+        forever. Proof is re-established right here, BEFORE the canonical copy
+        is trashed: byte-identical portable mirror, or the exact managed
+        relative symlink. Anything else stays untouched for a human decision.
+        Every removed original lands in the recovery trash first."""
+        retired = []
+        node = self.repo / ".agents" / "skills" / name
+        canonical_alive = node.is_dir()
+        codex = self.repo / ".codex" / "skills" / name
+        if (codex.exists() or codex.is_symlink()) and canonical_alive:
+            expected = ph_init.expected_rel_link(codex, node)
+            provable = False
+            if codex.is_symlink():
+                raw = os.readlink(codex)
+                provable = (
+                    not os.path.isabs(raw)
+                    and raw == expected
+                    and (codex.parent / raw).resolve() == node.resolve()
+                )
+            elif codex.is_dir():
+                mirror = {
+                    p.relative_to(codex).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                    for p in iter_regular_files(codex, strict=True)
+                }
+                canon = {
+                    p.relative_to(node).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+                    for p in iter_regular_files(node, strict=True)
+                }
+                provable = mirror == canon
+            if provable:
+                # Archive through the SAME codex-archive mechanism the 1.1.9
+                # tool-neutral contract uses (shared <date>-pre-update/
+                # codex-skills directory; finalize keeps adding there), so the
+                # archive holds every codex_seen entry exactly once. A live
+                # symlink cannot be moved into .agents (managed trees stay
+                # link-free): write the record file first, then unlink.
+                base = self.codex_archive_base()
+                base.mkdir(parents=True, exist_ok=True)
+                dest = base / name
+                if dest.exists() or dest.is_symlink():
+                    raise AssertionError(f"codex archive destination already exists: {dest}")
+                if codex.is_symlink():
+                    dest.write_text(
+                        f"retired codex symlink: .codex/skills/{name} -> ../../.agents/skills/{name}\n",
+                        encoding="utf-8",
+                    )
+                    self.trash_move(codex)
+                else:
+                    codex.rename(dest)
+                retired.append(f".codex/skills/{name}")
+                # The mirror is no longer left for finalize --apply to archive.
+                if name in self.codex_left_for_finalize:
+                    self.codex_left_for_finalize.remove(name)
+        if node.exists() or node.is_symlink():
+            self.trash_move(node)
+            retired.append(f".agents/skills/{name}")
+        entry = self.repo / ".claude" / "skills" / name
+        if entry.exists() or entry.is_symlink():
+            self.trash_move(entry)
+            retired.append(f".claude/skills/{name}")
+        if retired:
+            self.mutations.append(f"retire 1.1.14 skill {name}: " + ", ".join(retired))
+        return retired
+
+    def retire_embedded_worktree_scripts(self) -> list[str]:
+        """The 1.1.14 shared-script swap: the two per-skill embedded script
+        directories are retired (recoverable backup) and the single shared
+        runtime script arrives via the release scaffold."""
+        retired = []
+        for name in ("ph-worktree-enter", "ph-worktree-exit"):
+            embedded = self.repo / ".agents" / "skills" / name / "scripts"
+            if embedded.is_dir():
+                self.trash_move(embedded)
+                retired.append(f".agents/skills/{name}/scripts/")
+        if retired:
+            self.mutations.append("retire embedded worktree scripts: " + ", ".join(retired))
+        return retired
+
+    def install_speckit(self) -> None:
+        """speckit-core-integration: copy the real pinned-generation install
+        (ten ph-* skills plus .specify) from the shared seed, mirroring the
+        Claude adapters in this case's adapter mode. The workflow-engine
+        assets are absent from the seed by contract."""
+        seed = _speckit_seed.ensure_seed()
+        copied = []
+        for name in SPECKIT_TARGET_SKILLS:
+            self._sync_tree(
+                self.repo / ".agents" / "skills" / name,
+                seed / ".agents" / "skills" / name,
+                None,
+            )
+            copied.append(f".agents/skills/{name}")
+            self.rebuild_mirrors(name)
+        changed_specify = self._sync_tree(self.repo / ".specify", seed / ".specify", None)
+        if changed_specify:
+            copied.append(".specify/")
+        self.mutations.append(
+            f"install pinned spec-kit generation: {len(SPECKIT_TARGET_SKILLS)} ph-* skills, "
+            ".specify shared infrastructure (official generator output, ph-renamed; "
+            "workflow-engine assets excluded)"
+        )
+
+    def ensure_constitution_override(self) -> None:
+        """constitution-governance-zone: render the PH constitution governance
+        override from the seeded upstream skeleton and write it as the
+        priority-1 project template (existing copies with the PH marker are
+        refreshed; the file keeps its recoverable backup semantics)."""
+        import ph_speckit
+        seed = _speckit_seed.ensure_seed()
+        contract = ph_speckit.speckit_contract()
+        data = ph_speckit.render_constitution_override(self.repo, seed, contract)
+        dest = self.repo / ph_speckit.CONSTITUTION_OVERRIDE_REL
+        if dest.is_file() and dest.read_bytes() == data:
+            return
+        if dest.exists() or dest.is_symlink():
+            if not dest.is_file():
+                raise AssertionError(f"constitution override destination is not a regular file: {dest}")
+            self.trash_move(dest)
+            self.mutations.append(f"backup+refresh {ph_speckit.CONSTITUTION_OVERRIDE_REL}")
+        else:
+            self.mutations.append(f"create {ph_speckit.CONSTITUTION_OVERRIDE_REL}")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+
+    def record_speckit_baselines(self) -> None:
+        """The speckit install records per-file content baselines into
+        .agents/ph.json (the ownership proof the next upgrade compares a
+        differing file against); simulate that manifest write too."""
+        import ph_speckit
+        ph_speckit.cmd_record_baselines(self.repo, None)
+        self.mutations.append("record speckit per-file content baselines into .agents/ph.json")
+
+    def migrate_intents_to_spec(self) -> str:
+        """intent-to-spec: run the real prepared migration script, not a twin.
+
+        The script's own dry-run plan must report no conflicts, and every
+        spec-eligible entry must come out of this one invocation.
+        """
+        script = self.prepared.root / "scripts" / "ph_merge_update.py"
+        proc = must_run(
+            sys.executable, str(script), "migrate-intents", "--repo", str(self.repo),
+            timeout=300,
+        )
+        planned = json.loads(proc.stdout)
+        assert not planned["conflicts"], f"intent-to-spec plan reported conflicts: {planned['conflicts']}"
+        applied = must_run(
+            sys.executable, str(script), "migrate-intents", "--repo", str(self.repo), "--apply",
+            timeout=300,
+        )
+        payload = json.loads(applied.stdout)
+        assert payload["conflicts"] == [], f"intent-to-spec apply reported conflicts: {payload['conflicts']}"
+        assert not payload["source_updated"], f"intent-to-spec apply reported source drift: {payload['source_updated']}"
+        eligible = {
+            f"docs/意图/待办/新特性/{FEATURE_NAME}",
+            f"docs/意图/实施/问题记录/{STARTED_NAME}",
+            f"docs/意图/实施/新特性/{DELIVERED_NAME}",
+        }
+        # The ledger's entries are the authoritative outcome; the script's own
+        # generated/restored/skipped spec lists must cover exactly them.
+        ledger = json.loads(
+            (self.repo / "specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8")
+        )
+        covered_sources = {e["source"] for e in ledger["entries"]}
+        assert covered_sources == eligible, f"intent-to-spec covered {covered_sources} != the fixture entries {eligible}"
+        covered_specs = {e["spec"] for e in ledger["entries"]}
+        assert covered_specs == set(payload["generated"]) | set(payload["restored"]) | set(payload["skipped"]), (
+            f"intent-to-spec script outcome {payload} != ledger specs {covered_specs}"
+        )
+        self.mutations.append(
+            f"intent-to-spec: {len(covered_specs)} specs migrated, "
+            f"{len(payload['history_only'])} entries history-only"
+        )
+        return payload
+
     def ensure_schema(self):
         self.ensure_scaffold(".agents/ph.schema.json")
 
@@ -1294,6 +1520,16 @@ def _make_handler(item_id):
             engine.ensure_skill(name)
         for name in spec.get("retire", ()):
             extra.extend(engine.retire_skill(name))
+        for name in spec.get("retire_managed", ()):
+            extra.extend(engine.retire_managed_skill(name))
+        if spec.get("embedded_scripts"):
+            extra.extend(engine.retire_embedded_worktree_scripts())
+        if spec.get("speckit"):
+            engine.install_speckit()
+        if spec.get("constitution"):
+            engine.ensure_constitution_override()
+        if spec.get("intent_spec"):
+            engine.migrate_intents_to_spec()
         if spec.get("payload"):
             engine.ensure_payload()
         if spec.get("agents"):
@@ -1375,10 +1611,15 @@ def _make_handler(item_id):
             assert not legacy_dir.exists(), f"{legacy_dir} still exists but the item reported no work"
             facts.append(f"docs/意图/{spec['entries']}/ 不存在，无存量条目需要迁移（已核对）")
         if spec.get("skills"):
+            # Skills the 1.1.14 target no longer ships (retired helpers still
+            # listed by older hops' scopes) are tolerated: their hop installed
+            # them legitimately and the 1.1.14 retirement item (a later hop)
+            # removes them; the final assertions verify the retired state.
             missing = [n for n in spec["skills"]
-                       if not (engine.repo / ".agents" / "skills" / n / "SKILL.md").is_file()]
+                       if n not in RETIRED_TARGET_SKILLS
+                       and not (engine.repo / ".agents" / "skills" / n / "SKILL.md").is_file()]
             assert not missing, f"scoped skills missing after merge: {missing}"
-            facts.append(f"范围内 {len(spec['skills'])} 个 Skill 已在位且与发行根一致（已核对）")
+            facts.append(f"范围内 {len(spec['skills'])} 个 Skill 状态已核对（在位或待后续退役项处理）")
         synced_docs = [rel for rel in spec.get("docs", []) if rel not in engine.preserved]
         preserved_docs = [rel for rel in spec.get("docs", []) if rel in engine.preserved]
         for rel in synced_docs:
@@ -1767,6 +2008,13 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             self.assertTrue(evidence and evidence.strip(), f"empty evidence for {item['id']}")
             item["status"] = status
             item["evidence"] = evidence
+        if "speckit-core-integration" in item_ids:
+            # The real ph_speckit install writes the per-file content baselines
+            # into .agents/ph.json once everything (skills, .specify, and the
+            # constitution override from the later item) is on disk; the
+            # fixture mirrors that manifest write exactly once, after the
+            # item loop, because verify pins the recorded baselines.
+            engine.record_speckit_baselines()
         if "tool-neutral-adapters" in item_ids:
             self.assertIsNotNone(
                 engine.codex_seen,
@@ -1875,7 +2123,17 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         self.assertEqual(manifest["template_version"], CURRENT)
         self.assertNotIn("schema_version", manifest)
         self.assertEqual(manifest["adapter_mode"], mode)
-        self.assertEqual(manifest["skills"]["required_names"], list(prepared.required_skills))
+        self.assertEqual(
+            manifest["skills"]["required_names"],
+            list(prepared.required_skills) + list(SPECKIT_TARGET_SKILLS),
+        )
+        speckit_section = manifest["speckit"]
+        self.assertEqual(speckit_section["commit"], _speckit_seed.contract()["commit"])
+        self.assertEqual(
+            speckit_section["skills"],
+            {name: f"speckit-{name[3:]}" for name in SPECKIT_TARGET_SKILLS},
+        )
+        self.assertEqual(manifest["canonical"]["scripts"], ".agents/scripts")
         self.assertEqual(manifest["project_note"], "升级矩阵注入的项目备注：必须在 finalize 后逐字节保留。")
         schema = json.loads((repo / ".agents" / "ph.schema.json").read_text(encoding="utf-8"))
         self.assertEqual(
@@ -1883,7 +2141,32 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         )
         self.assertEqual(schema["$id"], "urn:ph:schema:project-harness")
         skills = sorted(p.name for p in (repo / ".agents" / "skills").iterdir() if p.is_dir())
-        self.assertEqual(skills, sorted(set(prepared.required_skills)))
+        self.assertEqual(
+            skills,
+            sorted(set(prepared.required_skills) | set(SPECKIT_TARGET_SKILLS)),
+        )
+        for name in sorted(RETIRED_TARGET_SKILLS):
+            self.assertFalse((repo / ".agents" / "skills" / name).exists(),
+                             f"retired skill still installed: {name}")
+            self.assertFalse((repo / ".claude" / "skills" / name).exists(),
+                             f"retired Claude mirror still installed: {name}")
+        for name in ("ph-worktree-enter", "ph-worktree-exit"):
+            self.assertFalse((repo / ".agents" / "skills" / name / "scripts").exists(),
+                             f"embedded worktree script dir must be retired: {name}")
+        self.assertTrue((repo / ".specify" / "memory" / "constitution.md").is_file())
+        self.assertFalse((repo / ".specify" / "workflows").exists(),
+                         "workflow-engine assets must not be installed")
+        override = repo / ".specify" / "templates" / "overrides" / "constitution-template.md"
+        self.assertTrue(override.is_file())
+        override_text = override.read_text(encoding="utf-8")
+        self.assertIn("## PH 管理区：本仓库约束规范导航", override_text)
+        # The links are written for the MATERIALIZED location (upstream copies
+        # the override to .specify/memory/constitution.md), so they are
+        # resolved from there, not from the override's own deeper directory.
+        materialized_base = repo / ".specify" / "memory"
+        for link in [line for line in override_text.splitlines() if "](../../docs/" in line]:
+            target = (materialized_base / link.split("](", 1)[1].split(")", 1)[0]).resolve()
+            self.assertTrue(target.is_file(), f"broken constitution link: {link}")
         for name in OLD_ALIASES:
             for base in (".agents", ".claude", ".codex"):
                 self.assertFalse((repo / base / "skills" / name).exists(), f"legacy alias still live: {base}/skills/{name}")
@@ -1904,7 +2187,7 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         else:
             self.assertEqual(os.readlink(root_entry), ".agents/AGENTS.md")
             self.assertEqual(os.readlink(claude_entry), ".agents/AGENTS.md")
-        for name in prepared.required_skills:
+        for name in (*prepared.required_skills, *SPECKIT_TARGET_SKILLS):
             adapter = repo / ".claude" / "skills" / name
             if mode == "portable":
                 self.assertTrue(adapter.is_dir() and not adapter.is_symlink(),
@@ -2002,6 +2285,7 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             f"实施/问题记录/{STARTED_NAME}",
             f"实施/新特性/{DELIVERED_NAME}",
             f"已废弃/新特性/{DROPPED_NAME}",
+            "历史索引.md",
         }
         intent_files = {
             p.relative_to(repo / "docs" / "意图").as_posix()
@@ -2011,6 +2295,53 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             rel[len("docs/意图/"):] for rel in prepared.scaffold_files if rel.startswith("docs/意图/")
         }
         self.assertEqual(intent_files, scaffold_intent | expected_extras)
+        # 5b) intent-to-spec: the ledger maps exactly the three spec-eligible
+        # fixture entries to their deterministic specs; the dropped entry and
+        # every interview stay history-only; originals are byte-identical
+        # (proven by source_sha256 matching the on-disk bytes); the generated
+        # specs carry no fabricated plan/tasks artifacts; and the feature
+        # pointer was never created or rewritten by the migration.
+        ledger = json.loads((repo / "specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8"))
+        self.assertEqual(ledger["schema"], "ph.intent-ledger/1")
+        self.assertEqual(ledger["specs_root"], "specs")
+        by_source = {e["source"]: e for e in ledger["entries"]}
+        self.assertEqual(set(by_source), {
+            f"docs/意图/待办/新特性/{FEATURE_NAME}",
+            f"docs/意图/实施/问题记录/{STARTED_NAME}",
+            f"docs/意图/实施/新特性/{DELIVERED_NAME}",
+        })
+        for source, entry in by_source.items():
+            source_path = repo / source
+            self.assertEqual(
+                hashlib.sha256(source_path.read_bytes()).hexdigest(), entry["source_sha256"],
+                f"migrated intent original drifted: {source}",
+            )
+            spec_path = repo / entry["spec"]
+            self.assertTrue(spec_path.is_file(), f"ledger spec missing: {entry['spec']}")
+            self.assertEqual(hashlib.sha256(spec_path.read_bytes()).hexdigest(), entry["spec_sha256"])
+        self.assertEqual({e["source"] for e in ledger["history_only"]}, {
+            f"docs/意图/已废弃/新特性/{DROPPED_NAME}",
+        })
+        for entry in ledger["entries"]:
+            spec_text = (repo / entry["spec"]).read_text(encoding="utf-8")
+            self.assertIn(entry["intent_id"], spec_text)
+            # The fixture entries carry none of the four legacy sections, so
+            # every section must be an explicit NEEDS CLARIFICATION, never a
+            # fabricated requirement row.
+            self.assertEqual(spec_text.count("NEEDS CLARIFICATION: 原意图没有「"), 4, spec_text)
+            self.assertNotIn("FR-001", spec_text)
+            self.assertNotIn("SC-001", spec_text)
+            spec_dir = (repo / entry["spec"]).parent
+            self.assertEqual(
+                {p.name for p in spec_dir.iterdir()}, {"spec.md"},
+                f"no plan/tasks artifacts may be generated: {spec_dir}",
+            )
+        history_index = (repo / "docs" / "意图" / "历史索引.md").read_text(encoding="utf-8")
+        for name in (FEATURE_NAME, STARTED_NAME, DELIVERED_NAME, DROPPED_NAME):
+            self.assertIn(name, history_index)
+        self.assertIn("唯一后续维护位置", history_index)
+        self.assertIn("select-intent-spec", history_index)
+        self.assertFalse((repo / ".specify" / "feature.json").exists())
         pending_index_path = repo / "docs" / "意图" / "待办" / "新特性" / "README.md"
         block = INDEX_CUSTOM_BLOCK.encode("utf-8")
         final_index = pending_index_path.read_bytes()
@@ -2125,6 +2456,23 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
                     if semver_tuple(version) < (1, 1, 8):
                         with self.assertRaisesRegex(module.PHReleaseError, "missing schema_version"):
                             module.prepare_release(CURRENT, **kwargs)
+                    elif semver_tuple(version) < (1, 1, 14):
+                        # 1.1.8-1.1.13 entries cannot directly prepare 1.1.14:
+                        # the 1.1.14 design deliberately splits the skill list
+                        # into 4 scaffold skills (release.json
+                        # required_skills) plus 10 generated spec-kit skills
+                        # (manifest required_names, never scaffold content),
+                        # while every published pre-1.1.14 validator pins
+                        # manifest names == required_skills exactly. The
+                        # sanctioned bootstrap is documented in the
+                        # ph-merge-update skill: clone the v1.1.14 tag itself
+                        # into a safe out-of-repo directory and run that
+                        # tree's prepare (its own validators accept the
+                        # release and write the receipt).
+                        with self.assertRaisesRegex(
+                            module.PHReleaseError, "skills.required_names mismatch"
+                        ):
+                            module.prepare_release(CURRENT, **kwargs)
                     else:
                         downloaded = module.prepare_release(CURRENT, **kwargs)
                         self.assertEqual(downloaded.version, CURRENT)
@@ -2166,21 +2514,35 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             support = Mock(side_effect=AssertionError("unexpected GitHub support action"))
             if hasattr(module, "offer_official_support"):
                 module.offer_official_support = support
-            downloaded = module.prepare_release(
-                CURRENT,
-                transport=LocalTransport(self.prepared.source, expected=module.FIXED_SOURCE),
-                parent=self.workspace / "pre-rename-118-handoff",
-                offer_support=False,
-            )
+            # 1.1.14 deliberately splits the skill list (4 scaffold + 10
+            # generated), while every pre-1.1.14 validator pins manifest
+            # names == release.json required_skills exactly, so the 1.1.8
+            # entry cannot prepare this release; assert the documented
+            # rejection (same as the handoff test) and bootstrap via the
+            # sanctioned v1.1.14-tag-clone path: the current tool's own
+            # prepare against the same synthetic source, addressed by the
+            # historical FIXED_SOURCE URL the way a 1.1.8-era clone would be.
+            with self.assertRaisesRegex(module.PHReleaseError, "skills.required_names mismatch"):
+                module.prepare_release(
+                    CURRENT,
+                    transport=LocalTransport(self.prepared.source, expected=module.FIXED_SOURCE),
+                    parent=self.workspace / "pre-rename-118-handoff",
+                    offer_support=False,
+                )
             support.assert_not_called()
         finally:
             sys.modules.pop(name, None)
+        downloaded = prepared_ph_release(self.prepared.root).prepare_release(
+            CURRENT,
+            transport=LocalTransport(self.prepared.source, expected=ph_release.DOWNLOAD_SOURCE),
+            parent=self.workspace / "pre-rename-118-handoff",
+            offer_support=False,
+        )
         self.assertEqual(downloaded.version, CURRENT)
         self.assertEqual(downloaded.tag, f"v{CURRENT}")
         self.assertEqual(downloaded.commit, self.prepared.commit)
-        self.assertEqual(downloaded.source, module.FIXED_SOURCE)
         old_target = PreparedTarget.from_prepared(
-            downloaded, origin="prepared by the historical 1.1.8 downloader (old source URL)"
+            downloaded, origin="bootstrapped by the current tool (v1.1.14-tag clone path)"
         )
         for case in cases:
             with self.subTest(mode=case["mode"]):

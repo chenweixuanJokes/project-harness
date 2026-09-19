@@ -71,7 +71,13 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("新的仓外安全目录", self.skill)
         self.assertIn("不覆盖用户级入口与目标项目", self.skill)
         self.assertIn("prepare --version 1.1.8", self.skill)
-        self.assertIn("目标 `1.1.14` 发行根", self.skill)
+        # 1.1.8-1.1.13 entries cannot prepare 1.1.14 directly: the documented
+        # bootstrap path clones the published v1.1.14 tag out-of-repo and lets
+        # its own validator write the receipt
+        self.assertIn("入口无法直接准备 1.1.14", self.skill)
+        self.assertIn("把 v1.1.14 标签本身 clone 到新的仓外安全目录", self.skill)
+        self.assertIn("prepare --version 1.1.14", self.skill)
+        self.assertIn("固定的 1.1.14 发行根", self.skill)
         # old schema_version field is removed only after finalize passes
         self.assertIn("仅在 finalize", self.skill)
 
@@ -82,11 +88,15 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotIn("转交", self.skill)
         self.assertNotIn("转 merge-update", self.skill)
 
-    def test_docs_sync_routed_away_from_init(self):
-        # ph-docs-sync is a separate skill: check-only doc verification, not init
-        self.assertIn("ph-docs-sync", self.skill)
-        self.assertIn("文档与代码一致性核验", self.skill)
-        self.assertIn("检查默认只读", self.skill)
+    def test_retired_skills_routed_away_from_init(self):
+        # The 1.1.14 retirement removed the old helper skills; init no longer
+        # references them and pins the spec-kit install instead.
+        for retired in ("ph-docs-sync", "ph-sure", "ph-intent-verify",
+                        "ph-memory-capture", "ph-intent-impl"):
+            self.assertNotIn(retired, self.skill)
+        self.assertIn("ph_speckit.py", self.skill)
+        self.assertIn("ph-specify", self.skill)
+        self.assertIn("ph-taskstoissues", self.skill)
 
     def test_mode_default_auto_for_new_installs(self):
         mode_lines = [line for line in self.skill.splitlines() if "--mode" in line]
@@ -125,14 +135,23 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn(".claude/skills/", self.skill)
         self.assertIn("原生读取 `.agents/skills`", self.skill)
 
-    def test_thirteen_distributed_skills_share_strict_frontmatter_subset(self):
+    def test_distributed_skills_share_strict_frontmatter_subset(self):
         release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
         required = release["required_skills"]
-        self.assertEqual(len(required), 13)
-        self.assertIn("ph-docs-sync", required)
-        self.assertIn("ph-intent-verify", required)
-        self.assertIn("ph-sure", required)
-        # the root SKILL.md is the ph-init slot; the other twelve live in scaffold
+        # 1.1.14 ships four PH scaffold skills; the ten spec-driven skills are
+        # generated from the pinned upstream release at install time and are
+        # therefore not scaffold content.
+        self.assertEqual(sorted(required), [
+            "ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
+        ])
+        # the spec-kit list's single maintenance source is the top-level
+        # contract file: release.json must not carry a second copy of it
+        contract = json.loads((ROOT / "speckit.json").read_text(encoding="utf-8"))
+        self.assertEqual(contract["schema"], "ph.speckit-contract/1")
+        self.assertNotIn("speckit", release)
+        speckit_names = [f"ph-{core}" for core in contract["skills"]]
+        self.assertEqual(len(speckit_names), 10)
+        # the root SKILL.md is the ph-init slot; the other three live in scaffold
         slots = {
             "ph-init": ROOT / "SKILL.md",
             **{
@@ -147,6 +166,11 @@ class SkillContractTests(unittest.TestCase):
             if child.is_dir()
         )
         self.assertEqual(scaffold_dirs, sorted(name for name in required if name != "ph-init"))
+        for name in speckit_names:
+            self.assertFalse(
+                (SCAFFOLD / ".agents" / "skills" / name).exists(),
+                f"spec-kit skill {name} must not be scaffold content",
+            )
         for name, path in sorted(slots.items()):
             with self.subTest(skill=name):
                 self.assertTrue(path.is_file(), f"missing skill file for {name}")
@@ -322,10 +346,15 @@ class EntryPointsTests(unittest.TestCase):
         self.assertNotIn("保留原位", self.agents)
         self.assertIn(".agents/archived", self.agents)
 
-    def test_canonical_agents_skill_table_registers_docs_sync(self):
-        self.assertIn("十三名固定", self.agents)
-        self.assertIn("ph-docs-sync", self.agents)
-        self.assertIn("只读", self.agents)
+    def test_canonical_agents_skill_table_registers_both_sources(self):
+        # The 1.1.14 skill table distinguishes PH scaffold skills from the ten
+        # renamed spec-kit skills and carries the explicit-invocation gate.
+        self.assertIn("十四名固定", self.agents)
+        self.assertIn("ph-specify", self.agents)
+        self.assertIn("GitHub Spec Kit", self.agents)
+        self.assertIn("明确点名", self.agents)
+        self.assertNotIn("ph-docs-sync", self.agents)
+        self.assertNotIn("ph-sure", self.agents)
 
 
 class EvalsCoverageTests(unittest.TestCase):

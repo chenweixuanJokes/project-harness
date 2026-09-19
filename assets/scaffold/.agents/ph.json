@@ -8,7 +8,8 @@
     "manifest": ".agents/ph.json",
     "schema": ".agents/ph.schema.json",
     "memory": ".agents/memory",
-    "skills": ".agents/skills"
+    "skills": ".agents/skills",
+    "scripts": ".agents/scripts"
   },
   "adapters": {
     "root_agents": {
@@ -60,18 +61,37 @@
     "root": ".agents/skills",
     "required_names": [
       "ph-init",
+      "ph-merge-update",
       "ph-worktree-enter",
       "ph-worktree-exit",
-      "ph-memory-capture",
-      "ph-memory-archive",
-      "ph-memory-ask",
-      "ph-intent-new",
-      "ph-intent-impl",
-      "ph-intent-verify",
-      "ph-intent-drop",
-      "ph-merge-update",
-      "ph-docs-sync",
-      "ph-sure"
+      "ph-analyze",
+      "ph-checklist",
+      "ph-clarify",
+      "ph-constitution",
+      "ph-converge",
+      "ph-implement",
+      "ph-plan",
+      "ph-specify",
+      "ph-tasks",
+      "ph-taskstoissues"
     ]
+  },
+  "speckit": {
+    "repository": "https://github.com/github/spec-kit.git",
+    "tag": "v1.0.8",
+    "commit": "0cc9a6a1159471a3108b9bad718ba17006dd6039",
+    "version": "1.0.8",
+    "skills": {
+      "ph-analyze": "speckit-analyze",
+      "ph-checklist": "speckit-checklist",
+      "ph-clarify": "speckit-clarify",
+      "ph-constitution": "speckit-constitution",
+      "ph-converge": "speckit-converge",
+      "ph-implement": "speckit-implement",
+      "ph-plan": "speckit-plan",
+      "ph-specify": "speckit-specify",
+      "ph-tasks": "speckit-tasks",
+      "ph-taskstoissues": "speckit-taskstoissues"
+    }
   }
 }

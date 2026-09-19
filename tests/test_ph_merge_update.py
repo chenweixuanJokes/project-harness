@@ -26,6 +26,10 @@ if str(SCRIPTS) not in sys.path:
 import ph_init  # noqa: E402
 import ph_merge_update  # noqa: E402
 import ph_release  # noqa: E402
+import ph_speckit  # noqa: E402
+if str(REPO_ROOT / "tests") not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT / "tests"))
+import _speckit_seed  # noqa: E402
 
 TRASH_ROOT = Path.home() / "trash"
 FIXED_SOURCE = ph_merge_update.FIXED_SOURCE
@@ -35,6 +39,7 @@ TARGET_SKILLS = list(TARGET_SKILLS_TUPLE)
 BASE_SKILLS = list(ph_merge_update.BASE_SKILLS)
 OLD_ALIASES = list(ph_merge_update.OLD_ALIASES)
 NEW_INTENT = list(ph_merge_update.NEW_INTENT)
+RETIRED_SKILLS = list(ph_merge_update.RETIRED_SKILLS)
 CHAIN_110 = [
     "intent-skill-names",
     "intent-lifecycle",
@@ -64,14 +69,16 @@ CHAIN_110 = [
     "explicit-invocation-rules",
     "intent-verify-skill",
     "worktree-wip-confirm",
-    "intent-verify-acceptance-contract",
-    "sure-skill",
+    "retire-legacy-skills",
+    "speckit-core-integration",
+    "constitution-governance-zone",
+    "intent-to-spec",
 ]
 CHAIN_100 = ["intent-domain", *CHAIN_110]
 CHAIN_111 = CHAIN_110[6:]  # everything after the 1.1.0 -> 1.1.1 hop
-CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract", "sure-skill"]
-CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract", "sure-skill"]
-CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract", "sure-skill"]
+CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec"]
+CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec"]
+CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec"]
 CHAIN_112 = [
     "init-docs-workflow",
     "docs-guidance",
@@ -95,6 +102,39 @@ def copy_tree(src: Path, dest: Path) -> None:
 
 
 class MergeUpdateTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # One real pinned-generation spec-kit install (cache or network),
+        # shared by every fixture: it simulates the Agent-executed
+        # speckit-core-integration migration item, whose artifacts the
+        # upgrade verify/finalize steps require on disk.
+        cls._speckit_seed = _speckit_seed.ensure_seed()
+
+    def seed_speckit(self, repo: Path) -> None:
+        """Copy the real pinned-generation artifacts into the fixture.
+
+        The real `ph_speckit.py install --apply` also renders the constitution
+        override for THIS repo (its navigation zone references this repo's
+        docs/约束规范, so the seed's own override does not fit) and records
+        the per-file content baselines into .agents/ph.json (the ownership
+        proof the next upgrade compares a differing file against)."""
+        src = self._speckit_seed
+        for name in ph_init.SPECKIT_SKILL_NAMES:
+            copy_tree(src / ".agents/skills" / name, repo / ".agents/skills" / name)
+        copy_tree(src / ".specify", repo / ".specify")
+        scripts = repo / ".agents" / "scripts"
+        scripts.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(
+            REPO_ROOT / "assets/scaffold/.agents/scripts/ph_worktree.py",
+            scripts / "ph_worktree.py",
+        )
+        contract = ph_speckit.speckit_contract()
+        staging = ph_speckit.resolve_staging(None, contract)
+        override = repo / ph_speckit.CONSTITUTION_OVERRIDE_REL
+        override.parent.mkdir(parents=True, exist_ok=True)
+        override.write_bytes(ph_speckit.render_constitution_override(repo, staging, contract))
+        ph_speckit.cmd_record_baselines(repo, None)
+
     def setUp(self):
         self._temps = []
         self.receipt_patch = None
@@ -203,6 +243,43 @@ class MergeUpdateTests(unittest.TestCase):
                 else:
                     self.write_skill(repo, name)
 
+    def apply_114_migration(self, repo: Path) -> None:
+        """Simulate the Agent-executed 1.1.14 semantic merge steps on disk.
+
+        The retirement item archives the retired skills out of the managed
+        install (mirrors included) and the speckit item installs the ten
+        upstream skills plus the .specify shared infrastructure.
+        """
+        for name in set(RETIRED_SKILLS) | {"ph-sure"}:
+            for rel in (
+                Path(".agents") / "skills" / name,
+                Path(".claude") / "skills" / name,
+            ):
+                target = repo / rel
+                if target.exists() and not target.is_symlink():
+                    shutil.rmtree(target)
+                elif target.is_symlink() or target.exists():
+                    target.unlink()
+        # the tool-neutral adapters item (1.1.9) archived .codex before the
+        # retirement item runs, so the post-merge state has no .codex left
+        codex_root = repo / ".codex"
+        if codex_root.exists():
+            shutil.rmtree(codex_root)
+        self.seed_speckit(repo)
+
+    def apply_speckit_with_retire_na(self, repo: Path) -> None:
+        """The 1.1.8-era codex tests keep the retired skills canonical (the
+        codex mirror archive compares against them), so the retirement item
+        stays not_applicable while the spec-kit item is applied."""
+        state_path = self.update_dir(repo) / "state.json"
+        state = json.loads(state_path.read_text(encoding="utf-8"))
+        for item in state["items"]:
+            if item["id"] == "retire-legacy-skills":
+                item["status"] = "not_applicable"
+                item["evidence"] = "codex-archive scenario: canonical kept for mirror comparison"
+        self.write_json(state_path, state)
+        self.seed_speckit(repo)
+
     def seed_legacy_names(self, repo: Path) -> None:
         for name in BASE_SKILLS + OLD_ALIASES:
             self.write_skill(repo, name)
@@ -296,6 +373,11 @@ class MergeUpdateTests(unittest.TestCase):
         dest.mkdir(parents=True, exist_ok=True)
         self.write_json(dest / "state.json", data)
         (dest / "report.md").write_text("# report\nkept project_fact\n", encoding="utf-8")
+        if "intent-to-spec" in ids:
+            # The mandatory migration item's on-disk artifacts (ledger,
+            # migrated specs, history index) are part of the applied state the
+            # verify gate checks; produce them the way the real item does.
+            ph_merge_update.migrate_intents_payload(repo, True)
         return data
 
     def invoke(self, *argv):
@@ -349,8 +431,9 @@ class MergeUpdateTests(unittest.TestCase):
                                "tool-neutral-adapters", "repository-rename", "docs-sync-skill",
                                "current-branch-defaults", "adopt-mode-docs",
                                "question-execution-contract", "explicit-invocation-rules",
-                               "intent-verify-skill", "worktree-wip-confirm", "intent-verify-acceptance-contract",
-                               "sure-skill"])
+                               "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills",
+                               "speckit-core-integration", "constitution-governance-zone",
+                               "intent-to-spec"])
         state = self.write_state(repo, from_version="1.1.2", items=ids)
         before_manifest = manifest_path.read_bytes()
         for status in ("pending", "blocked"):
@@ -378,16 +461,16 @@ class MergeUpdateTests(unittest.TestCase):
             ph_merge_update.inspect_payload(repo)
 
     def fixture_110_current(self, mode="portable"):
+        """The post-merge state: the four scaffold skills plus the ten
+        spec-kit skills the Agent-executed migration items installed."""
         repo = self.git_repo(f"ph-merge-{mode}-")
-        names = BASE_SKILLS + NEW_INTENT + ["ph-merge-update"]
-        self.write_manifest(repo, mode=mode, names=names)
+        names = list(ph_init.ALL_REQUIRED_SKILL_NAMES)
+        self.write_manifest(repo, mode=mode, names=BASE_SKILLS + NEW_INTENT + ["ph-merge-update"])
         self.write_agents(repo)
         self.seed_target_skills(repo)
+        self.seed_speckit(repo)
         self.write_intent_layout(repo, in_progress=True)
-        # Adapters mirror every live canonical skill: these fixtures model the
-        # post-merge state where all target skills (ph-docs-sync included)
-        # are installed with byte-identical copies.
-        self.seed_adapters(repo, mode, TARGET_SKILLS)
+        self.seed_adapters(repo, mode, names)
         self.seed_gitignore(repo)
         return repo
 
@@ -404,8 +487,11 @@ class MergeUpdateTests(unittest.TestCase):
         )
         self.write_agents(repo)
         self.seed_target_skills(repo)
+        for name in names:
+            if not (repo / ".agents" / "skills" / name / "SKILL.md").is_file():
+                self.write_skill(repo, name)
         self.write_intent_layout(repo, in_progress=True)
-        self.seed_adapters(repo, mode, TARGET_SKILLS)
+        self.seed_adapters(repo, mode, names + list(ph_init.SPECKIT_SKILL_NAMES))
         self.seed_gitignore(repo)
         return repo
 
@@ -416,9 +502,14 @@ class MergeUpdateTests(unittest.TestCase):
         self.write_manifest(repo, mode=mode, version="1.1.9", names=names)
         self.write_agents(repo)
         self.seed_target_skills(repo)
+        # 1.1.9-1.1.13 installs carried the docs-sync and intent-verify
+        # skills on top of the base ten; materialize them for realism.
+        for name in (*names, "ph-docs-sync", "ph-intent-verify"):
+            if not (repo / ".agents" / "skills" / name / "SKILL.md").is_file():
+                self.write_skill(repo, name)
         self.write_intent_layout(repo, in_progress=True)
         # 1.1.9 installs carry no codex adapters (tool-neutral topology).
-        self.seed_adapters(repo, mode, TARGET_SKILLS, codex=False)
+        self.seed_adapters(repo, mode, names, codex=False)
         self.seed_gitignore(repo)
         return repo
 
@@ -441,10 +532,15 @@ class MergeUpdateTests(unittest.TestCase):
                 self.assertEqual(manifest_path.read_bytes(), old_bytes, "inspect must stay read-only")
 
                 state = self.write_state(repo, from_version=from_version, items=chain_ids)
+                self.apply_114_migration(repo)
+                # The simulated Agent-executed migration items legitimately
+                # rewrote the manifest (speckit install records the per-file
+                # content baselines); from here on nothing may change it.
+                post_merge_bytes = manifest_path.read_bytes()
                 verified = ph_merge_update.verify_payload(repo)
                 self.assertTrue(verified["ok"])
                 self.assertEqual(verified["from"], from_version)
-                self.assertEqual(manifest_path.read_bytes(), old_bytes, "verify must stay read-only")
+                self.assertEqual(manifest_path.read_bytes(), post_merge_bytes, "verify must stay read-only")
                 self.assertEqual((repo / ".agents" / "AGENTS.md").read_bytes(), agents_bytes)
 
                 old = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -454,7 +550,7 @@ class MergeUpdateTests(unittest.TestCase):
                 self.assertNotIn("schema_version", cand)
                 self.assertNotIn("codex_skills", cand["adapters"])
                 self.assertEqual(cand["template_version"], CURRENT)
-                self.assertEqual(cand["skills"]["required_names"], TARGET_SKILLS)
+                self.assertEqual(cand["skills"]["required_names"], list(ph_init.ALL_REQUIRED_SKILL_NAMES))
                 self.assertEqual(cand["project_note"], "keep-user-field")
                 self.assertEqual(cand["worktree"], old["worktree"])
                 self.assertEqual(cand["memory"], old["memory"])
@@ -464,14 +560,14 @@ class MergeUpdateTests(unittest.TestCase):
                 result = ph_merge_update.finalize_payload(repo, False)
                 self.assertFalse(result["apply"])
                 self.assertFalse(result["complete"])
-                self.assertEqual(manifest_path.read_bytes(), old_bytes)
+                self.assertEqual(manifest_path.read_bytes(), post_merge_bytes)
 
                 # a pending migration item blocks apply and never falsely completes
                 state["items"][-1]["status"] = "pending"
                 self.write_json(self.update_dir(repo) / "state.json", state)
                 with self.assertRaises(ph_init.PHError):
                     ph_merge_update.finalize_payload(repo, True)
-                self.assertEqual(manifest_path.read_bytes(), old_bytes)
+                self.assertEqual(manifest_path.read_bytes(), post_merge_bytes)
                 self.assertEqual(
                     json.loads((self.update_dir(repo) / "state.json").read_text())["status"],
                     "in_progress",
@@ -486,7 +582,7 @@ class MergeUpdateTests(unittest.TestCase):
                 self.assertNotIn("codex_skills", written["adapters"])
                 self.assertEqual(written["template_version"], CURRENT)
                 self.assertEqual(written["project_note"], "keep-user-field")
-                self.assertEqual(written["skills"]["required_names"], TARGET_SKILLS)
+                self.assertEqual(written["skills"]["required_names"], list(ph_init.ALL_REQUIRED_SKILL_NAMES))
                 self.assertEqual(written["worktree"], old["worktree"])
                 self.assertEqual(written["memory"], old["memory"])
                 self.assertIn("keep-me", (repo / ".agents" / "AGENTS.md").read_text(encoding="utf-8"))
@@ -505,6 +601,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.install_receipt()
         repo = self.fixture_at_119()
         custom = repo / ".agents/skills/ph-docs-sync/SKILL.md"
+        custom.parent.mkdir(parents=True, exist_ok=True)
         custom_body = (
             "---\nname: ph-docs-sync\ndescription: team custom sync flow\n---\n"
             "# our own sync skill\n项目自建同步流程，升级不得覆盖。\n"
@@ -529,6 +626,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.install_receipt()
         repo = self.fixture_at_119()
         custom = repo / ".agents/skills/ph-docs-sync/SKILL.md"
+        custom.parent.mkdir(parents=True, exist_ok=True)
         custom_body = (
             "---\nname: ph-docs-sync\ndescription: team custom sync flow\n---\n"
             "# our own sync skill\n项目自建同步流程，升级不得覆盖。\n"
@@ -547,6 +645,9 @@ class MergeUpdateTests(unittest.TestCase):
         dest.mkdir(parents=True, exist_ok=True)
         self.write_json(dest / "state.json", state)
         (dest / "report.md").write_text("# report\ndocs-sync-skill blocked\n", encoding="utf-8")
+        # the state marks intent-to-spec applied; its on-disk artifacts are
+        # part of that state and precede the retirement gate in verify
+        ph_merge_update.migrate_intents_payload(repo, True)
 
         with self.assertRaises(ph_init.PHError) as ctx:
             ph_merge_update.verify_payload(repo)
@@ -563,9 +664,9 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(json.loads((dest / "state.json").read_text())["status"], "in_progress")
         self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
 
-        # Marking the blocked item applied while the custom skill stays in
-        # place must not pass verify: the installed skill has to match the
-        # release bytes during the 1.1.10 upgrade.
+        # Marking every item applied while the custom skill stays in place
+        # must not pass verify either: the retirement gate rejects the live
+        # retired skill even when the byte pin no longer applies to it.
         for item in state["items"]:
             item["status"] = "applied"
             item["evidence"] = "fixture already contains the target skill defaults"
@@ -574,7 +675,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.write_json(dest / "state.json", state)
         with self.assertRaises(ph_init.PHError) as ctx:
             ph_merge_update.verify_payload(repo)
-        self.assertIn("does not match the release skill", str(ctx.exception))
+        self.assertIn("retired skills still live", str(ctx.exception))
         self.assertEqual(manifest_path.read_bytes(), before)
         self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
 
@@ -596,6 +697,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(inspected["from"], "1.1.9")
         self.assertEqual([i["id"] for i in inspected["suggested_state"]["items"]], CHAIN_119)
         self.write_state(repo, from_version="1.1.9", items=CHAIN_119)
+        self.apply_114_migration(repo)
         verified = ph_merge_update.verify_payload(repo)
         self.assertTrue(verified["ok"])
 
@@ -604,23 +706,19 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(result["from"], "1.1.9")
         written = json.loads((repo / ".agents/ph.json").read_text(encoding="utf-8"))
         self.assertEqual(written["template_version"], CURRENT)
-        self.assertIn("ph-docs-sync", written["skills"]["required_names"])
+        self.assertNotIn("ph-docs-sync", written["skills"]["required_names"])
         self.assertEqual(written["adapter_mode"], "portable")
-        # the upgrade installs the skill and never syncs business documents
-        skill = repo / ".agents/skills/ph-docs-sync"
-        self.assertTrue((skill / "SKILL.md").is_file())
-        self.assertEqual(
-            (skill / "SKILL.md").read_bytes(),
-            (SCAFFOLD / ".agents/skills/ph-docs-sync/SKILL.md").read_bytes(),
-        )
-        self.assertTrue((repo / ".claude/skills/ph-docs-sync/SKILL.md").is_file())
+        # the 1.1.10 hop installed docs-sync, but the 1.1.14 retirement item
+        # removed it again from the managed install (mirrors included)
+        self.assertFalse((repo / ".agents/skills/ph-docs-sync").exists())
+        self.assertFalse((repo / ".claude/skills/ph-docs-sync").exists())
         self.assertEqual(wiki.read_bytes(), wiki_bytes)
         self.assertEqual(governance.read_bytes(), governance_bytes)
-        # the upgraded repo's own installer discovers the new required skill
+        # the upgraded repo's own installer validates the fourteen-skill layout
         installed = repo / ".agents/skills/ph-init/scripts/ph_init.py"
         proc = run([sys.executable, str(installed), "check", "--repo", str(repo)])
         self.assertIn("status=ok", proc.stdout, proc.stdout)
-        self.assertIn(".agents/skills/ph-docs-sync/SKILL.md", proc.stdout)
+        self.assertIn(".agents/skills/ph-analyze/SKILL.md", proc.stdout)
         # repeated runs stay idempotent
         self.assertTrue(ph_merge_update.inspect_payload(repo)["up_to_date"])
         again = ph_merge_update.finalize_payload(repo, True)
@@ -654,10 +752,11 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(self.tree_snapshot(repo), before)
         self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
 
-    def test_intent_verify_install_pinned_to_release_bytes(self):
-        # Marking intent-verify-skill applied while a drifted same-name skill
-        # stays in place must not pass verify: the installed skill has to
-        # match the release bytes during the 1.1.13 upgrade.
+    def test_retired_intent_verify_blocks_verify_while_live(self):
+        # Marking retire-legacy-skills applied while a retired
+        # ph-intent-verify skill stays in place must not pass verify: since
+        # 1.1.14 the retirement item requires the skill to be gone from the
+        # managed install instead of matching a release scaffold copy.
         self.install_receipt()
         repo = self.fixture_at_119()
         custom = repo / ".agents/skills/ph-intent-verify/SKILL.md"
@@ -675,11 +774,14 @@ class MergeUpdateTests(unittest.TestCase):
         dest = self.update_dir(repo)
         dest.mkdir(parents=True, exist_ok=True)
         self.write_json(dest / "state.json", state)
-        (dest / "report.md").write_text("# report\nintent-verify-skill applied\n", encoding="utf-8")
+        (dest / "report.md").write_text("# report\nretire-legacy-skills applied\n", encoding="utf-8")
+        # applied intent-to-spec carries its on-disk artifacts with it
+        ph_merge_update.migrate_intents_payload(repo, True)
 
         with self.assertRaises(ph_init.PHError) as ctx:
             ph_merge_update.verify_payload(repo)
-        self.assertIn("installed ph-intent-verify does not match the release skill", str(ctx.exception))
+        self.assertIn("retired skills still live", str(ctx.exception))
+        self.assertIn("ph-intent-verify", str(ctx.exception))
         # a failing verify never advances the version or rewrites the state
         self.assertEqual(manifest_path.read_bytes(), before)
         self.assertEqual(
@@ -687,39 +789,35 @@ class MergeUpdateTests(unittest.TestCase):
         )
         self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
 
-        # Installing the genuine release skill unblocks verify and finalize;
-        # afterwards project customization of the skill is free.
-        custom.write_text(
-            (SCAFFOLD / ".agents/skills/ph-intent-verify/SKILL.md").read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
+        # Executing the retirement item removes the retired skill (custom
+        # content included) and unblocks verify and finalize; the release
+        # contract never lists the retired name again.
+        self.apply_114_migration(repo)
         verified = ph_merge_update.verify_payload(repo)
         self.assertTrue(verified["ok"])
         result = ph_merge_update.finalize_payload(repo, True)
         self.assertTrue(result["complete"])
         written = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertIn("ph-intent-verify", written["skills"]["required_names"])
-        self.assertEqual(
-            (repo / ".agents/skills/ph-intent-verify/SKILL.md").read_bytes(),
-            (SCAFFOLD / ".agents/skills/ph-intent-verify/SKILL.md").read_bytes(),
-        )
+        self.assertNotIn("ph-intent-verify", written["skills"]["required_names"])
+        self.assertFalse(custom.exists())
         installed_check = run([sys.executable,
                                str(repo / ".agents/skills/ph-init/scripts/ph_init.py"),
                                "check", "--repo", str(repo)])
         self.assertIn("status=ok", installed_check.stdout, installed_check.stdout)
-        self.assertIn(".agents/skills/ph-intent-verify/SKILL.md", installed_check.stdout)
 
-    def test_sure_same_name_custom_skill_blocks_inspect(self):
-        # ph-sure arrives with 1.1.14: a live same-named directory on a 1.1.9
-        # project is project content and must block instead of being
-        # overwritten (same contract as the 1.1.10/1.1.13 protections).
+    def test_retired_sure_skill_is_not_a_release_skill(self):
+        # ph-sure never shipped and 1.1.14 retires it: a live same-named
+        # directory is retired project content, inspect stays read-only and
+        # does not name it as a scaffold conflict, and the executed
+        # retirement item removes it together with the other retired skills.
         self.install_receipt()
         repo = self.fixture_at_119()
         custom = repo / ".agents/skills/ph-sure/SKILL.md"
         custom_body = (
             "---\nname: ph-sure\ndescription: team custom wrap-up checks\n---\n"
-            "# our own sure skill\n项目自建收尾核查，升级不得覆盖。\n"
+            "# our own sure skill\n项目自建收尾核查，升级按退役语义处理。\n"
         )
+        custom.parent.mkdir(parents=True, exist_ok=True)
         custom.write_text(custom_body, encoding="utf-8")
         before = self.tree_snapshot(repo)
 
@@ -727,23 +825,23 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(inspected["from"], "1.1.9")
         self.assertEqual(inspected["to"], CURRENT)
         self.assertEqual(inspected["profile"], "1.1.0-current-names")
-        self.assertTrue(
+        self.assertFalse(
             any("ph-sure" in conflict for conflict in inspected["conflicts"]),
             inspected["conflicts"],
         )
-        self.assertFalse(inspected["can_finalize"])
         # inspect stays read-only and the custom body survives byte-for-byte
         self.assertEqual(self.tree_snapshot(repo), before)
         self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
 
-    def test_sure_install_pinned_to_release_bytes(self):
-        # Marking sure-skill applied while a drifted same-name skill stays in
-        # place must not pass verify: the installed skill has to match the
-        # release bytes during the 1.1.14 upgrade.
+    def test_retired_sure_skill_blocks_verify_while_live(self):
+        # Marking retire-legacy-skills applied while a live ph-sure (the
+        # unshipped draft sibling) stays in place must not pass verify: the
+        # retirement item requires it gone from the managed install.
         self.install_receipt()
         repo = self.fixture_at_119()
         custom = repo / ".agents/skills/ph-sure/SKILL.md"
         custom_body = "---\nname: ph-sure\ndescription: drift\n---\n# drifted sure skill\n"
+        custom.parent.mkdir(parents=True, exist_ok=True)
         custom.write_text(custom_body, encoding="utf-8")
         manifest_path = repo / ".agents/ph.json"
         before = manifest_path.read_bytes()
@@ -757,11 +855,14 @@ class MergeUpdateTests(unittest.TestCase):
         dest = self.update_dir(repo)
         dest.mkdir(parents=True, exist_ok=True)
         self.write_json(dest / "state.json", state)
-        (dest / "report.md").write_text("# report\nsure-skill applied\n", encoding="utf-8")
+        (dest / "report.md").write_text("# report\nretire-legacy-skills applied\n", encoding="utf-8")
+        # applied intent-to-spec carries its on-disk artifacts with it
+        ph_merge_update.migrate_intents_payload(repo, True)
 
         with self.assertRaises(ph_init.PHError) as ctx:
             ph_merge_update.verify_payload(repo)
-        self.assertIn("installed ph-sure does not match the release skill", str(ctx.exception))
+        self.assertIn("retired skills still live", str(ctx.exception))
+        self.assertIn("ph-sure", str(ctx.exception))
         # a failing verify never advances the version or rewrites the state
         self.assertEqual(manifest_path.read_bytes(), before)
         self.assertEqual(
@@ -769,27 +870,20 @@ class MergeUpdateTests(unittest.TestCase):
         )
         self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
 
-        # Installing the genuine release skill unblocks verify and finalize;
-        # afterwards project customization of the skill is free.
-        custom.write_text(
-            (SCAFFOLD / ".agents/skills/ph-sure/SKILL.md").read_text(encoding="utf-8"),
-            encoding="utf-8",
-        )
+        # Executing the retirement item removes the live ph-sure and
+        # unblocks verify and finalize; required_names never gains it.
+        self.apply_114_migration(repo)
         verified = ph_merge_update.verify_payload(repo)
         self.assertTrue(verified["ok"])
         result = ph_merge_update.finalize_payload(repo, True)
         self.assertTrue(result["complete"])
         written = json.loads(manifest_path.read_text(encoding="utf-8"))
-        self.assertIn("ph-sure", written["skills"]["required_names"])
-        self.assertEqual(
-            (repo / ".agents/skills/ph-sure/SKILL.md").read_bytes(),
-            (SCAFFOLD / ".agents/skills/ph-sure/SKILL.md").read_bytes(),
-        )
+        self.assertNotIn("ph-sure", written["skills"]["required_names"])
+        self.assertFalse(custom.exists())
         installed_check = run([sys.executable,
                                str(repo / ".agents/skills/ph-init/scripts/ph_init.py"),
                                "check", "--repo", str(repo)])
         self.assertIn("status=ok", installed_check.stdout, installed_check.stdout)
-        self.assertIn(".agents/skills/ph-sure/SKILL.md", installed_check.stdout)
 
     def test_upgrade_from_118_worktree_and_tool_neutral(self):
         self.install_receipt()
@@ -810,37 +904,33 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(manifest_path.read_bytes(), before)
         # Portable mirrors are byte-identical to the canonical skills here, so
         # inspect classifies every live codex adapter as retirable.
+        historical_names = sorted(BASE_SKILLS + NEW_INTENT + ["ph-merge-update"])
         self.assertEqual(
             sorted(i["name"] for i in inspected["codex_retirement"]["retirable"]),
-            sorted(TARGET_SKILLS),
+            historical_names,
         )
         self.assertEqual(inspected["codex_retirement"]["blocked"], [])
 
         self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+        self.apply_114_migration(repo)
         verified = ph_merge_update.verify_payload(repo)
         self.assertTrue(verified["ok"])
-        self.assertEqual(
-            sorted(verified["codex_retirement"]["retirable"]),
-            sorted(TARGET_SKILLS),
-        )
+        # the simulated Agent phase already archived the whole .codex tree
+        self.assertEqual(verified["codex_retirement"]["retirable"], [])
         result = ph_merge_update.finalize_payload(repo, True)
         self.assertTrue(result["complete"])
         archived = {i["name"] for i in result["retired_codex"]}
-        self.assertEqual(archived, set(TARGET_SKILLS))
+        self.assertEqual(archived, set())
         self.assertTrue(all(i["result"] == "archived" for i in result["retired_codex"]))
         written = json.loads(manifest_path.read_text(encoding="utf-8"))
         self.assertEqual(written["template_version"], CURRENT)
         self.assertNotIn("schema_version", written)
         self.assertNotIn("codex_skills", written["adapters"])
         self.assertEqual(ph_merge_update.codex_leftover_names(repo), [])
-        # pre-upgrade mirrors stay recoverable inside the project archive
-        archived_dir = self.archived_codex_dir(repo)
-        self.assertIsNotNone(archived_dir)
-        for name in TARGET_SKILLS:
-            self.assertTrue((archived_dir / name / "SKILL.md").is_file(), name)
-        self.assertFalse((archived_dir / "my-tool").exists())
-        # non-ph content under .codex/skills is never touched
-        self.assertEqual((my_tool / "SKILL.md").read_text(encoding="utf-8"), "# my-tool\nuser-owned\n")
+        # the simulated Agent phase removed the whole .codex tree during the
+        # tool-neutral retirement, so finalize has no mirror left to archive
+        self.assertFalse((repo / ".codex").exists())
+        self.assertIsNone(self.archived_codex_dir(repo))
 
     def test_codex_symlink_leftovers_archive_and_finalize_is_idempotent(self):
         self.install_receipt()
@@ -849,6 +939,7 @@ class MergeUpdateTests(unittest.TestCase):
         my_tool.mkdir(parents=True, exist_ok=True)
         (my_tool / "SKILL.md").write_text("# my-tool\n", encoding="utf-8")
         self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+        self.apply_speckit_with_retire_na(repo)
 
         result = ph_merge_update.finalize_payload(repo, True)
         self.assertTrue(result["complete"])
@@ -890,6 +981,7 @@ class MergeUpdateTests(unittest.TestCase):
         drifted = repo / ".codex" / "skills" / "ph-intent-new" / "SKILL.md"
         drifted.write_bytes(drifted.read_bytes() + b"\nuser customization\n")
         self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+        self.apply_speckit_with_retire_na(repo)
         before = self.tree_snapshot(repo)
 
         inspected = ph_merge_update.inspect_payload(repo)
@@ -929,6 +1021,7 @@ class MergeUpdateTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+        self.apply_speckit_with_retire_na(repo)
 
         verdict, reason = ph_merge_update.classify_codex_leftover(repo, "ph-intent-new")
         self.assertEqual(verdict, "retire")
@@ -969,6 +1062,7 @@ class MergeUpdateTests(unittest.TestCase):
         for label, repo in cases.items():
             with self.subTest(case=label):
                 self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+                self.apply_speckit_with_retire_na(repo)
                 before = self.tree_snapshot(repo)
                 with self.assertRaises(ph_init.PHError) as ctx:
                     ph_merge_update.verify_payload(repo)
@@ -983,6 +1077,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.install_receipt()
         repo = self.fixture_at_version("1.1.8")
         self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+        self.apply_speckit_with_retire_na(repo)
         # A previous interrupted run archived everything, then the entry reappeared.
         ph_merge_update.retire_codex_adapters(repo)
         archived = self.archived_codex_dir(repo) / "ph-intent-new"
@@ -1000,9 +1095,14 @@ class MergeUpdateTests(unittest.TestCase):
         self.install_receipt()
         repo = self.fixture_at_version("1.1.8")
         self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+        self.apply_speckit_with_retire_na(repo)
         # Simulate a crash after the retirement pass but before sync/write.
         first_pass = ph_merge_update.retire_codex_adapters(repo)
-        self.assertEqual({i["name"] for i in first_pass}, set(TARGET_SKILLS))
+        # The .codex mirror predates the spec-kit install, so the archived
+        # adapters are exactly the historical PH skills, not the four-name
+        # release contract of 1.1.14.
+        historical = set(BASE_SKILLS + NEW_INTENT + ["ph-merge-update"])
+        self.assertEqual({i["name"] for i in first_pass}, historical)
         archived_dir = self.archived_codex_dir(repo)
 
         result = ph_merge_update.finalize_payload(repo, True)
@@ -1018,6 +1118,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.install_receipt()
         repo = self.fixture_at_version("1.1.8", mode="symlink")
         self.write_state(repo, from_version="1.1.8", items=CHAIN_118)
+        self.apply_speckit_with_retire_na(repo)
         skills_dir = repo / ".codex" / "skills"
 
         # Interruption right between persisting the archive record and
@@ -1071,7 +1172,14 @@ class MergeUpdateTests(unittest.TestCase):
         state = json.loads((self.update_dir(repo) / "state.json").read_text())
         self.assertEqual(state["status"], "complete")
         audited = {i["name"]: i for i in state["retired_codex"]}
-        self.assertEqual(set(audited), set(TARGET_SKILLS))
+        # Symlink adapters exist for every seeded name regardless of when the
+        # canonical target appeared, so the audit covers the historical PH
+        # skills plus the ten spec-kit skills the speckit item installed.
+        self.assertEqual(
+            set(audited),
+            set(BASE_SKILLS + NEW_INTENT + ["ph-merge-update"])
+            | set(ph_init.SPECKIT_SKILL_NAMES),
+        )
         for name, item in audited.items():
             self.assertEqual(
                 item["dest"],
@@ -1091,10 +1199,11 @@ class MergeUpdateTests(unittest.TestCase):
 
     def test_completed_repo_with_live_codex_leftovers_is_blocked(self):
         repo = self.git_repo("ph-merge-stale-codex-")
-        names = TARGET_SKILLS
+        names = list(ph_init.ALL_REQUIRED_SKILL_NAMES)
         self.write_manifest(repo, version=CURRENT, names=names)
         self.write_agents(repo)
         self.seed_target_skills(repo)
+        self.seed_speckit(repo)
         self.write_intent_layout(repo)
         # A repo already at CURRENT must not keep live codex adapters around.
         self.seed_adapters(repo, "portable", names, codex=True)
@@ -1104,7 +1213,10 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertIn("still live", str(ctx.exception))
         with self.assertRaises(ph_init.PHError):
             ph_merge_update.finalize_payload(repo, True)
-        self.assertEqual(ph_merge_update.codex_leftover_names(repo), sorted(TARGET_SKILLS))
+        self.assertEqual(
+            ph_merge_update.codex_leftover_names(repo),
+            sorted(ph_init.ALL_REQUIRED_SKILL_NAMES),
+        )
         self.assertIsNone(self.archived_codex_dir(repo))
 
     def test_candidate_whitelist_only_allows_schema_and_codex_removal(self):
@@ -1262,7 +1374,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertFalse(data["apply"])
         self.assertFalse(data["complete"])
         self.assertEqual(
-            sorted(data["codex_retirement"]["retirable"]), sorted(TARGET_SKILLS)
+            sorted(data["codex_retirement"]["retirable"]), sorted(TARGET_SKILLS + list(ph_init.SPECKIT_SKILL_NAMES))
         )
         self.assertEqual((repo / ".agents" / "ph.json").read_bytes(), before)
         self.assertIn("keep-me", (repo / ".agents" / "AGENTS.md").read_text(encoding="utf-8"))
@@ -1290,7 +1402,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertNotIn("codex_skills", written["adapters"])
         self.assertEqual(written["adapter_mode"], "portable")
         self.assertEqual(written["project_note"], "keep-user-field")
-        self.assertEqual(written["skills"]["required_names"], TARGET_SKILLS)
+        self.assertEqual(written["skills"]["required_names"], list(ph_init.ALL_REQUIRED_SKILL_NAMES))
         self.assertEqual(json.loads((self.update_dir(repo) / "state.json").read_text())["status"], "complete")
         self.assertIn("keep-me", (repo / ".agents" / "AGENTS.md").read_text(encoding="utf-8"))
         self.assertEqual(ph_merge_update.codex_leftover_names(repo), [])
@@ -1384,7 +1496,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(cand["adapter_mode"], "portable")
         self.assertIn("claude_skills", cand["adapters"])
         self.assertNotIn("codex_skills", cand["adapters"])  # tool-neutral candidate
-        self.assertEqual(cand["skills"]["required_names"], TARGET_SKILLS)
+        self.assertEqual(cand["skills"]["required_names"], list(ph_init.ALL_REQUIRED_SKILL_NAMES))
         self.assertEqual(cand["template_version"], CURRENT)
         self.assertNotIn("schema_version", cand)
         self.assertEqual(data["template_version"], "1.1.0")
@@ -1398,6 +1510,9 @@ class MergeUpdateTests(unittest.TestCase):
         self.write_manifest(repo, version="1.0.0", names=names)
         self.write_agents(repo)
         self.seed_target_skills(repo)
+        for name in names:
+            if not (repo / ".agents" / "skills" / name / "SKILL.md").is_file():
+                self.write_skill(repo, name)
         self.write_intent_layout(repo)
         code, out, err = self.invoke("inspect", "--repo", str(repo))
         self.assertEqual(code, 0, err)
@@ -1409,10 +1524,11 @@ class MergeUpdateTests(unittest.TestCase):
 
     def test_inspect_complete_target_is_up_to_date(self):
         repo = self.git_repo("ph-merge-current-")
-        names = TARGET_SKILLS
+        names = list(ph_init.ALL_REQUIRED_SKILL_NAMES)
         self.write_manifest(repo, version=CURRENT, names=names)
         self.write_agents(repo)
         self.seed_target_skills(repo)
+        self.seed_speckit(repo)
         self.write_intent_layout(repo)
         # A fresh CURRENT install carries no codex adapters at all.
         self.seed_adapters(repo, "portable", names, codex=False)
@@ -1463,6 +1579,8 @@ class MergeUpdateTests(unittest.TestCase):
         repo = self.fixture_110_current()
         self.install_receipt()
         self.write_state(repo)
+        for name in NEW_INTENT:
+            self.write_skill(repo, name)
         self.write_skill(repo, "ph-intent-capture")
         code, _out, err = self.invoke("verify", "--repo", str(repo))
         self.assertEqual(code, 2)
