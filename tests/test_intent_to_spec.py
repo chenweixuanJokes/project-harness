@@ -536,7 +536,12 @@ created: "2026-08-01"
         self.migrate(apply=True)
         ledger_path = self.repo / mu.INTENT_LEDGER_REL
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
-        ledger["entries"].append(dict(ledger["entries"][0], spec="specs/INTENT-INT-20260901-LOGIN/spec.md"))
+        variant = "specs/INTENT-INT-20260901-LOGIN/spec.md"
+        variant_path = self.repo / variant
+        if not variant_path.exists():
+            variant_path.parent.mkdir(parents=True)
+            variant_path.write_bytes((self.repo / ledger["entries"][0]["spec"]).read_bytes())
+        ledger["entries"].append(dict(ledger["entries"][0], spec=variant))
         ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         with self.assertRaises(mu.PHError) as caught:
             mu.verify_intent_spec_layout(self.repo)

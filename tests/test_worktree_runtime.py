@@ -46,6 +46,8 @@ class RuntimeFixture(unittest.TestCase):
     # ---------- fixture plumbing ----------
 
     def tearDown(self):
+        if not TRASH.is_dir():
+            return  # Hosts without a system trash retain fixtures in the temp directory.
         for workspace in self.workspaces:
             if workspace.exists():
                 workspace.rename(
