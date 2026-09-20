@@ -6,6 +6,13 @@
 
 尚未打过历史 tag。`1.0.0` 与两套 `1.1.0` 命名是可追溯提交，不是已发布 tag。首个正式 tag 是 `v1.1.1`，不追认 `v1.1.0`。
 
+## 1.1.15
+
+- 统一 Spec Kit 安装与验证的完整受管文件清单，缺失运行依赖或共享文件基准时阻断；即使内容相同，也检查软链接、硬链接及目录占用。
+- 基准重建拒绝待安装或未转换的文件，冲突时保留 manifest 与模板；独立宪法刷新在写入前检查 manifest。
+- CLI 将 blocked 和验证失败转换为非零退出码，避免外部脚本误判成功。
+- 迁移项 `speckit-integrity-gates` 更新运行工具并验证完整性，保留项目自定义、意图、Spec 与历史材料。
+
 ## 1.1.14
 
 - 技能集整体收缩与上游集成：PH 自身只保留四个必需 Skill——`ph-init`、`ph-merge-update`、`ph-worktree-enter`、`ph-worktree-exit`；九个旧受管技能（`ph-memory-capture`、`ph-memory-archive`、`ph-memory-ask`、`ph-intent-new`、`ph-intent-impl`、`ph-intent-verify`、`ph-intent-drop`、`ph-docs-sync`，含未发布草稿的 `ph-sure`）从 scaffold 与旧项目升级的受管安装移除，退役文件先备份到 `.agents/updates/<ver>/backup/`；意图（`docs/意图/`）、记忆（`.agents/memory/`）与业务 docs 结构及内容保留，规则文档改为"由代理在普通会话按本文执行"。

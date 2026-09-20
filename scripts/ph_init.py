@@ -2089,6 +2089,12 @@ def check_common(report: Report, repo: Path, *, candidate: dict | None = None) -
             report.add("error", rel, "spec-kit shared infrastructure missing")
         else:
             report.add("ok", rel, "present (spec-kit)")
+    try:
+        verification = run_speckit("verify", "--repo", str(repo))
+        if not verification.get("ok"):
+            report.add("error", ".specify", "; ".join(verification.get("problems") or ["spec-kit verification failed"]))
+    except PHError as exc:
+        report.add("error", ".specify", str(exc))
     script = repo / ".agents" / "scripts" / "ph_worktree.py"
     if not script.is_file():
         report.add("error", ".agents/scripts/ph_worktree.py", "shared worktree script missing")

@@ -29,7 +29,7 @@ PH 面向多种编码客户端：约束与技能的正式存放位置（canonica
 
 ## 唯一源与准备
 
-正式源只有 `https://github.com/chenweixuanJokes/project-harness.git`。官方仓库由 `ph-init` 更名而来，产品名 Project Harness；技能名与安装路径不随仓库名变化，仍是 `ph-init` 与 `ph-*`。旧地址 `https://github.com/chenweixuanJokes/ph-init.git` 经 GitHub 重定向指向同一仓库：1.1.8 及以后入口按旧地址 prepare 也能取到新包，不是错误；`FIXED_SOURCE` 等固定标识与 `release.json.repository`、`receipt.source`、`state.source.repository` 在 1.x 保留旧地址的兼容含义，存量值不改写、不当作错误。`latest` 取数值最大的稳定 tag（排除预发布与非版本标签），并固定到该 tag 的 commit。本批版本为 `1.1.14`（四个 PH 必需 Skill 加十个上游规格技能）。PH 只有这一个版本号：不再有独立的 Schema 版本，发行包与项目清单都不携带 `schema_version` 字段，schema 标识固定为无版本的 `urn:ph:schema:project-harness`；`template_version` 仍表示项目已完成升级的 PH 版本。
+正式源只有 `https://github.com/chenweixuanJokes/project-harness.git`。官方仓库由 `ph-init` 更名而来，产品名 Project Harness；技能名与安装路径不随仓库名变化，仍是 `ph-init` 与 `ph-*`。旧地址 `https://github.com/chenweixuanJokes/ph-init.git` 经 GitHub 重定向指向同一仓库：1.1.8 及以后入口按旧地址 prepare 也能取到新包，不是错误；`FIXED_SOURCE` 等固定标识与 `release.json.repository`、`receipt.source`、`state.source.repository` 在 1.x 保留旧地址的兼容含义，存量值不改写、不当作错误。`latest` 取数值最大的稳定 tag（排除预发布与非版本标签），并固定到该 tag 的 commit。本批版本为 `1.1.15`（四个 PH 必需 Skill 加十个上游规格技能）。PH 只有这一个版本号：不再有独立的 Schema 版本，发行包与项目清单都不携带 `schema_version` 字段，schema 标识固定为无版本的 `urn:ph:schema:project-harness`；`template_version` 仍表示项目已完成升级的 PH 版本。
 
 ### Spec Kit 集成（固定正式版）
 

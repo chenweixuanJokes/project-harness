@@ -1,6 +1,6 @@
 {
   "$schema": "./ph.schema.json",
-  "template_version": "1.1.14",
+  "template_version": "1.1.15",
   "adapter_mode": "portable",
   "canonical": {
     "root": ".agents",

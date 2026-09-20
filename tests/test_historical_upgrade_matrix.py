@@ -147,6 +147,7 @@ RETIRED_TARGET_SKILLS = set(HISTORICAL_TWELVE_SKILLS) - set(TARGET_SCAFFOLD_SKIL
 SPECKIT_TARGET_SKILLS = tuple(f"ph-{core}" for core in _speckit_seed.contract()["skills"])
 TARGET_SKILLS = TARGET_SCAFFOLD_SKILLS  # retained name for scope-coverage reads
 LAYOUT_SKILLS = {
+    "speckit-skills": ("ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit"),
     "twelve-skills": HISTORICAL_TWELVE_SKILLS,
     "eleven-skills": HISTORICAL_ELEVEN_SKILLS,
     "six-skills": BASE_SKILLS,
@@ -155,6 +156,7 @@ LAYOUT_SKILLS = {
     "ten-skills": ("ph-init",) + CORE_NON_INIT + NEW_INTENT + ("ph-merge-update",),
 }
 LAYOUT_PROFILE = {
+    "speckit-skills": "speckit-current",
     "twelve-skills": "1.1.0-current-names",
     "eleven-skills": "1.1.0-current-names",
     "six-skills": "1.0.0",
@@ -316,7 +318,8 @@ def sources_for_version(version: str):
             "the upgrade matrix refuses to fabricate history - publish the tag or register a fixed source"
         )
     layout = (
-        "twelve-skills" if semver_tuple(version) >= (1, 1, 13)
+        "speckit-skills" if semver_tuple(version) >= (1, 1, 14)
+        else "twelve-skills" if semver_tuple(version) >= (1, 1, 13)
         else "eleven-skills" if semver_tuple(version) >= (1, 1, 10)
         else "ten-skills"
     )
@@ -524,7 +527,10 @@ class HistoricalTree:
         )
         if installed != expected:
             raise AssertionError(f"{self.ref} scaffold skills {installed} != layout {expected}")
-        if sorted(manifest["skills"]["required_names"]) != sorted(set(LAYOUT_SKILLS[self.layout])):
+        expected_names = set(LAYOUT_SKILLS[self.layout])
+        if self.layout == "speckit-skills":
+            expected_names.update(manifest["speckit"]["skills"])
+        if sorted(manifest["skills"]["required_names"]) != sorted(expected_names):
             raise AssertionError(f"{self.ref} manifest required_names does not match layout")
         release = self.root / "release.json"
         if semver_tuple(self.version) >= (1, 1, 1):
@@ -560,6 +566,7 @@ class HistoricalTree:
 # ---------------------------------------------------------------------------
 
 ENGINE_ENSURE = {
+    "speckit-integrity-gates": {"payload": True},
     "current-branch-defaults": {
         # 1.1.11 release deltas this item owns: the branch-default rules in
         # ph-intent-impl and ph-worktree-enter (SKILL.md + evals samples),
@@ -1970,12 +1977,18 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         self.assertEqual(disk_manifest["template_version"], version)
         self.assertEqual(disk_manifest.get("schema_version"), expected_schema_version(version))
         self.assertEqual(disk_manifest["adapter_mode"], mode)
-        self.assertEqual(sorted(disk_manifest["skills"]["required_names"]), sorted(set(LAYOUT_SKILLS[layout])))
+        expected_names = set(LAYOUT_SKILLS[layout])
+        if layout == "speckit-skills":
+            expected_names.update(disk_manifest["speckit"]["skills"])
+        self.assertEqual(sorted(disk_manifest["skills"]["required_names"]), sorted(expected_names))
         live = sorted(p.name for p in (repo / ".agents" / "skills").iterdir() if p.is_dir())
-        self.assertEqual(live, sorted(set(LAYOUT_SKILLS[layout])))
+        self.assertEqual(live, sorted(expected_names))
 
         # 2) Project customizations.
         custom = insert_project_customizations(repo, case)
+        if layout == "speckit-skills":
+            must_run(sys.executable, str(hist.root / "scripts/ph_merge_update.py"),
+                     "migrate-intents", "--repo", str(repo), "--apply")
 
         # 3) Current inspect: read-only, genuinely verified source, full chain.
         chain = independent_chain(prepared.index_path, version, CURRENT)

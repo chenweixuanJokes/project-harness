@@ -62,7 +62,7 @@ class DocsTemplateTests(unittest.TestCase):
 
     def test_docs_migration_keeps_single_version_contract(self):
         release = json.loads((ROOT / "release.json").read_text())
-        self.assertEqual(release["version"], "1.1.14")
+        self.assertEqual(release["version"], "1.1.15")
         self.assertNotIn("schema_version", release)  # single PH version since 1.1.8
         self.assertEqual(len(release["required_skills"]), 4)
         self.assertIn("ph-merge-update", release["required_skills"])
@@ -72,7 +72,7 @@ class DocsTemplateTests(unittest.TestCase):
         self.assertEqual(len(speckit["skills"]), 10)
         manifest = json.loads((SCAFFOLD / ".agents/ph.json").read_text())
         self.assertNotIn("schema_version", manifest)
-        self.assertEqual(manifest["template_version"], "1.1.14")
+        self.assertEqual(manifest["template_version"], release["version"])
         self.assertEqual(
             manifest["skills"]["required_names"],
             release["required_skills"] + [f"ph-{core}" for core in speckit["skills"]],

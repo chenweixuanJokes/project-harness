@@ -138,6 +138,12 @@
         "constitution-governance-zone",
         "intent-to-spec"
       ]
+    },
+    {
+      "from_version": "1.1.14",
+      "to_version": "1.1.15",
+      "path": "migrations/1.1.14-to-1.1.15.md",
+      "items": ["speckit-integrity-gates"]
     }
   ]
 }

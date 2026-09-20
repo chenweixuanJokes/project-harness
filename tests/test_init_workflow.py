@@ -57,7 +57,7 @@ class SkillContractTests(unittest.TestCase):
         cls.skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     def test_batch_version_single_ph_version_contract(self):
-        self.assertIn("本批版本为 `1.1.14`", self.skill)
+        self.assertIn("本批版本为 `1.1.15`", self.skill)
         # separate schema version is gone; 1.1.10+ release numbers must not trip the check
         self.assertNotRegex(self.skill, r"1\.1\.1(?![0-9])")
         self.assertIn("urn:ph:schema:project-harness", self.skill)

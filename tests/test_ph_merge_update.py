@@ -73,12 +73,13 @@ CHAIN_110 = [
     "speckit-core-integration",
     "constitution-governance-zone",
     "intent-to-spec",
+    "speckit-integrity-gates",
 ]
 CHAIN_100 = ["intent-domain", *CHAIN_110]
 CHAIN_111 = CHAIN_110[6:]  # everything after the 1.1.0 -> 1.1.1 hop
-CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec"]
-CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec"]
-CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec"]
+CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates"]
+CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates"]
+CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates"]
 CHAIN_112 = [
     "init-docs-workflow",
     "docs-guidance",
@@ -433,7 +434,7 @@ class MergeUpdateTests(unittest.TestCase):
                                "question-execution-contract", "explicit-invocation-rules",
                                "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills",
                                "speckit-core-integration", "constitution-governance-zone",
-                               "intent-to-spec"])
+                               "intent-to-spec", "speckit-integrity-gates"])
         state = self.write_state(repo, from_version="1.1.2", items=ids)
         before_manifest = manifest_path.read_bytes()
         for status in ("pending", "blocked"):

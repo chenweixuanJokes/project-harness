@@ -322,6 +322,91 @@ class SpecifyOwnershipTests(unittest.TestCase):
         subprocess.run(["git", "init", "-q", str(path)], check=True)
         return path
 
+    def complete_repo(self):
+        repo = self.repo("ph-integrity-")
+        (repo / ".agents").mkdir()
+        (repo / ".agents/ph.json").write_text("{}\n", encoding="utf-8")
+        self.assertFalse(ph_speckit.cmd_install(repo, True, None)["blocked"])
+        return repo
+
+    def test_every_shared_dependency_and_baseline_is_required(self):
+        repo = self.complete_repo()
+        manifest = repo / ".agents/ph.json"
+        original = manifest.read_bytes()
+        for rel in ph_speckit.SHARED_RUNTIME_RELS:
+            with self.subTest(path=rel):
+                path = repo / rel
+                saved = repo / "saved-runtime"
+                path.rename(saved)
+                self.assertFalse(ph_speckit.cmd_verify(repo)["ok"])
+                self.assertTrue(ph_speckit.cmd_record_baselines(repo, None)["blocked"])
+                self.assertEqual(manifest.read_bytes(), original)
+                saved.rename(path)
+                data = json.loads(original)
+                del data["speckit"]["files"][rel]
+                manifest.write_text(json.dumps(data), encoding="utf-8")
+                self.assertFalse(ph_speckit.cmd_verify(repo)["ok"])
+                manifest.write_bytes(original)
+
+    def test_identical_link_and_directory_block_before_reading(self):
+        repo = self.complete_repo()
+        path = repo / ".specify/scripts/bash/setup-plan.sh"
+        saved = self.temp_dir("ph-external-") / "script.sh"
+        path.rename(saved)
+        path.symlink_to(saved)
+        before = (repo / ".agents/ph.json").read_bytes()
+        self.assertTrue(ph_speckit.cmd_install(repo, True, None)["blocked"])
+        self.assertFalse(ph_speckit.cmd_verify(repo)["ok"])
+        self.assertEqual((repo / ".agents/ph.json").read_bytes(), before)
+        path.rename(saved.parent / "saved-link")
+        path.mkdir()
+        self.assertTrue(ph_speckit.cmd_install(repo, False, None)["blocked"])
+
+    def test_record_rejects_unconverted_stock_bytes(self):
+        repo = self.complete_repo()
+        rel = ".specify/templates/plan-template.md"
+        raw, _ = self.staging_template(rel)
+        (repo / rel).write_bytes(raw)
+        manifest = repo / ".agents/ph.json"
+        before = manifest.read_bytes()
+        self.assertTrue(ph_speckit.cmd_record_baselines(repo, None)["blocked"])
+        self.assertEqual(manifest.read_bytes(), before)
+
+    def test_constitution_validates_manifest_before_writing(self):
+        repo = self.complete_repo()
+        dest = repo / ph_speckit.CONSTITUTION_OVERRIDE_REL
+        dest.rename(repo / "saved-override")
+        (repo / ".agents/ph.json").write_text("{broken", encoding="utf-8")
+        with self.assertRaises(ph_init.PHError):
+            ph_speckit.cmd_constitution(repo, True, None)
+        self.assertFalse(dest.exists())
+
+    def test_installed_check_rejects_missing_runtime_and_repair_is_idempotent(self):
+        repo = self.repo("ph-public-check-")
+        from test_historical_upgrade_matrix import PreparedTarget
+        prepared = PreparedTarget(self.temp_dir("ph-check-release-"))
+        init = subprocess.run([sys.executable, str(prepared.root / "scripts/ph_init.py"), "init", "--mode", "portable", "--apply", "--repo", str(repo)], capture_output=True, text=True)
+        self.assertEqual(init.returncode, 0, init.stdout + init.stderr)
+        runtime = repo / ".specify/scripts/bash/setup-plan.sh"
+        runtime.rename(repo / "saved-runtime")
+        installed = repo / ".agents/skills/ph-init/scripts/ph_init.py"
+        def check():
+            return subprocess.run([sys.executable, str(installed), "check", "--repo", str(repo)], capture_output=True, text=True)
+        self.assertNotEqual(check().returncode, 0)
+        result = ph_speckit.cmd_install(repo, True, None)
+        self.assertFalse(result["blocked"])
+        self.assertEqual(check().returncode, 0)
+        before = {p.relative_to(repo): p.read_bytes() for root in (repo / ".specify", repo / ".agents") for p in root.rglob("*") if p.is_file() and "__pycache__" not in p.parts}
+        self.assertFalse(ph_speckit.cmd_install(repo, True, None)["blocked"])
+        self.assertEqual(before, {p: (repo / p).read_bytes() for p in before})
+
+    def test_verify_cli_failure_has_nonzero_exit(self):
+        repo = self.complete_repo()
+        (repo / ".agents/ph.json").write_text("{}", encoding="utf-8")
+        result = subprocess.run([sys.executable, str(SCRIPTS / "ph_speckit.py"), "verify", "--repo", str(repo)], capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(json.loads(result.stdout)["ok"])
+
     def staging_template(self, rel: str) -> tuple[bytes, bytes]:
         staging = ph_speckit.resolve_staging(None, self.contract)
         raw = (staging / rel).read_bytes()
