@@ -16,8 +16,9 @@ import time
 from pathlib import Path
 
 import ph_init
+import ph_layout
 from ph_init import (
-    PHError, cmd_check, cmd_sync, contained, ensure_canonical_root,
+    PHError, SPECIFY_DIR, cmd_check, cmd_sync, contained, ensure_canonical_root,
     expected_rel_link, find_repo, infer_mode, is_disallowed_reparse,
     is_git_symlink_mode, iter_files, load_repo_manifest, posix_rel,
     read_json, reject_nested_links, sha256_file,
@@ -42,10 +43,35 @@ NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
 # ph-intent-verify with 1.1.13/intent-verify-skill. ph-sure and its migration
 # item were dropped from the unreleased 1.1.14 batch when the legacy skill set
 # was retired for the spec-kit integration.)
+# The three memory skills arrive with the merged 1.1.15→1.2.1 hop (the 1.1.16
+# candidate was never published, so the arrival version is 1.2.1). Two of them
+# (ph-memory-ask/ph-memory-archive) REINTRODUCE names that PH shipped as
+# scaffold skills before 1.1.14: a live same-named directory below 1.1.14 is
+# that official historical copy (retire-legacy-skills archives it), and only a
+# live copy at 1.1.14 or later - when no PH release shipped the name - is
+# unmanaged project content and blocks the item. ph-memory-learning is a new
+# name (nothing shipped it before); ph-memory-capture's recording duty was
+# folded into learning, so capture itself is NOT re-shipped and stays retired
+# (see RETIRED_SKILLS and the capture-residual guard in
+# release_skill_name_conflicts).
 RELEASE_ONLY_SKILLS = {
     "ph-docs-sync": ("docs-sync-skill", "1.1.10"),
     "ph-intent-verify": ("intent-verify-skill", "1.1.13"),
+    "ph-memory-ask": ("memory-skills", "1.2.1"),
+    "ph-memory-learning": ("memory-skills", "1.2.1"),
+    "ph-memory-archive": ("memory-skills", "1.2.1"),
 }
+# First release at or above which a same-named memory-skill directory is
+# unmanaged project content rather than the official pre-1.1.14 copy.
+MEMORY_REINTRODUCED_FLOOR = "1.1.14"
+MEMORY_SKILL_ITEM = "memory-skills"
+# Memory names retired with 1.1.14 whose duty 1.2.1 folded elsewhere instead of
+# re-shipping them. Below MEMORY_REINTRODUCED_FLOOR a live copy is the official
+# historical scaffold skill and retire-legacy-skills archives it; at that floor
+# or later no release ever shipped the name, so a live directory is user
+# content on a PH-reserved retired name: block the memory-skills item and ask,
+# never delete silently.
+MEMORY_RETIRED_NOT_RESHIPPED = ("ph-memory-capture",)
 # The ten spec-kit skills are not scaffold content (they are generated from the
 # pinned official release at install time), so they use their own guard: a live
 # same-named directory below 1.1.14 is project content and must block the
@@ -55,7 +81,13 @@ SPECKIT_INTRODUCED = "1.1.14"
 SPECKIT_RELEASE_ITEM = "speckit-core-integration"
 # Skills retired with 1.1.14: they were scaffold skills in earlier releases, so
 # an upgrade must archive them out of the managed install (with a backup) while
-# preserving user-customized content that never belonged to PH.
+# preserving user-customized content that never belonged to PH. ph-memory-ask
+# and ph-memory-archive were reintroduced with a new contract by the 1.2.1
+# memory skills; they stay listed here so the retirement item still archives
+# the old pre-1.1.14 copies, while assert_release_skill_installs drops them
+# from the retired set (see there) because the target ships them again.
+# ph-memory-capture is NOT reintroduced (its recording duty moved into
+# ph-memory-learning), so it stays retired for every upgrade path.
 RETIRED_SKILLS = (
     "ph-memory-capture",
     "ph-memory-archive",
@@ -68,6 +100,8 @@ RETIRED_SKILLS = (
 )
 INTENT_ROOTS = ("docs/意图/待办", "docs/意图/实施")
 INTENT_KINDS = ("新特性", "问题记录")
+# 1.2.1: TARGET_FILES retired with the intent tree - target_paths() now pins
+# the project-harness home skeleton instead (see its docstring).
 TARGET_FILES = ("docs/意图/README.md", "docs/意图/_模板.md", "docs/意图/访谈纪要/_模板.md", "docs/约束规范/工程规范/意图与访谈.md", ".agents/AGENTS.md")
 CORE_PREFIXES = (
     "release.json",
@@ -86,6 +120,7 @@ PH_INIT_RUNTIME = (
     "scripts/ph_release.py",
     "scripts/ph_merge_update.py",
     "scripts/ph_speckit.py",
+    "scripts/ph_layout.py",
     "migrations/index.json",
     "assets/scaffold/.agents/ph.json",
     "assets/scaffold/.agents/ph.schema.json",
@@ -210,9 +245,10 @@ def live_skills(repo: Path) -> set[str]:
 def detect_profile(names: set[str]) -> tuple[str, list[str]]:
     base, old, new = set(BASE_SKILLS), set(OLD_ALIASES), set(NEW_INTENT)
     speckit = set(ph_init.SPECKIT_SKILL_NAMES)
-    # The 1.1.14 target layout carries the ten spec-kit skills next to the
-    # four PH skills; the retired memory skills are gone by design, so this
-    # check comes before the historical base-skill requirement.
+    # The 1.1.14+ target layout carries the ten spec-kit skills next to the PH
+    # skills (1.2.1 adds the three memory skills back); the memory skills are
+    # release-only content again, so this check comes before the historical
+    # base-skill requirement.
     if speckit <= names:
         core = names - speckit
         # A half-applied upgrade may still carry retired leftovers; only a
@@ -260,11 +296,31 @@ def release_skill_name_conflicts(names: set[str], disk_version: str, existing: d
             continue
         if semver_tuple(disk_version) >= semver_tuple(introduced):
             continue
+        if item == MEMORY_SKILL_ITEM and semver_tuple(disk_version) < semver_tuple(
+            MEMORY_REINTRODUCED_FLOOR
+        ):
+            # Below 1.1.14 PH shipped the old same-named memory skill as
+            # scaffold content: this is the official historical copy, the
+            # retire-legacy-skills item archives it, and the memory-skills
+            # item then installs the new contract. Not a customization.
+            continue
         out.append(
             f".agents/skills/{skill}: same-name directory exists below "
             f"{introduced} and no PH release ships it; treat it as project "
             f"content, keep it in place, block the {item} item, and ask "
             "the user before any replacement"
+        )
+    for skill in MEMORY_RETIRED_NOT_RESHIPPED:
+        if skill not in names or existing is not None:
+            continue
+        if semver_tuple(disk_version) < semver_tuple(MEMORY_REINTRODUCED_FLOOR):
+            continue  # official pre-1.1.14 copy; retire-legacy-skills archives it
+        out.append(
+            f".agents/skills/{skill}: retired name exists at {disk_version} and "
+            "no PH release ships it anymore (its recording duty moved into "
+            "ph-memory-learning); treat it as user content, keep it in place, "
+            f"block the {MEMORY_SKILL_ITEM} item, and ask the user to remove "
+            "or rename it before retrying"
         )
     for skill in sorted(ph_init.SPECKIT_SKILL_NAMES):
         if skill not in names or existing is not None:
@@ -509,7 +565,11 @@ def validate_state(data: dict, from_version: str, to_version: str, required: lis
         raise PHError("state.source.repository is not the fixed GitHub source")
     receipt = src.get("receipt")
     if receipt and (source.get("tag") != receipt["tag"] or source.get("commit") != receipt["commit"]):
-        raise PHError("state.source does not match source receipt")
+        raise PHError(
+            "state.source does not match source receipt: expected "
+            f"tag={receipt['tag']} commit={receipt['commit']}, got "
+            f"tag={source.get('tag')!r} commit={source.get('commit')!r}"
+        )
     items = data.get("items")
     if not isinstance(items, list) or [i.get("id") for i in items if isinstance(i, dict)] != required:
         raise PHError("state.items must list the full migration chain")
@@ -601,6 +661,10 @@ def inspect_payload(repo: Path) -> dict:
         else:
             codex_verify_check(repo, disk_version, to_version)
         raise_if_blocked(cmd_check(repo, mode), "ordinary check")
+        content = ph_layout.verify_constraints(repo, Path(__file__).resolve().parents[1])
+        if not content["ok"]:
+            conflicts.extend(content["problems"])
+            up_to_date = False
     return {
         "action": "inspect", "from": from_version, "to": to_version, "profile": profile,
         "up_to_date": up_to_date, "conflicts": conflicts, "chain": chain, "mode": mode,
@@ -611,9 +675,20 @@ def inspect_payload(repo: Path) -> dict:
 
 
 def target_paths() -> tuple[list[str], list[str]]:
-    dirs = [r for r in INTENT_ROOTS] + [f"{r}/{k}" for r in INTENT_ROOTS for k in INTENT_KINDS]
-    files = list(TARGET_FILES) + [f"{d}/README.md" for d in dirs]
-    return dirs, files
+    """1.2.1 terminal layout: the intent tree is retired, so the mandatory
+    targets are the project-harness home skeleton instead."""
+    home = ".agents/project-harness"
+    dirs = (
+        f"{home}/constraints",
+        f"{home}/documents",
+        f"{home}/memory/temporary",
+        f"{home}/memory/structured",
+        f"{home}/runtime",
+        f"{home}/specs",
+        f"{home}/archive",
+    )
+    files = (f"{home}/README.md", f"{home}/memory/README.md", f"{home}/memory/temporary/README.md", f"{home}/memory/structured/README.md")
+    return list(dirs), list(files)
 
 
 def leftover_aliases(repo: Path) -> list[str]:
@@ -641,13 +716,27 @@ def check_target_layout(repo: Path, skills: tuple[str, ...]) -> None:
         text = dest.read_text(encoding="utf-8")
         if not text.strip():
             raise PHError(f"{rel} is empty")
-        if rel == "docs/意图/_模板.md" and not re.search(
-            r'^status_dir:\s*[\"\']?待办/新特性[\"\']?\s*$', text, re.MULTILINE
-        ):
-            raise PHError(f"{rel} must default status_dir to 待办/新特性")
+
     leftover = leftover_aliases(repo)
     if leftover:
         raise PHError("old intent aliases still live: " + ", ".join(leftover))
+
+    # The active-feature pointer is the runtime scripts' entry into the specs
+    # tree: a value left at a pre-1.2.1 location (root specs/) makes every
+    # spec command silently resolve to a retired directory, so an unresolvable
+    # pointer blocks verify instead of passing as a finished upgrade.
+    feature_json = repo / ph_layout.RUNTIME / "feature.json"
+    if feature_json.is_file() and not feature_json.is_symlink():
+        try:
+            pointer = str((read_json(feature_json) or {}).get("feature_directory") or "")
+        except (ValueError, OSError):
+            raise PHError(f"{ph_layout.RUNTIME}/feature.json is not readable JSON")
+        if pointer and not pointer.startswith("/"):
+            if not (repo / pointer).is_dir():
+                raise PHError(
+                    f"{ph_layout.RUNTIME}/feature.json points at {pointer!r}, which is not a directory; "
+                    "adapt the active-feature pointer to the project-harness specs root"
+                )
 
 
 def assert_target_schema(repo: Path) -> None:
@@ -683,7 +772,7 @@ def assert_local_ph_init(repo: Path, version: str, skills: tuple[str, ...]) -> N
 # Codex and OpenCode read AGENTS.md and `.agents/skills` natively, so the
 # `.codex/skills/ph-*` mirrors are retired: verify classifies each leftover
 # against verifiable evidence, finalize --apply moves the provably managed
-# ones into `.agents/archived/<date>-pre-update/codex-skills/`, and anything
+# ones into the project-harness archive legacy-backup (<date>-pre-update/codex-skills/), and anything
 # unprovable stays in place and blocks. Non ph-* entries are never touched.
 # ---------------------------------------------------------------------------
 
@@ -868,8 +957,8 @@ def codex_verify_check(repo: Path, disk_version: str, to_version: str) -> list[s
         raise PHError(
             f"project is already at {to_version} but codex skill adapters are still live: "
             + ", ".join(f"{CODEX_SKILLS_REL}/{n}" for n in live)
-            + "; archive them under .agents/archived/<date>-pre-update/codex-skills/ or remove "
-            "them, then re-verify"
+            + "; archive them under .agents/project-harness/archive/legacy-backup/<date>-pre-update/codex-skills/ "
+            "or remove them, then re-verify"
         )
     return live
 
@@ -881,7 +970,9 @@ def codex_archive_base(repo: Path) -> Path:
     interrupted finalize already created; otherwise today's UTC date starts a
     fresh one. Other archived content is never considered or touched.
     """
-    archived = repo / ".agents" / "archived"
+    # 1.2.1 unified archive: retired adapters land under the project-harness
+    # archive, never a top-level .agents/archived directory.
+    archived = repo / ".agents" / "project-harness" / "archive" / "legacy-backup"
     if archived.is_dir() and not archived.is_symlink():
         for child in sorted(archived.iterdir()):
             if (
@@ -928,7 +1019,7 @@ def retire_codex_adapters(repo: Path) -> list[dict]:
 
     Only finalize --apply calls this: verify classifies first, every entry is
     re-classified at move time (fresh evidence against races), and each entry
-    lands under .agents/archived/<date>-pre-update/codex-skills/<name> so the
+    lands under the project-harness archive legacy-backup (<date>-pre-update/codex-skills/<name>) so the
     pre-upgrade adapter stays recoverable. Portable mirrors and degenerated
     link files are moved as-is; a live symlink cannot be moved into .agents
     (the canonical tree must stay link-free), so it is unlinked and a regular
@@ -1075,8 +1166,12 @@ def verify_speckit_layout(repo: Path) -> None:
 # ---------------------------------------------------------------------------
 
 INTENT_HISTORY_SCHEMA = "ph.intent-ledger/1"
-INTENT_SPEC_ROOT = "specs"
-INTENT_LEDGER_REL = "specs/.ph-intent-ledger.json"
+INTENT_SPEC_ROOT = ".agents/project-harness/specs"
+# 1.2.1 archives the retired intent tree under the unified archive while
+# legacy-backup keeps the pre-upgrade relative path, so an entry source like
+# docs/意图/... resolves one-to-one under this root.
+INTENT_ARCHIVE_ROOT = ".agents/project-harness/archive/legacy-backup"
+INTENT_LEDGER_REL = ".agents/project-harness/specs/.ph-intent-ledger.json"
 INTENT_HISTORY_REL = "docs/意图/历史索引.md"
 # Spec-eligible roots: the two canonical ones plus the two early-layout roots
 # (进行中/已完成), so a tree that still carries a pre-1.1.2 directory is
@@ -1322,8 +1417,8 @@ def _render_intent_history_index(rows: list[dict], ledger_rel: str) -> str:
         f"- 把某个已迁移 Spec 选为当前 feature：运行"
         f" `python3 .agents/skills/ph-init/scripts/ph_merge_update.py select-intent-spec"
         f" --repo <仓库根> --intent <intent_id>`（默认 dry-run，加 `--apply` 生效；仅当"
-        " `.specify/feature.json` 缺失或未指向其他 feature 时写入），或在 shell 中"
-        " `export SPECIFY_FEATURE_DIRECTORY=specs/<feature>`。迁移与验证从不改写已有活动 feature 指针。",
+        " `runtime/feature.json`（即 `.agents/project-harness/runtime/feature.json`）缺失或未指向其他 feature 时写入），或在 shell 中"
+        " `export SPECIFY_FEATURE_DIRECTORY=.agents/project-harness/specs/<feature>`。迁移与验证从不改写已有活动 feature 指针。",
         f"- 原文件与本索引为只读历史；映射与哈希以 `{ledger_rel}` 为准。",
         "",
         "## 已迁移为 Spec（待办 / 实施 / 早期进行中 / 已完成）",
@@ -1539,7 +1634,7 @@ def plan_intent_to_spec(repo: Path) -> dict:
             and prior_spec.startswith(f"{INTENT_SPEC_ROOT}/")
             and prior_spec.endswith("/spec.md")
         ):
-            spec_dir = posix_rel(prior_spec)[: -len("/spec.md")].split("/", 1)[1]
+            spec_dir = posix_rel(prior_spec)[len(f"{INTENT_SPEC_ROOT}/"): -len("/spec.md")]
             assigned[entry["source"]] = spec_dir
             owner_of.setdefault(spec_dir, (entry["intent_id"], entry["source"]))
     for entry in sorted(
@@ -1560,7 +1655,7 @@ def plan_intent_to_spec(repo: Path) -> dict:
         owner = by_dir.setdefault(spec_dir, entry["source"])
         if owner != entry["source"]:
             conflicts.append(
-                f"duplicate source id `{entry['intent_id']}`: {entry['source']} collides with {owner} on specs/{spec_dir}"
+                f"duplicate source id `{entry['intent_id']}`: {entry['source']} collides with {owner} on {INTENT_SPEC_ROOT}/{spec_dir}"
             )
             continue
         # Case-insensitive filesystems (macOS default) resolve specs/intent-A
@@ -1576,6 +1671,15 @@ def plan_intent_to_spec(repo: Path) -> dict:
     # The specs root and each planned feature directory must be real
     # directories: a regular file (or link) in the way used to crash the
     # apply with a bare NotADirectoryError instead of a reported conflict.
+    # 1.2.1: the legacy root-level specs/ tree must not shadow the migrated
+    # home root. Its relocation is owned by ph-home-restructure, but a
+    # directory (or link) sitting at the old root is recorded here as a
+    # relocation input so verify can prove nothing was silently dropped.
+    legacy_specs = repo / "specs"
+    if legacy_specs.is_symlink() or (legacy_specs.exists() and not legacy_specs.is_dir()):
+        conflicts.append(
+            '`specs` at the repository root is a symlink or non-directory; move it aside and re-run migrate-intents'
+        )
     specs_root = repo / INTENT_SPEC_ROOT
     if specs_root.is_symlink() or (specs_root.exists() and not specs_root.is_dir()):
         conflicts.append(
@@ -1773,14 +1877,18 @@ def verify_intent_spec_layout(repo: Path) -> None:
         source, spec = str(entry.get("source", "")), str(entry.get("spec", ""))
         if not is_safe_rel(source) or not is_safe_rel(spec):
             raise PHError(f"{INTENT_LEDGER_REL} carries an unsafe path: {source!r} / {spec!r}")
+        original = intent_original_path(repo, source)
+        if original is None:
+            raise PHError(f"migrated intent original must stay as read-only history: {source}")
         # Containment: a symlinked ancestor (specs/ -> anywhere) must never
         # let the migration artifacts resolve outside the repo.
         for rel in (INTENT_LEDGER_REL, source, spec):
             issue = ancestor_issue(repo, repo / rel)
             if issue:
                 raise PHError(f"intent-to-spec artifact escapes the repository: {issue}")
-        if not (repo / source).is_file():
-            raise PHError(f"migrated intent original must stay as read-only history: {source}")
+        issue = ancestor_issue(repo, original)
+        if issue:
+            raise PHError(f"intent-to-spec artifact escapes the repository: {issue}")
         if not (repo / spec).is_file():
             raise PHError(f"ledger spec is missing: {spec}")
         spec_dir = spec.rsplit("/", 1)[0]
@@ -1791,34 +1899,30 @@ def verify_intent_spec_layout(repo: Path) -> None:
                 f"ledger spec directories differ only by case ({owner!r} vs {spec_dir!r}); "
                 "on a case-insensitive filesystem they are the same directory"
             )
-        if sha256_file(repo / source) != entry.get("source_sha256"):
+        if sha256_file(original) != entry.get("source_sha256"):
             # The originals are read-only history: a drifted original is an
             # unreviewed change the migration never carried into the spec, and
             # it must block verify instead of being swallowed.
             drifted.append(f"{source} (recorded {str(entry.get('source_sha256'))[:12]}...)")
-    if drifted:
-        raise PHError(
-            "read-only-history originals drifted after migration; restore their bytes or re-run "
-            "migrate-intents to review the drift: " + "; ".join(drifted)
-        )
     for entry in ledger["history_only"]:
         source = str(entry.get("source", ""))
-        if not is_safe_rel(source) or not (repo / source).is_file():
+        original = intent_original_path(repo, source) if is_safe_rel(source) else None
+        if original is None:
             raise PHError(f"history-only intent original must stay as read-only history: {source!r}")
         # Same containment proof as migrated entries: a symlinked ancestor
         # must never let a history-only original resolve outside the repo.
-        issue = ancestor_issue(repo, repo / source)
+        issue = ancestor_issue(repo, original)
         if issue:
             raise PHError(f"intent-to-spec artifact escapes the repository: {issue}")
-        if sha256_file(repo / source) != entry.get("source_sha256"):
+        if sha256_file(original) != entry.get("source_sha256"):
             drifted.append(f"{source} (recorded {str(entry.get('source_sha256'))[:12]}...)")
     if drifted:
         raise PHError(
             "read-only-history originals drifted after migration; restore their bytes or re-run "
             "migrate-intents to review the drift: " + "; ".join(drifted)
         )
-    history = repo / INTENT_HISTORY_REL
-    if not history.is_file() or not history.read_text(encoding="utf-8").strip():
+    history = intent_original_path(repo, INTENT_HISTORY_REL)
+    if history is None or not history.read_text(encoding="utf-8").strip():
         raise PHError(f"{INTENT_HISTORY_REL} is missing or empty")
     issue = ancestor_issue(repo, history)
     if issue:
@@ -1833,6 +1937,23 @@ def verify_intent_spec_layout(repo: Path) -> None:
             raise PHError(
                 f"{INTENT_HISTORY_REL} must keep the migration rules: it no longer mentions {claim}"
             )
+
+
+def intent_original_path(repo: Path, source: str) -> Path | None:
+    """Resolve the read-only original of a migrated intent entry.
+
+    1.2.1 archives the retired intent tree under the unified archive while
+    legacy-backup keeps the pre-upgrade relative path, so the original
+    resolves at its live path while the tree is still in place and at the
+    archived path afterwards; neither means the read-only-history contract
+    is broken.
+    """
+
+    live = repo / source
+    if live.is_file():
+        return live
+    archived = repo / INTENT_ARCHIVE_ROOT / source
+    return archived if archived.is_file() else None
 
 
 def select_intent_spec(repo: Path, intent: str | None, spec: str | None, apply: bool) -> dict:
@@ -1877,10 +1998,10 @@ def select_intent_spec(repo: Path, intent: str | None, spec: str | None, apply: 
     feature_dir = posix_rel(spec_rel)[: -len("/spec.md")] if spec_rel.endswith("/spec.md") else posix_rel(spec_rel)
     if not (repo / feature_dir).is_dir():
         raise PHError(f"migrated feature directory is missing on disk: {feature_dir}")
-    feature_json = repo / ".specify" / "feature.json"
+    feature_json = repo / SPECIFY_DIR / "feature.json"
     result: dict = {
         "action": "select-intent-spec", "apply": apply, "intent_id": target.get("intent_id"),
-        "spec": spec_rel, "feature_directory": feature_dir, "feature_json": ".specify/feature.json",
+        "spec": spec_rel, "feature_directory": feature_dir, "feature_json": f"{SPECIFY_DIR}/feature.json",
     }
     if feature_json.is_file():
         current = read_json(feature_json).get("feature_directory")
@@ -1891,17 +2012,17 @@ def select_intent_spec(repo: Path, intent: str | None, spec: str | None, apply: 
         if apply:
             raise PHError(
                 f"refusing to overwrite the active feature pointer ({current!r}); use "
-                "SPECIFY_FEATURE_DIRECTORY or adjust .specify/feature.json by hand"
+                "SPECIFY_FEATURE_DIRECTORY or adjust runtime/feature.json (.agents/project-harness/runtime/feature.json) by hand"
             )
         result["wrote"] = False
         result["refused"] = (
             f"the active feature pointer selects {current!r}; select-intent-spec never overwrites it "
-            "(use SPECIFY_FEATURE_DIRECTORY or adjust .specify/feature.json by hand)"
+            "(use SPECIFY_FEATURE_DIRECTORY or adjust runtime/feature.json (.agents/project-harness/runtime/feature.json) by hand)"
         )
         return result
     if apply:
         _write_repo_bytes(
-            repo, ".specify/feature.json",
+            repo, f"{SPECIFY_DIR}/feature.json",
             (json.dumps({"feature_directory": feature_dir}, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
         )
         result["wrote"] = True
@@ -1953,14 +2074,29 @@ def assert_release_skill_installs(repo: Path, disk_version: str, state: dict) ->
     longer applies and later project customization of the skill is free.
     Skills that 1.1.14 retired (and their unshipped draft sibling ph-sure)
     are not pinned to a scaffold copy anymore; when the retirement item is
-    applied they must be gone from the managed install instead.
+    applied they must be gone from the managed install instead. The memory
+    skills reintroduced by the 1.2.1 target are removed from that retired
+    set (they are release-only skills again and get pinned), so a freshly
+    installed ph-memory-* directory never fails the retirement gate as a
+    leftover. ph-memory-capture is not re-shipped and stays retired, so an
+    applied retirement plus a live capture directory fails as a leftover.
     """
     statuses = {
         item.get("id"): item.get("status")
         for item in state.get("items", [])
         if isinstance(item, dict)
     }
-    retired = set(RETIRED_SKILLS) | {"ph-sure"}
+    # Retired means "must be gone when retire-legacy-skills is applied".
+    # Release-only skills the CURRENT target re-ships (the 1.2.1 memory
+    # skills) leave the retired set and rejoin the byte pin below, decided by
+    # the scaffold actually shipping the directory; skills the target no
+    # longer ships (ph-docs-sync, ph-intent-verify, ph-memory-capture) stay
+    # retired instead.
+    scaffold_skills = SOURCE_ROOT / "assets" / "scaffold" / ".agents" / "skills"
+    shipped_release_only = frozenset(
+        skill for skill in RELEASE_ONLY_SKILLS if (scaffold_skills / skill).is_dir()
+    )
+    retired = (set(RETIRED_SKILLS) | {"ph-sure"}) - shipped_release_only
     if statuses.get("retire-legacy-skills") == "applied" and semver_tuple(disk_version) < semver_tuple(
         SPECKIT_INTRODUCED
     ):
@@ -1975,7 +2111,7 @@ def assert_release_skill_installs(repo: Path, disk_version: str, state: dict) ->
                 "retire-legacy-skills is applied but retired skills still live: "
                 + ", ".join(leftovers)
             )
-    for skill in sorted(set(RELEASE_ONLY_SKILLS) - retired):
+    for skill in sorted(shipped_release_only):
         item, introduced = RELEASE_ONLY_SKILLS[skill]
         if statuses.get(item) not in ITEM_DONE:
             continue  # pending/blocked items already fail the evidence gate
@@ -2035,6 +2171,9 @@ def verify_payload(repo: Path) -> dict:
         verify_intent_spec_layout(repo)
     assert_release_skill_installs(repo, disk_version, state)
     check_target_layout(repo, skills)
+    content = ph_layout.verify_constraints(repo, Path(__file__).resolve().parents[1])
+    if not content["ok"]:
+        raise PHError("project constraints are incomplete: " + "; ".join(content["problems"]))
     assert_target_schema(repo)
     assert_local_ph_init(repo, to_version, skills)
     live_codex = codex_verify_check(repo, disk_version, to_version)

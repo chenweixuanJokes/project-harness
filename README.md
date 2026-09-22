@@ -97,7 +97,11 @@ git clone https://github.com/chenweixuanJokes/project-harness.git ~/.agents/skil
 
 ## 文档
 
-- [初始化与文档整理](./assets/scaffold/docs/约束规范/工程规范/初始化与文档补全.md)
+- [初始化与文档整理](./references/接入规范.md)
 - [版本升级说明](./migrations/README.md)
 - [技能与命令参考](./SKILL.md)
 - [贡献者：维护与发布要求](./docs/约束规范/工程规范/版本与合并升级.md)
+
+## Spec Kit 随包分发
+
+PH 发行包保存基于固定官方版本的十个规格驱动技能和完整运行依赖。用户安装、升级不再访问官方 Spec Kit 或运行官方生成器；维护者按需引入上游，见 [维护说明](references/Spec-Kit维护.md)。技能默认落实项目测试规范，不新增验收入口；实际测试结果记录在功能目录的 verification.md。

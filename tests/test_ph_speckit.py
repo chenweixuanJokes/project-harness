@@ -31,6 +31,7 @@ if str(REPO_ROOT / "tests") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "tests"))
 
 import ph_init  # noqa: E402
+import ph_layout  # noqa: E402
 import ph_merge_update  # noqa: E402
 import ph_speckit  # noqa: E402
 import _speckit_seed  # noqa: E402
@@ -43,8 +44,12 @@ STATIC_CORE_SKILLS = (
     "analyze", "checklist", "clarify", "constitution", "converge",
     "implement", "plan", "specify", "tasks", "taskstoissues",
 )
+RUNTIME = ph_layout.RUNTIME
+RUNTIME_TEMPLATES = f"{ph_layout.RUNTIME}/templates"
+RUNTIME_SCRIPTS = f"{ph_layout.RUNTIME}/scripts/bash"
 STATIC_REQUIRED_SKILLS = (
     "ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
+    "ph-memory-ask", "ph-memory-learning", "ph-memory-archive",
 )
 
 
@@ -159,12 +164,12 @@ class RealGenerationTests(unittest.TestCase):
         self.assertIn("$speckit-git-commit", specify)
         self.assertIn("speckit.git.commit", specify)
         # shared infra carries the rename
-        template = (self.seed / ".specify" / "templates" / "plan-template.md").read_text(encoding="utf-8")
+        template = (self.seed / ph_layout.RUNTIME / "templates" / "plan-template.md").read_text(encoding="utf-8")
         self.assertIn("$ph-plan", template)
-        prereq = (self.seed / ".specify" / "scripts" / "bash" / "check-prerequisites.sh").read_text(encoding="utf-8")
+        prereq = (self.seed / ph_layout.RUNTIME / "scripts" / "bash" / "check-prerequisites.sh").read_text(encoding="utf-8")
         self.assertIn("$ph-specify", prereq)
         # workflow-engine assets are excluded by contract
-        self.assertFalse((self.seed / ".specify" / "workflows").exists())
+        self.assertFalse((self.seed / ph_layout.RUNTIME / "workflows").exists())
 
     def test_cmd_verify_accepts_a_complete_install(self):
         repo = self.repo("ph-speckit-verify-install-")
@@ -188,7 +193,7 @@ class RealGenerationTests(unittest.TestCase):
         self.assertTrue(payload["blocked"])
         by_path = {item["path"]: item for item in payload["items"]}
         self.assertEqual(by_path[".agents/skills/ph-specify/SKILL.md"]["kind"], "conflict")
-        self.assertFalse((repo / ".specify").exists(), "a blocked install must write nothing")
+        self.assertFalse((repo / RUNTIME).exists(), "a blocked install must write nothing")
         self.assertIn("user content", custom.read_text(encoding="utf-8"))
 
     def test_apply_refuses_symlinked_destination_ancestors(self):
@@ -206,12 +211,13 @@ class RealGenerationTests(unittest.TestCase):
         self.assertTrue(all("symlink" in i["reason"] for i in conflicts), conflicts)
         self.assertFalse((outside / "ph-specify").exists(), "no write may escape through the link")
 
-    def test_apply_refuses_symlinked_specify_ancestor(self):
+    def test_apply_refuses_symlinked_runtime_ancestor(self):
         repo = self.repo("ph-speckit-specify-link-")
         outside = self.temp_dir("ph-speckit-outside2-")
-        (repo / ".specify").symlink_to(outside)
+        (repo / RUNTIME).parent.mkdir(parents=True)
+        (repo / RUNTIME).symlink_to(outside)
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
-        self.assertTrue(payload["blocked"], "a symlinked .specify must block the install")
+        self.assertTrue(payload["blocked"], "a symlinked runtime root must block the install")
         self.assertFalse((outside / "templates").exists())
 
     def test_ensure_safe_write_dest_rejects_hardlinks_and_escapes(self):
@@ -227,7 +233,7 @@ class RealGenerationTests(unittest.TestCase):
 
     def test_validate_staging_detects_tampering(self):
         staging = self.temp_dir("ph-speckit-tamper-")
-        shutil.copytree(self.seed / ".specify", staging / ".specify")
+        shutil.copytree(self.seed / ph_layout.RUNTIME, staging / ".specify")
         contract = ph_speckit.speckit_contract()
         # A staging without the official manifests is rejected outright.
         with self.assertRaises(ph_init.PHError):
@@ -282,7 +288,7 @@ class RealGenerationTests(unittest.TestCase):
 class SpecifyOwnershipTests(unittest.TestCase):
     """Ownership of an existing managed file must be proven, never assumed.
 
-    A differing managed file (skill, .specify file, constitution override) is
+    A differing managed file (skill, runtime file, constitution override) is
     only rewritten when the per-file content baseline recorded by the last PH
     install (`speckit.files` in .agents/ph.json) still matches the on-disk
     bytes. Generation markers - the manifest's speckit record, its skills
@@ -350,7 +356,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
 
     def test_identical_link_and_directory_block_before_reading(self):
         repo = self.complete_repo()
-        path = repo / ".specify/scripts/bash/setup-plan.sh"
+        path = repo / f"{RUNTIME}/scripts/bash/setup-plan.sh"
         saved = self.temp_dir("ph-external-") / "script.sh"
         path.rename(saved)
         path.symlink_to(saved)
@@ -364,7 +370,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
 
     def test_record_rejects_unconverted_stock_bytes(self):
         repo = self.complete_repo()
-        rel = ".specify/templates/plan-template.md"
+        rel = f"{RUNTIME}/templates/plan-template.md"
         raw, _ = self.staging_template(rel)
         (repo / rel).write_bytes(raw)
         manifest = repo / ".agents/ph.json"
@@ -387,7 +393,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
         prepared = PreparedTarget(self.temp_dir("ph-check-release-"))
         init = subprocess.run([sys.executable, str(prepared.root / "scripts/ph_init.py"), "init", "--mode", "portable", "--apply", "--repo", str(repo)], capture_output=True, text=True)
         self.assertEqual(init.returncode, 0, init.stdout + init.stderr)
-        runtime = repo / ".specify/scripts/bash/setup-plan.sh"
+        runtime = repo / f"{RUNTIME}/scripts/bash/setup-plan.sh"
         runtime.rename(repo / "saved-runtime")
         installed = repo / ".agents/skills/ph-init/scripts/ph_init.py"
         def check():
@@ -396,7 +402,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
         result = ph_speckit.cmd_install(repo, True, None)
         self.assertFalse(result["blocked"])
         self.assertEqual(check().returncode, 0)
-        before = {p.relative_to(repo): p.read_bytes() for root in (repo / ".specify", repo / ".agents") for p in root.rglob("*") if p.is_file() and "__pycache__" not in p.parts}
+        before = {p.relative_to(repo): p.read_bytes() for root in (repo / RUNTIME, repo / ".agents") for p in root.rglob("*") if p.is_file() and "__pycache__" not in p.parts}
         self.assertFalse(ph_speckit.cmd_install(repo, True, None)["blocked"])
         self.assertEqual(before, {p: (repo / p).read_bytes() for p in before})
 
@@ -409,13 +415,13 @@ class SpecifyOwnershipTests(unittest.TestCase):
 
     def staging_template(self, rel: str) -> tuple[bytes, bytes]:
         staging = ph_speckit.resolve_staging(None, self.contract)
-        raw = (staging / rel).read_bytes()
-        return raw, ph_speckit.convert_shared_bytes(raw)
+        converted = (staging / rel).read_bytes()
+        # A legacy-shaped fixture tests rejection without consulting network/cache.
+        raw = converted.replace(b"ph-plan", b"speckit-plan").replace(b".agents/project-harness/runtime", b".specify")
+        return raw, converted
 
     def staging_skill(self, core: str) -> bytes:
-        staging = ph_speckit.resolve_staging(None, self.contract)
-        src = staging / ph_speckit.SPECKIT_GENERATED_SKILLS_DIR / ph_speckit.speckit_skill_name(core) / "SKILL.md"
-        return ph_speckit.convert_skill_text(src.read_text(encoding="utf-8"), core, self.contract).encode("utf-8")
+        return (ph_speckit.bundled_source() / ph_speckit.SKILL_BASELINE_RELS[core]).read_bytes()
 
     def write_manifest(
         self,
@@ -444,13 +450,13 @@ class SpecifyOwnershipTests(unittest.TestCase):
 
     def test_user_specify_file_without_provenance_is_never_overwritten(self):
         repo = self.repo("ph-speckit-user-specify-")
-        custom = repo / ".specify" / "templates" / "plan-template.md"
+        custom = repo / RUNTIME / "templates" / "plan-template.md"
         custom.parent.mkdir(parents=True)
         custom.write_text("# 我的项目自有计划模板\n", encoding="utf-8")
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertTrue(payload["blocked"], payload["items"])
         by_path = {item["path"]: item for item in payload["items"]}
-        self.assertEqual(by_path[".specify/templates/plan-template.md"]["kind"], "conflict")
+        self.assertEqual(by_path[f"{RUNTIME}/templates/plan-template.md"]["kind"], "conflict")
         self.assertEqual(custom.read_text(encoding="utf-8"), "# 我的项目自有计划模板\n")
         # A blocked install writes nothing at all.
         self.assertFalse((repo / ".agents" / "skills" / "ph-plan").exists())
@@ -460,9 +466,9 @@ class SpecifyOwnershipTests(unittest.TestCase):
         # the previous generation and the on-disk bytes still match it, so the
         # file is provably unmodified and may be replaced by the new one.
         repo = self.repo("ph-speckit-upgrade-")
-        _raw, converted = self.staging_template(".specify/templates/plan-template.md")
+        _raw, converted = self.staging_template(f"{RUNTIME}/templates/plan-template.md")
         older = converted + "\nolder generation line\n".encode("utf-8")
-        dest = repo / ".specify" / "templates" / "plan-template.md"
+        dest = repo / RUNTIME / "templates" / "plan-template.md"
         dest.parent.mkdir(parents=True)
         dest.write_bytes(older)
         self.write_manifest(
@@ -470,18 +476,18 @@ class SpecifyOwnershipTests(unittest.TestCase):
             commit="0" * 40,
             tag="v0.0.1",
             version="0.0.1",
-            files={".specify/templates/plan-template.md": hashlib.sha256(older).hexdigest()},
+            files={f"{RUNTIME}/templates/plan-template.md": hashlib.sha256(older).hexdigest()},
         )
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertFalse(payload["blocked"], payload["items"])
-        self.assertEqual(self.item(payload, ".specify/templates/plan-template.md")["kind"], "write")
+        self.assertEqual(self.item(payload, f"{RUNTIME}/templates/plan-template.md")["kind"], "write")
         self.assertEqual(dest.read_bytes(), converted)
         # The manifest provenance advanced to the pinned contract and the
         # baseline now records the freshly installed bytes.
         section = ph_speckit.read_installed_speckit_section(repo)
         self.assertEqual(section["commit"], self.contract["commit"])
         self.assertEqual(
-            section["files"][".specify/templates/plan-template.md"],
+            section["files"][f"{RUNTIME}/templates/plan-template.md"],
             hashlib.sha256(converted).hexdigest(),
         )
 
@@ -493,34 +499,34 @@ class SpecifyOwnershipTests(unittest.TestCase):
         # the notes; without a per-file content baseline the differing file is
         # user content and must conflict.
         repo = self.repo("ph-speckit-user-append-")
-        _raw, converted = self.staging_template(".specify/templates/plan-template.md")
+        _raw, converted = self.staging_template(f"{RUNTIME}/templates/plan-template.md")
         user_text = "\n\n## 我们项目自己的补充\n\n交付前必须通过内部验收，本节为项目自有约定。\n"
         disk = converted + user_text.encode("utf-8")
-        dest = repo / ".specify" / "templates" / "plan-template.md"
+        dest = repo / RUNTIME / "templates" / "plan-template.md"
         dest.parent.mkdir(parents=True)
         dest.write_bytes(disk)
         # A pre-baseline manifest: it records the generation, never the bytes.
         self.write_manifest(repo, commit="0" * 40, tag="v0.0.1", version="0.0.1")
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertTrue(payload["blocked"], payload["items"])
-        self.assertEqual(self.item(payload, ".specify/templates/plan-template.md")["kind"], "conflict")
+        self.assertEqual(self.item(payload, f"{RUNTIME}/templates/plan-template.md")["kind"], "conflict")
         self.assertIn("项目自有约定", dest.read_text(encoding="utf-8"))
 
     def test_recorded_generation_with_upstream_named_file_conflicts(self):
         repo = self.repo("ph-speckit-reverted-")
-        raw, _converted = self.staging_template(".specify/templates/plan-template.md")
-        dest = repo / ".specify" / "templates" / "plan-template.md"
+        raw, _converted = self.staging_template(f"{RUNTIME}/templates/plan-template.md")
+        dest = repo / RUNTIME / "templates" / "plan-template.md"
         dest.parent.mkdir(parents=True)
         dest.write_bytes(raw + "\nuser note\n".encode("utf-8"))
         self.write_manifest(repo, commit="0" * 40, tag="v0.0.1", version="0.0.1")
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertTrue(payload["blocked"], payload["items"])
-        self.assertEqual(self.item(payload, ".specify/templates/plan-template.md")["kind"], "conflict")
+        self.assertEqual(self.item(payload, f"{RUNTIME}/templates/plan-template.md")["kind"], "conflict")
 
     def test_specify_file_edited_within_this_generation_conflicts(self):
         repo = self.repo("ph-speckit-same-commit-")
-        _raw, converted = self.staging_template(".specify/templates/plan-template.md")
-        dest = repo / ".specify" / "templates" / "plan-template.md"
+        _raw, converted = self.staging_template(f"{RUNTIME}/templates/plan-template.md")
+        dest = repo / RUNTIME / "templates" / "plan-template.md"
         dest.parent.mkdir(parents=True)
         dest.write_bytes(converted + "\n用户改动。\n".encode("utf-8"))
         self.write_manifest(
@@ -531,16 +537,16 @@ class SpecifyOwnershipTests(unittest.TestCase):
         )
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertTrue(payload["blocked"], payload["items"])
-        self.assertEqual(self.item(payload, ".specify/templates/plan-template.md")["kind"], "conflict")
+        self.assertEqual(self.item(payload, f"{RUNTIME}/templates/plan-template.md")["kind"], "conflict")
         self.assertIn("用户改动。", dest.read_text(encoding="utf-8"))
 
     def test_drifted_baseline_conflicts_even_from_a_recorded_generation(self):
         # A baseline exists, but the on-disk bytes no longer match it: the
         # user edited the file after the install, so no upgrade may overwrite.
         repo = self.repo("ph-speckit-drift-")
-        _raw, converted = self.staging_template(".specify/templates/plan-template.md")
+        _raw, converted = self.staging_template(f"{RUNTIME}/templates/plan-template.md")
         disk = converted + "\n用户改动。\n".encode("utf-8")
-        dest = repo / ".specify" / "templates" / "plan-template.md"
+        dest = repo / RUNTIME / "templates" / "plan-template.md"
         dest.parent.mkdir(parents=True)
         dest.write_bytes(disk)
         self.write_manifest(
@@ -548,20 +554,20 @@ class SpecifyOwnershipTests(unittest.TestCase):
             commit="0" * 40,
             tag="v0.0.1",
             version="0.0.1",
-            files={".specify/templates/plan-template.md": hashlib.sha256(converted).hexdigest()},
+            files={f"{RUNTIME}/templates/plan-template.md": hashlib.sha256(converted).hexdigest()},
         )
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertTrue(payload["blocked"], payload["items"])
-        self.assertEqual(self.item(payload, ".specify/templates/plan-template.md")["kind"], "conflict")
+        self.assertEqual(self.item(payload, f"{RUNTIME}/templates/plan-template.md")["kind"], "conflict")
         self.assertIn("用户改动。", dest.read_text(encoding="utf-8"))
 
     def test_malformed_baseline_entries_are_dropped_not_trusted(self):
         # A corrupted `files` record (wrong hash shape) must never unlock an
         # overwrite: it is treated as absent and the file conflicts.
         repo = self.repo("ph-speckit-bad-baseline-")
-        _raw, converted = self.staging_template(".specify/templates/plan-template.md")
+        _raw, converted = self.staging_template(f"{RUNTIME}/templates/plan-template.md")
         disk = converted + "\nolder generation line\n".encode("utf-8")
-        dest = repo / ".specify" / "templates" / "plan-template.md"
+        dest = repo / RUNTIME / "templates" / "plan-template.md"
         dest.parent.mkdir(parents=True)
         dest.write_bytes(disk)
         self.write_manifest(
@@ -569,25 +575,25 @@ class SpecifyOwnershipTests(unittest.TestCase):
             commit="0" * 40,
             tag="v0.0.1",
             version="0.0.1",
-            files={".specify/templates/plan-template.md": "not-a-hash"},
+            files={f"{RUNTIME}/templates/plan-template.md": "not-a-hash"},
         )
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertTrue(payload["blocked"], payload["items"])
-        self.assertEqual(self.item(payload, ".specify/templates/plan-template.md")["kind"], "conflict")
+        self.assertEqual(self.item(payload, f"{RUNTIME}/templates/plan-template.md")["kind"], "conflict")
 
-    def test_stock_upstream_specify_file_is_adopted(self):
+    def test_unrecorded_legacy_template_requires_review(self):
         repo = self.repo("ph-speckit-stock-")
-        raw, converted = self.staging_template(".specify/templates/plan-template.md")
-        dest = repo / ".specify" / "templates" / "plan-template.md"
+        raw, converted = self.staging_template(f"{RUNTIME}/templates/plan-template.md")
+        dest = repo / RUNTIME / "templates" / "plan-template.md"
         dest.parent.mkdir(parents=True)
         dest.write_bytes(raw)  # a stock, unmodified upstream file
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
-        self.assertFalse(payload["blocked"], payload["items"])
-        self.assertEqual(self.item(payload, ".specify/templates/plan-template.md")["kind"], "write")
-        self.assertEqual(dest.read_bytes(), converted)
+        self.assertTrue(payload["blocked"], payload["items"])
+        self.assertEqual(self.item(payload, f"{RUNTIME}/templates/plan-template.md")["kind"], "conflict")
+        self.assertEqual(dest.read_bytes(), raw)
 
     def test_install_records_per_file_baselines(self):
-        # Every install re-records the baselines: skills, managed .specify
+        # Every install re-records the baselines: skills, managed runtime
         # files, and the constitution override - but never the user-owned
         # memory constitution.
         repo = self.repo("ph-speckit-baselines-")
@@ -604,7 +610,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
             self.assertEqual(
                 files.get(rel), ph_init.sha256_file(repo / rel), f"baseline missing or wrong for {rel}"
             )
-        self.assertEqual(files[".specify/templates/plan-template.md"], ph_init.sha256_file(repo / ".specify/templates/plan-template.md"))
+        self.assertEqual(files[f"{RUNTIME}/templates/plan-template.md"], ph_init.sha256_file(repo / f"{RUNTIME}/templates/plan-template.md"))
         self.assertEqual(
             files[ph_speckit.CONSTITUTION_OVERRIDE_REL],
             ph_init.sha256_file(repo / ph_speckit.CONSTITUTION_OVERRIDE_REL),
@@ -614,8 +620,8 @@ class SpecifyOwnershipTests(unittest.TestCase):
     def _fresh_init_window(self, prefix: str) -> tuple[Path, str, Path]:
         """The fresh-init window: install wrote the override (its sha256 is
         this run's content proof), then the scaffold deploy replaced the
-        manifest with its template (no speckit.files) and grew the docs/
-        约束规范 tree the override references."""
+        manifest with its template (no speckit.files) and grew the constraints
+        tree the materialized constitution references."""
         repo = self.repo(prefix)
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
         self.assertFalse(payload["blocked"], payload["items"])
@@ -628,7 +634,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
         )
         override_rel = ph_speckit.CONSTITUTION_OVERRIDE_REL
         install_sha = self.item(payload, override_rel)["sha256"]
-        docs = repo / "docs" / "约束规范" / "工程规范"
+        docs = repo / ph_speckit.DOCS_GOVERNANCE_ROOT / "工程规范"
         docs.mkdir(parents=True)
         (docs / "对用户提问.md").write_text("# 对用户提问\n", encoding="utf-8")
         return repo, install_sha, repo / override_rel
@@ -678,7 +684,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
             version=self.contract["version"],
             files=None,
         )
-        rel = ".specify/templates/plan-template.md"
+        rel = f"{RUNTIME}/templates/plan-template.md"
         dest = repo / rel
         dest.write_bytes(dest.read_bytes() + "\n<!-- 用户自定义 -->\n".encode("utf-8"))
         result = ph_speckit.cmd_record_baselines(repo, None)
@@ -690,7 +696,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
         manifest = repo / ".agents/ph.json"
         before_manifest = manifest.read_bytes()
         before_override = override.read_bytes()
-        target = repo / ".specify/templates/plan-template.md"
+        target = repo / f"{RUNTIME}/templates/plan-template.md"
         target.write_bytes(target.read_bytes() + b"\nuser customization\n")
         result = ph_speckit.cmd_record_baselines(repo, None, install_sha)
         self.assertTrue(result["blocked"])
@@ -802,7 +808,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
         self.assertIn("项目自有补充段落", dest.read_text(encoding="utf-8"))
 
     def test_override_refresh_on_a_matching_baseline_and_re_record(self):
-        # docs/约束规范 gained a document: the PH-managed navigation zone
+        # constraints gained a document: the PH-managed navigation zone
         # refreshes because the override bytes still match the baseline, and
         # the new baseline is recorded afterwards.
         repo = self.repo("ph-speckit-override-refresh-")
@@ -817,7 +823,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
             version=self.contract["version"],
             files={ph_speckit.CONSTITUTION_OVERRIDE_REL: hashlib.sha256(pristine).hexdigest()},
         )
-        governance = repo / "docs" / "约束规范" / "工程规范"
+        governance = repo / ph_speckit.DOCS_GOVERNANCE_ROOT / "工程规范"
         governance.mkdir(parents=True)
         (governance / "Git与并行开发.md").write_text("# Git与并行开发\n正文。\n", encoding="utf-8")
         payload = ph_speckit.cmd_install(repo, apply=True, cache=None)
@@ -849,10 +855,10 @@ class SpecifyOwnershipTests(unittest.TestCase):
         data = {
             "template_version": "1.1.13",
             "skills": {},
-            "speckit": {"files": {".specify/templates/plan-template.md": "a" * 64}},
+            "speckit": {"files": {f"{RUNTIME}/templates/plan-template.md": "a" * 64}},
         }
         cand = ph_merge_update.build_candidate(data, "1.1.14", ("ph-init",))
-        self.assertEqual(cand["speckit"]["files"], {".specify/templates/plan-template.md": "a" * 64})
+        self.assertEqual(cand["speckit"]["files"], {f"{RUNTIME}/templates/plan-template.md": "a" * 64})
         self.assertEqual(cand["speckit"]["commit"], self.contract["commit"])
         plain = ph_merge_update.build_candidate(
             {"template_version": "1.1.13", "skills": {}, "speckit": {}}, "1.1.14", ("ph-init",)
@@ -860,7 +866,7 @@ class SpecifyOwnershipTests(unittest.TestCase):
         self.assertNotIn("files", plain["speckit"])
         self.assertEqual(
             ph_init.speckit_section_with_baselines(data)["files"],
-            {".specify/templates/plan-template.md": "a" * 64},
+            {f"{RUNTIME}/templates/plan-template.md": "a" * 64},
         )
         self.assertNotIn("files", ph_init.speckit_section_with_baselines({"speckit": {}}))
 
@@ -878,9 +884,9 @@ class SpecifyOwnershipTests(unittest.TestCase):
         self.assertFalse(payload["apply"])
         by_path = {item["path"]: item for item in payload["items"]}
         self.assertEqual(by_path[".agents/ph.json"]["kind"], "conflict")
-        # Nothing was written: no skills, no .specify tree.
+        # Nothing was written: no skills, no runtime tree.
         self.assertFalse((repo / ".agents" / "skills" / "ph-plan").exists())
-        self.assertFalse((repo / ".specify").exists())
+        self.assertFalse((repo / RUNTIME).exists())
 
 
 class ConstitutionOverrideTests(unittest.TestCase):
@@ -911,7 +917,7 @@ class ConstitutionOverrideTests(unittest.TestCase):
     def test_override_links_resolve_at_the_materialized_depth(self):
         repo = self.temp_dir("ph-speckit-const-")
         # Material docs referenced by the governance zone.
-        governance = repo / "docs" / "约束规范" / "工程规范"
+        governance = repo / ph_speckit.DOCS_GOVERNANCE_ROOT / "工程规范"
         governance.mkdir(parents=True)
         (governance / "README.md").write_text(
             "| [Git与并行开发.md](./Git与并行开发.md) | 分支与并行开发约束 |\n", encoding="utf-8"
@@ -924,31 +930,38 @@ class ConstitutionOverrideTests(unittest.TestCase):
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
         # The override renders for the materialized constitution at
-        # .specify/memory/constitution.md (two levels below the root), so the
-        # links must resolve from that depth - verified against the exact
-        # materialized path, not the template's own location.
-        materialized = repo / ".specify" / "memory" / "constitution.md"
+        # .agents/project-harness/constitution.md, so the links must resolve
+        # from that depth - verified against the exact materialized path, not
+        # the template's own location.
+        materialized = repo / ph_layout.CONSTITUTION
         materialized.parent.mkdir(parents=True, exist_ok=True)
         materialized.write_bytes(data)
         text = materialized.read_text(encoding="utf-8")
-        self.assertIn("## PH 管理区：本仓库约束规范导航", text)
-        link_line = next(
-            line for line in text.splitlines() if "Git与并行开发.md" in line and "](../../docs/" in line
+        self.assertIn("## 约束导航", text)
+        entry = next(
+            line
+            for line in text.splitlines()
+            if "Git与并行开发.md" in line and "](constraints/" in line
         )
-        target = (materialized.parent / link_line.split("](", 1)[1].split(")", 1)[0]).resolve()
-        self.assertTrue(target.is_file(), f"broken link from the materialized depth: {link_line}")
+        lines = text.splitlines()
+        row = "\n".join(lines[lines.index(entry) : lines.index(entry) + 2])
+        target = (materialized.parent / entry.split("](", 1)[1].split(")", 1)[0]).resolve()
+        self.assertTrue(target.is_file(), f"broken link from the materialized depth: {row}")
         self.assertEqual(
-            target, (repo / "docs" / "约束规范" / "工程规范" / "Git与并行开发.md").resolve()
+            target,
+            (repo / ph_speckit.DOCS_GOVERNANCE_ROOT / "工程规范" / "Git与并行开发.md").resolve(),
         )
-        # Positioning comes from the directory README index.
-        self.assertIn("分支与并行开发约束", link_line)
+        # Positioning comes from the directory README index and is declared on
+        # the entry's own 使用时机 line.
+        self.assertIn("分支与并行开发约束", row)
+        self.assertIn("使用时机：", row)
         # The upstream skeleton survives verbatim ahead of the PH zone.
-        skeleton = (self.seed / ".specify" / "templates" / "constitution-template.md").read_text(encoding="utf-8")
+        skeleton = (self.seed / ph_layout.RUNTIME / "templates" / "constitution-template.md").read_text(encoding="utf-8")
         self.assertTrue(text.startswith(skeleton.rstrip("\n")))
 
     def test_unindexable_document_is_marked_pending_confirmation(self):
         repo = self.temp_dir("ph-speckit-const-unknown-")
-        governance = repo / "docs" / "约束规范" / "后端规范"
+        governance = repo / ph_speckit.DOCS_GOVERNANCE_ROOT / "后端规范"
         governance.mkdir(parents=True)
         (governance / "无名约束.md").write_text("# 无名约束\n没有任何索引描述。\n", encoding="utf-8")
         data = ph_speckit.render_constitution_override(repo, self.seed, self.contract)
@@ -959,7 +972,7 @@ class ConstitutionOverrideTests(unittest.TestCase):
 
     def test_template_underscore_files_are_excluded(self):
         repo = self.temp_dir("ph-speckit-const-tpl-")
-        governance = repo / "docs" / "约束规范" / "工程规范"
+        governance = repo / ph_speckit.DOCS_GOVERNANCE_ROOT / "工程规范"
         governance.mkdir(parents=True)
         (governance / "_模板.md").write_text("# 模板\n", encoding="utf-8")
         data = ph_speckit.render_constitution_override(repo, self.seed, self.contract)
@@ -969,18 +982,18 @@ class ConstitutionOverrideTests(unittest.TestCase):
 class WorkflowExclusionTests(unittest.TestCase):
     def test_workflow_engine_assets_are_not_installed(self):
         seed = _speckit_seed.ensure_seed()
-        self.assertFalse((seed / ".specify" / "workflows").exists())
+        self.assertFalse((seed / ph_layout.RUNTIME / "workflows").exists())
         # The skill files must not reference the workflow engine.
         for skill in (seed / ".agents" / "skills").glob("ph-*/SKILL.md"):
             text = skill.read_text(encoding="utf-8")
-            self.assertNotIn(".specify/workflows", text, skill)
+            self.assertNotIn(f"{RUNTIME}/workflows", text, skill)
 
     def test_verify_flags_installed_workflow_assets(self):
         with tempfile.TemporaryDirectory(prefix="ph-speckit-wf-") as tmp:
             repo = Path(tmp)
-            (repo / ".specify" / "workflows").mkdir(parents=True)
-            (repo / ".specify" / "workflows" / "speckit").mkdir()
-            (repo / ".specify" / "workflows" / "speckit" / "workflow.yml").write_text(
+            (repo / RUNTIME / "workflows").mkdir(parents=True)
+            (repo / RUNTIME / "workflows" / "speckit").mkdir()
+            (repo / RUNTIME / "workflows" / "speckit" / "workflow.yml").write_text(
                 "schema_version: '1.0'\n", encoding="utf-8"
             )
             result = ph_speckit.cmd_verify(repo)

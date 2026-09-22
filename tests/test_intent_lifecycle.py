@@ -32,10 +32,19 @@ MD_LINK = re.compile(r"(?<!!)\[.*?\]\(([^)]+)\)")
 # The scaffold skills plus the ten spec-kit skills that init installs from the
 # pinned upstream release; both sets must exist in every freshly installed repo.
 REQUIRED_SKILLS = ph_init.REQUIRED_SKILLS + ph_init.SPECKIT_SKILL_NAMES
+# 1.2.1: the intent tree is retired; the fresh-install layout is the
+# project-harness home skeleton instead.
+HOME = ".agents/project-harness"
+# Scaffold-shipped home content directories: present right after a fresh
+# install, each with its own README index. `runtime/` is not scaffold
+# content - the pinned spec-kit install creates it - so it is asserted
+# separately in installed repositories.
 STATUS_DIRS = (
-    "docs/意图/待办/新特性", "docs/意图/待办/问题记录",
-    "docs/意图/实施/新特性", "docs/意图/实施/问题记录",
+    f"{HOME}/constraints", f"{HOME}/documents",
+    f"{HOME}/memory/temporary", f"{HOME}/memory/structured",
+    f"{HOME}/specs", f"{HOME}/archive/legacy-backup", f"{HOME}/archive/memory",
 )
+RUNTIME_DIR = f"{HOME}/runtime"
 
 
 def run(argv, cwd=None):
@@ -154,38 +163,40 @@ class IntentLifecycleTests(unittest.TestCase):
         self.assertFalse((repo / ".codex").exists())
         self.assertFalse((repo / ".opencode").exists())
         for rel in STATUS_DIRS:
-            self.assertTrue((repo / rel / "README.md").is_file(), rel)
-        self.assertFalse((repo / "docs/意图/进行中").exists())
-        self.assertEqual(line_field((repo / "docs/意图/_模板.md").read_text(encoding="utf-8"), "status_dir"),
-                         "待办/新特性")
+            self.assertTrue((repo / rel).is_dir(), rel)
+            if rel != f"{HOME}/constraints":
+                self.assertTrue((repo / rel / "README.md").is_file(), rel)
+        self.assertTrue((repo / RUNTIME_DIR).is_dir(), RUNTIME_DIR)
+        self.assertFalse((repo / "docs/意图").exists())
+        self.assertFalse((repo / ".specify").exists())
+        self.assertTrue((repo / f"{HOME}/constitution.md").is_file())
         for rel in (".agents/AGENTS.md", ".agents/ph.json", "AGENTS.md", "CLAUDE.md", ".gitignore"):
             self.assertTrue((repo / rel).exists(), rel)
 
     def test_scaffold_default_status_dirs(self):
         for rel in STATUS_DIRS:
-            self.assertTrue((SCAFFOLD / rel / "README.md").is_file(), rel)
-        intent = SCAFFOLD / "docs/意图"
-        self.assertFalse((intent / "进行中").exists())
-        self.assertEqual(line_field((intent / "_模板.md").read_text(encoding="utf-8"), "status_dir"),
-                         "待办/新特性")
+            self.assertTrue((SCAFFOLD / rel).is_dir(), rel)
+            if rel != f"{HOME}/constraints":
+                self.assertTrue((SCAFFOLD / rel / "README.md").is_file(), rel)
+        # runtime is created by the pinned spec-kit install, never shipped
+        self.assertTrue((SCAFFOLD / RUNTIME_DIR).is_dir())
+        self.assertFalse((SCAFFOLD / "docs/意图").exists())
+        self.assertTrue((SCAFFOLD / HOME / "memory" / "README.md").is_file())
+        self.assertTrue((SCAFFOLD / HOME / "archive" / "memory").is_dir())
 
     def test_intent_and_agents_markdown_links_and_readme_indexes(self):
-        docs, agents = SCAFFOLD / "docs", SCAFFOLD / ".agents/AGENTS.md"
+        home = SCAFFOLD / ".agents/project-harness"
+        docs, agents = home / "constraints", SCAFFOLD / ".agents/AGENTS.md"
         checked = 0
-        for path in (*docs.rglob("*.md"), agents):
+        for path in (*docs.rglob("*.md"), agents, home / "README.md"):
             for dest in resolved_links(path):
                 checked += 1
                 self.assertTrue(dest.exists(), f"broken link in {path} -> {dest}")
         self.assertGreater(checked, 0)
-        for directory in (docs, *sorted(p for p in docs.rglob("*") if p.is_dir())):
-            readme = directory / "README.md"
-            self.assertTrue(readme.is_file(), f"missing README: {directory}")
-            linked = resolved_links(readme)
-            missing = [c.name for c in directory.iterdir()
-                       if c.name not in {"README.md", ".DS_Store"}
-                       and c.resolve() not in linked
-                       and (c / "README.md").resolve() not in linked]
-            self.assertEqual(missing, [], f"{readme} missing {missing}")
+        self.assertFalse(list(docs.rglob("README.md")))
+        for path in docs.rglob("*.md"):
+            if not path.name.startswith("_"):
+                self.assertIn("使用时机：", path.read_text())
 
     def test_eval_json_and_skill_frontmatter(self):
         skills = [REPO_ROOT / "SKILL.md", *sorted((SCAFFOLD / ".agents/skills").glob("*/SKILL.md"))]
@@ -197,7 +208,7 @@ class IntentLifecycleTests(unittest.TestCase):
             self.assertTrue(description)
             self.assertLessEqual(len(description), 1024, name)
             names.append(name)
-        self.assertEqual(sorted(names), sorted(ph_init.REQUIRED_SKILLS))
+        self.assertEqual(sorted(names), sorted(ph_init.ALL_REQUIRED_SKILL_NAMES))
         seen = []
         for path in [REPO_ROOT / "evals/evals.json",
                      *sorted((SCAFFOLD / ".agents/skills").glob("*/evals/evals.json"))]:
@@ -207,7 +218,7 @@ class IntentLifecycleTests(unittest.TestCase):
             for item in data["evals"]:
                 self.assertTrue(str(item["prompt"]).strip() and str(item["expected_output"]).strip())
         self.assertEqual(len(seen), len(set(seen)))
-        self.assertTrue(set(seen).issubset(REQUIRED_SKILLS))
+        self.assertTrue(set(seen).issubset(ph_init.ALL_REQUIRED_SKILL_NAMES))
 
     def test_real_ph_init_dry_run_apply_check_both_modes(self):
         empty = self.git_repo("ph-intent-dry-")

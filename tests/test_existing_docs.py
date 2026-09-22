@@ -22,14 +22,19 @@ if str(SCRIPTS) not in sys.path:
 
 import ph_init  # noqa: E402
 
+# Since 1.2.1 the scaffold ships no docs/ tree: the docs-like PH content
+# lives under the project-harness home roots (constraints/ documents/), and
+# init must never overwrite a differing existing file there. Legacy docs/**
+# files are business content PH does not manage; a fresh init neither maps
+# nor touches them.
+HOME = ".agents/project-harness"
 CUSTOM_DOCS = {
-    "docs/README.md": "# 项目文档\n自定义 README，init 不得覆盖。\n",
-    "docs/约束规范/工程规范/文档治理.md": "# 文档治理\n项目定制规范正文。\n",
-    "docs/项目Wiki/项目概述.md": "# 项目概述\n项目 Wiki 正文。\n",
+    f"{HOME}/constraints/harness规范/文档治理规范.md": "# 文档治理\n使用时机：维护项目文档时。\n项目定制规范正文。\n",
+    f"{HOME}/documents/项目概述.md": "# 项目概述\n项目 Wiki 正文。\n",
 }
 MISSING_DOCS = (
-    "docs/意图/_模板.md",
-    "docs/项目Wiki/功能地图.md",
+    f"{HOME}/documents/功能地图.md",
+    f"{HOME}/constraints/测试规范/门禁规范.md",
 )
 EXTRA_DOC = "docs/项目Wiki/自定义存量.md"
 PAYLOAD_NEW_DOC = "docs/约束规范/工程规范/传递验收.md"
@@ -179,7 +184,7 @@ class ExistingDocsTests(unittest.TestCase):
         self.assertEqual((kind, problem), ("conflict", ph_init.PROBLEM_DEST_SYMLINK))
 
         as_dir = repo / "docs" / "dir.md"
-        as_dir.mkdir()
+        as_dir.mkdir(parents=True)
         kind, reason, problem = ph_init.classify_docs_scaffold(repo, as_dir, data)
         self.assertEqual((kind, problem), ("conflict", ph_init.PROBLEM_NOT_REGULAR_FILE))
 
@@ -216,6 +221,8 @@ class ExistingDocsTests(unittest.TestCase):
                 for rel in MISSING_DOCS:
                     self.assertEqual(mapped[rel], ("write", "scaffold"), dry.stdout)
                     self.assertFalse((repo / rel).exists(), rel)
+                # legacy docs/ files are not PH-managed: no plan item at all
+                self.assertNotIn(EXTRA_DOC, mapped, dry.stdout)
                 self.assertEqual({rel: (repo / rel).read_bytes() for rel in kept}, before)
 
                 applied = ph(repo, "init", "--apply", "--mode", mode)
@@ -230,7 +237,7 @@ class ExistingDocsTests(unittest.TestCase):
         repo = self.git_repo("ph-docs-nondocs-")
         kept = self.write_custom_docs(repo)
         agents = repo / ".agents" / "AGENTS.md"
-        agents.parent.mkdir(parents=True)
+        agents.parent.mkdir(parents=True, exist_ok=True)
         agents.write_text("# custom agents\nnot scaffold\n", encoding="utf-8")
         root_agents = repo / "AGENTS.md"
         root_agents.write_text("# stray root agents\n", encoding="utf-8")
@@ -246,6 +253,7 @@ class ExistingDocsTests(unittest.TestCase):
         self.assertIn("existing file differs", mapped[".agents/AGENTS.md"][1])
         for rel in CUSTOM_DOCS:
             self.assertEqual(mapped[rel], ("skip", "scaffold: 保留待会话审阅"), dry.stdout)
+        self.assertNotIn(EXTRA_DOC, mapped, dry.stdout)
 
         applied = ph(repo, "init", "--apply", "--mode", "portable")
         self.assertNotEqual(applied.returncode, 0, applied.stdout)
@@ -256,40 +264,42 @@ class ExistingDocsTests(unittest.TestCase):
             self.assertFalse((repo / rel).exists(), rel)
 
     def test_unsafe_docs_shapes_conflict_and_do_not_write(self):
+        # the same fail-closed protection now guards the home roots the
+        # scaffold actually deploys (constraints/ documents/)
         repo = self.git_repo("ph-docs-unsafe-")
-        (repo / "docs").mkdir()
+        (repo / HOME / "constraints" / "工程规范").mkdir(parents=True, exist_ok=True)
         outside_target = repo / "outside-readme.md"
         outside_target.write_text("escape", encoding="utf-8")
-        (repo / "docs" / "README.md").symlink_to("../outside-readme.md")
-        (repo / "docs" / "约束规范").mkdir()
-        (repo / "docs" / "约束规范" / "工程规范").mkdir()
-        as_dir = repo / "docs" / "约束规范" / "工程规范" / "文档治理.md"
-        as_dir.mkdir()
+        (repo / HOME / "constraints" / "工程规范" / "Git规范.md").symlink_to("../outside-readme.md")
+        (repo / HOME / "constraints" / "工程规范").mkdir(parents=True, exist_ok=True)
+        as_dir = repo / HOME / "constraints" / "harness规范" / "文档治理规范.md"
+        as_dir.mkdir(parents=True)
         (repo / "wiki-elsewhere").mkdir()
-        (repo / "docs" / "项目Wiki").symlink_to("../wiki-elsewhere")
-        (repo / "docs" / "意图").write_text("intent-is-a-file", encoding="utf-8")
+        (repo / HOME / "documents").mkdir(parents=True)
+        (repo / HOME / "documents" / "架构地图").symlink_to("../wiki-elsewhere")
+        (repo / HOME / "documents" / "领域").write_text("not-a-directory", encoding="utf-8")
 
         dry = ph(repo, "init", "--mode", "portable")
         self.assertNotEqual(dry.returncode, 0, dry.stdout)
         mapped = item_map(dry.stdout)
-        self.assertEqual(mapped["docs/README.md"][0], "conflict", dry.stdout)
-        self.assertIn("symlink", mapped["docs/README.md"][1])
-        self.assertEqual(mapped["docs/约束规范/工程规范/文档治理.md"][0], "conflict", dry.stdout)
-        self.assertIn("not a regular file", mapped["docs/约束规范/工程规范/文档治理.md"][1])
-        wiki = mapped["docs/项目Wiki/项目概述.md"]
+        self.assertEqual(mapped[f"{HOME}/constraints/工程规范/Git规范.md"][0], "conflict", dry.stdout)
+        self.assertIn("symlink", mapped[f"{HOME}/constraints/工程规范/Git规范.md"][1])
+        self.assertEqual(mapped[f"{HOME}/constraints/harness规范/文档治理规范.md"][0], "conflict", dry.stdout)
+        self.assertIn("not a regular file", mapped[f"{HOME}/constraints/harness规范/文档治理规范.md"][1])
+        wiki = mapped[f"{HOME}/documents/架构地图/README.md"]
         self.assertEqual(wiki[0], "conflict", dry.stdout)
         self.assertTrue("symlink" in wiki[1] or "outside" in wiki[1], wiki)
-        intent = mapped["docs/意图/_模板.md"]
-        self.assertEqual(intent[0], "conflict", dry.stdout)
-        self.assertIn("not a directory", intent[1])
+        domain = mapped[f"{HOME}/documents/领域/README.md"]
+        self.assertEqual(domain[0], "conflict", dry.stdout)
+        self.assertIn("not a directory", domain[1])
 
         applied = ph(repo, "init", "--apply", "--mode", "portable")
         self.assertNotEqual(applied.returncode, 0, applied.stdout)
-        self.assertTrue((repo / "docs" / "README.md").is_symlink())
+        self.assertTrue((repo / HOME / "constraints" / "工程规范" / "Git规范.md").is_symlink())
         self.assertTrue(as_dir.is_dir())
-        self.assertTrue((repo / "docs" / "项目Wiki").is_symlink())
-        self.assertTrue((repo / "docs" / "意图").is_file())
-        self.assertFalse((repo / "docs" / "项目Wiki" / "功能地图.md").exists())
+        self.assertTrue((repo / HOME / "documents" / "架构地图").is_symlink())
+        self.assertTrue((repo / HOME / "documents" / "领域").is_file())
+        self.assertFalse((repo / HOME / "documents" / "功能地图.md").exists())
 
     def test_sync_does_not_rewrite_project_docs(self):
         repo = self.git_repo("ph-docs-sync-")
@@ -313,7 +323,7 @@ class ExistingDocsTests(unittest.TestCase):
         installed = first / ".agents" / "skills" / "ph-init" / "scripts" / "ph_init.py"
         new_doc = first / ".agents" / "skills" / "ph-init" / "assets" / "scaffold" / PAYLOAD_NEW_DOC
         new_doc.parent.mkdir(parents=True, exist_ok=True)
-        payload = "# 新文档\n应由已安装 payload 传到下一仓。\n".encode("utf-8")
+        payload = "# 新文档\n使用时机：查看新增规范时。\n应由已安装 payload 传到下一仓。\n".encode("utf-8")
         new_doc.write_bytes(payload)
 
         second = self.git_repo("ph-docs-payload-dst-")

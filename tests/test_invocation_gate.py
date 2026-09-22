@@ -10,10 +10,16 @@ steps for an upgrade the user already requested) stays allowed. The gate
 covers entry only: inside an already explicitly started flow, user answers
 and "continue" are received and resumed by that same flow without repeating
 the skill name each turn and without triggering other skills; every skill
-description and the scaffold project constraints carry that clarification.
+description carries that clarification (since 1.2.1 the minimal AGENTS.md
+has no skill table, and the memory README restates the memory-skill gate).
 
 The retired ph-intent-verify contract half was removed with the 1.1.14
 skill-set reduction; intent acceptance rules now live in 意图与访谈.md.
+Since 1.1.16 there is exactly one second exception: ph-memory-ask triggers
+on the user's recollection intent in the current turn without being named
+("查记忆", "你还记得吗", ...); naming it still works, but plain "记住 /
+学习 / 归档" requests, name discussions, and skill chaining never trigger
+any memory skill.
 """
 
 from __future__ import annotations
@@ -29,11 +35,13 @@ ALL_SKILL_PATHS = {
     "ph-init": REPO_ROOT / "SKILL.md",
     **{p.parent.name: p for p in sorted(SKILLS.glob("*/SKILL.md"))},
 }
-# The four PH scaffold skills; the ten spec-kit skills live in .agents/skills
+# The seven PH scaffold skills; the ten spec-kit skills live in .agents/skills
 # only after an install runs the pinned upstream generator (no scaffold copy).
 REQUIRED = [
     "ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
+    "ph-memory-ask", "ph-memory-learning", "ph-memory-archive",
 ]
+REQUIRED += ["ph-" + core for core in json.loads((REPO_ROOT / "speckit.json").read_text())["skills"]]
 
 
 def frontmatter(text: str) -> str:
@@ -54,8 +62,36 @@ class ExplicitInvocationGateTests(unittest.TestCase):
                     if line.startswith("description:"):
                         description = line
                         break
-                self.assertIn("明确点名", description, name)
+                if name == "ph-memory-ask":
+                    # The one recollection-intent exception: the query skill
+                    # triggers on intent without being named.
+                    self.assertIn("回忆意图", description, name)
+                    self.assertIn("无需点名", description, name)
+                else:
+                    self.assertIn("明确点名", description, name)
                 self.assertIn("不触发", description, name)
+
+    def test_memory_ask_query_intent_is_the_only_memory_exception(self):
+        # The 1.1.16 memory skills keep the name-it gate except for the ask
+        # query: recollection intent triggers it, plain 记住/学习/归档 and
+        # name discussions never trigger any memory skill, and the scaffold
+        # constraints state the exception centrally.
+        ask = (SKILLS / "ph-memory-ask" / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("回忆意图", ask)
+        self.assertIn("无需点名", ask)
+        for term in ("「记住 X」", "学习", "归档"):
+            self.assertIn(term, ask)
+        for name in ("ph-memory-learning", "ph-memory-archive"):
+            text = (SKILLS / name / "SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("明确点名", text, name)
+            self.assertIn("都不触发", text, name)
+        # since 1.2.1 the central statement lives in the memory README (the
+        # minimal AGENTS.md no longer carries a skill table)
+        memory = (SCAFFOLD / ".agents/project-harness/memory/README.md").read_text(encoding="utf-8")
+        self.assertIn("ph-memory-ask", memory)
+        self.assertIn("无需点名", memory)
+        self.assertIn("任何记忆技能", memory)
+        self.assertIn("不自动串联", memory)
 
     def test_started_flow_continuation_does_not_require_renaming(self):
         # The entry gate governs entry only: once a flow was explicitly
@@ -71,11 +107,11 @@ class ExplicitInvocationGateTests(unittest.TestCase):
                         break
                 for term in clause_terms:
                     self.assertIn(term, description, name)
-        # the same rule is stated centrally in the scaffold project constraints,
-        # and the verify body gate (the multi-round acceptance flow) repeats it
-        agents = (SCAFFOLD / ".agents" / "AGENTS.md").read_text(encoding="utf-8")
-        for term in clause_terms:
-            self.assertIn(term, agents)
+        # the same rule is stated centrally in the memory README for the
+        # memory skills, and every skill description repeats it
+        memory = (SCAFFOLD / ".agents/project-harness/memory/README.md").read_text(encoding="utf-8")
+        self.assertIn("已显式启动", memory)
+        self.assertIn("不要求每轮重复点名", memory)
         wexit = (SKILLS / "ph-worktree-exit" / "SKILL.md").read_text(encoding="utf-8")
         for term in clause_terms:
             self.assertIn(term, wexit)

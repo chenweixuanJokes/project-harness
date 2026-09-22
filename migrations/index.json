@@ -143,7 +143,21 @@
       "from_version": "1.1.14",
       "to_version": "1.1.15",
       "path": "migrations/1.1.14-to-1.1.15.md",
-      "items": ["speckit-integrity-gates"]
+      "items": [
+        "speckit-integrity-gates"
+      ]
+    },
+    {
+      "from_version": "1.1.15",
+      "to_version": "1.2.1",
+      "path": "migrations/1.1.15-to-1.2.1.md",
+      "items": [
+        "memory-skills",
+        "ph-home-restructure",
+        "constitution-materialization",
+        "intent-retirement",
+        "bundled-speckit-acceptance"
+      ]
     }
   ]
 }

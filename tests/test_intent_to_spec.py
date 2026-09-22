@@ -148,7 +148,7 @@ class IntentToSpecTestCase(unittest.TestCase):
 
     def snapshot(self) -> dict[str, str]:
         snaps: dict[str, str] = {}
-        for base in ("docs/意图", "specs", ".specify"):
+        for base in ("docs/意图", mu.INTENT_SPEC_ROOT, mu.SPECIFY_DIR):
             root = self.repo / base
             if not root.exists():
                 continue
@@ -166,9 +166,9 @@ class IntentToSpecTestCase(unittest.TestCase):
         self.assertEqual(result["conflicts"], [])
         self.assertEqual(
             sorted(result["generated"]),
-            ["specs/intent-INT-20260901-login/spec.md", "specs/intent-INT-20260902-crash/spec.md"],
+            [".agents/project-harness/specs/intent-INT-20260901-login/spec.md", ".agents/project-harness/specs/intent-INT-20260902-crash/spec.md"],
         )
-        spec = self.spec_bytes("specs/intent-INT-20260901-login/spec.md").decode("utf-8")
+        spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260901-login/spec.md").decode("utf-8")
         self.assertIn("# Feature Specification: 登录改造", spec)
         for fragment in ("用户能单点登录。", "仅 Web 端；不做移动端。", "必须复用现有会话服务。", "跳转登录后回跳原页。"):
             self.assertIn(fragment, spec)
@@ -182,7 +182,7 @@ class IntentToSpecTestCase(unittest.TestCase):
 
     def test_missing_sections_become_needs_clarification_without_fabrication(self):
         self.migrate(apply=True)
-        spec = self.spec_bytes("specs/intent-INT-20260902-crash/spec.md").decode("utf-8")
+        spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260902-crash/spec.md").decode("utf-8")
         self.assertEqual(spec.count("NEEDS CLARIFICATION: 原意图没有「"), 4)
         for section in ("目标", "范围与非目标", "关键约束", "验收标准"):
             self.assertIn(f"## {section}（逐字摘录）", spec)
@@ -199,7 +199,7 @@ class IntentToSpecTestCase(unittest.TestCase):
         result = self.migrate(apply=True)
         self.assertIn("docs/意图/已废弃/新特性/INT-20260903-old.md", result["history_only"])
         self.assertIn("docs/意图/访谈纪要/IV-20260901-100000-login.md", result["history_only"])
-        self.assertFalse((self.repo / "specs/intent-INT-20260903-old").exists())
+        self.assertFalse((self.repo / ".agents/project-harness/specs/intent-INT-20260903-old").exists())
         ledger = self.ledger()
         self.assertEqual(len(ledger["entries"]), 2)
         self.assertEqual(len(ledger["history_only"]), 2)
@@ -223,7 +223,7 @@ class IntentToSpecTestCase(unittest.TestCase):
         # Only additive artifacts appear.
         new_rels = set(after) - set(before)
         self.assertTrue(new_rels)
-        self.assertTrue(all(rel.startswith("specs/") or rel == mu.INTENT_HISTORY_REL for rel in new_rels))
+        self.assertTrue(all(rel.startswith(".agents/project-harness/specs/") or rel == mu.INTENT_HISTORY_REL for rel in new_rels))
 
     # -- ledger persistence and conflicts -----------------------------------
 
@@ -265,12 +265,12 @@ class IntentToSpecTestCase(unittest.TestCase):
         self.migrate(apply=True)
         entry = self.repo / "docs/意图/待办/新特性/INT-20260901-login.md"
         entry.write_text(entry.read_text(encoding="utf-8") + "\n新增记录行。\n", encoding="utf-8")
-        spec_before = self.spec_bytes("specs/intent-INT-20260901-login/spec.md")
+        spec_before = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260901-login/spec.md")
         with self.assertRaises(mu.PHError) as caught:
             self.migrate(apply=True)
         self.assertIn("read-only-history originals drifted", str(caught.exception))
         self.assertIn("docs/意图/待办/新特性/INT-20260901-login.md", str(caught.exception))
-        self.assertEqual(self.spec_bytes("specs/intent-INT-20260901-login/spec.md"), spec_before)
+        self.assertEqual(self.spec_bytes(".agents/project-harness/specs/intent-INT-20260901-login/spec.md"), spec_before)
         with self.assertRaises(mu.PHError) as caught:
             mu.verify_intent_spec_layout(self.repo)
         self.assertIn("originals drifted", str(caught.exception))
@@ -284,19 +284,19 @@ class IntentToSpecTestCase(unittest.TestCase):
 
     def test_user_modified_spec_is_never_overwritten(self):
         self.migrate(apply=True)
-        spec_path = self.repo / "specs/intent-INT-20260901-login/spec.md"
+        spec_path = self.repo / ".agents/project-harness/specs/intent-INT-20260901-login/spec.md"
         spec_path.write_bytes(spec_path.read_bytes() + "\n用户补充：移动端范围待议。\n".encode("utf-8"))
         result = self.migrate(apply=True)
         self.assertEqual(result["spec_user_modified"], ["docs/意图/待办/新特性/INT-20260901-login.md"])
         self.assertIn("用户补充", spec_path.read_text(encoding="utf-8"))
 
     def test_same_name_foreign_spec_blocks_apply_without_writing(self):
-        (self.repo / "specs/intent-INT-20260901-login").mkdir(parents=True)
-        (self.repo / "specs/intent-INT-20260901-login/spec.md").write_text("mine", encoding="utf-8")
+        (self.repo / ".agents/project-harness/specs/intent-INT-20260901-login").mkdir(parents=True)
+        (self.repo / ".agents/project-harness/specs/intent-INT-20260901-login/spec.md").write_text("mine", encoding="utf-8")
         with self.assertRaises(mu.PHError) as caught:
             self.migrate(apply=True)
         self.assertIn("already exists and is not a migration artifact", str(caught.exception))
-        self.assertEqual((self.repo / "specs/intent-INT-20260901-login/spec.md").read_text(encoding="utf-8"), "mine")
+        self.assertEqual((self.repo / ".agents/project-harness/specs/intent-INT-20260901-login/spec.md").read_text(encoding="utf-8"), "mine")
         self.assertFalse((self.repo / mu.INTENT_LEDGER_REL).exists())
         plan = self.migrate()
         self.assertTrue(any("already exists" in c for c in plan["conflicts"]))
@@ -321,13 +321,13 @@ class IntentToSpecTestCase(unittest.TestCase):
             SPARSE_ENTRY.format(status_dir="已完成/问题记录").replace("INT-20260902-crash", "INT-20260802-done"),
         )
         result = self.migrate(apply=True)
-        self.assertIn("specs/intent-INT-20260801-early/spec.md", result["generated"])
-        self.assertIn("specs/intent-INT-20260802-done/spec.md", result["generated"])
+        self.assertIn(".agents/project-harness/specs/intent-INT-20260801-early/spec.md", result["generated"])
+        self.assertIn(".agents/project-harness/specs/intent-INT-20260802-done/spec.md", result["generated"])
         # An early-layout completed legacy entry keeps its completed status.
-        done = self.spec_bytes("specs/intent-INT-20260802-done/spec.md").decode("utf-8")
+        done = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260802-done/spec.md").decode("utf-8")
         self.assertIn("**Status**: Complete", done)
         self.assertIn("不自动重新验收或判通过", done)
-        early = self.spec_bytes("specs/intent-INT-20260801-early/spec.md").decode("utf-8")
+        early = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260801-early/spec.md").decode("utf-8")
         self.assertIn("**Status**: In Progress", early)
         self.assertIn("实施不等于完成", early)
 
@@ -341,7 +341,7 @@ class IntentToSpecTestCase(unittest.TestCase):
         with self.assertRaises(mu.PHError):
             mu.verify_intent_spec_layout(self.repo)
         self.migrate(apply=True)
-        (self.repo / "specs/intent-INT-20260902-crash/spec.md").unlink()
+        (self.repo / ".agents/project-harness/specs/intent-INT-20260902-crash/spec.md").unlink()
         with self.assertRaises(mu.PHError):
             mu.verify_intent_spec_layout(self.repo)
         self.migrate(apply=True)
@@ -351,7 +351,9 @@ class IntentToSpecTestCase(unittest.TestCase):
 
     def test_foreign_ledger_schema_is_refused(self):
         (self.repo / "specs").mkdir()
-        (self.repo / mu.INTENT_LEDGER_REL).write_text(
+        ledger_path = self.repo / mu.INTENT_LEDGER_REL
+        ledger_path.parent.mkdir(parents=True, exist_ok=True)
+        ledger_path.write_text(
             json.dumps({"schema": "someone-else/9", "entries": []}), encoding="utf-8"
         )
         with self.assertRaises(mu.PHError):
@@ -362,34 +364,34 @@ class IntentToSpecTestCase(unittest.TestCase):
     def test_select_writes_pointer_only_when_absent_and_never_overwrites(self):
         self.migrate(apply=True)
         plan = mu.select_intent_spec(self.repo, "INT-20260901-login", None, apply=False)
-        self.assertEqual(plan["planned"]["feature_directory"], "specs/intent-INT-20260901-login")
-        self.assertFalse((self.repo / ".specify/feature.json").exists())
+        self.assertEqual(plan["planned"]["feature_directory"], ".agents/project-harness/specs/intent-INT-20260901-login")
+        self.assertFalse((self.repo / ".agents/project-harness/runtime/feature.json").exists())
         mu.select_intent_spec(self.repo, "INT-20260901-login", None, apply=True)
-        pointer = json.loads((self.repo / ".specify/feature.json").read_text(encoding="utf-8"))
+        pointer = json.loads((self.repo / ".agents/project-harness/runtime/feature.json").read_text(encoding="utf-8"))
         # The upstream resolver derives FEATURE_SPEC as <dir>/spec.md itself, so
         # the pointer must hold the directory, never the spec.md file path.
-        self.assertEqual(pointer, {"feature_directory": "specs/intent-INT-20260901-login"})
+        self.assertEqual(pointer, {"feature_directory": ".agents/project-harness/specs/intent-INT-20260901-login"})
         # A live pointer pointing elsewhere is never overwritten.
         with self.assertRaises(mu.PHError) as caught:
             mu.select_intent_spec(self.repo, "INT-20260902-crash", None, apply=True)
         self.assertIn("refusing to overwrite the active feature pointer", str(caught.exception))
         self.assertEqual(
-            json.loads((self.repo / ".specify/feature.json").read_text(encoding="utf-8")), pointer
+            json.loads((self.repo / ".agents/project-harness/runtime/feature.json").read_text(encoding="utf-8")), pointer
         )
         # Selecting the already-selected spec is a no-op.
         again = mu.select_intent_spec(self.repo, "INT-20260901-login", None, apply=True)
         self.assertFalse(again["wrote"])
         # Selecting by spec path or by directory both work; unknown ids fail.
-        by_spec = mu.select_intent_spec(self.repo, None, "specs/intent-INT-20260902-crash/spec.md", apply=False)
+        by_spec = mu.select_intent_spec(self.repo, None, ".agents/project-harness/specs/intent-INT-20260902-crash/spec.md", apply=False)
         self.assertEqual(by_spec["intent_id"], "INT-20260902-crash")
-        by_dir = mu.select_intent_spec(self.repo, None, "specs/intent-INT-20260902-crash", apply=False)
+        by_dir = mu.select_intent_spec(self.repo, None, ".agents/project-harness/specs/intent-INT-20260902-crash", apply=False)
         self.assertEqual(by_dir["intent_id"], "INT-20260902-crash")
         with self.assertRaises(mu.PHError):
             mu.select_intent_spec(self.repo, "INT-404", None, apply=False)
 
     def test_migration_never_creates_the_feature_pointer(self):
         self.migrate(apply=True)
-        self.assertFalse((self.repo / ".specify/feature.json").exists())
+        self.assertFalse((self.repo / ".agents/project-harness/runtime/feature.json").exists())
 
     def test_upstream_common_sh_resolves_the_selected_feature(self):
         # The real upstream resolver (common.sh from the pinned staging cache)
@@ -399,9 +401,19 @@ class IntentToSpecTestCase(unittest.TestCase):
         staging = Path.home() / ".cache" / "ph" / "speckit" / (
             f"{speckit['tag']}-{speckit['commit'][:12]}"
         )
-        common = staging / "staging" / ".specify" / "scripts" / "bash" / "common.sh"
+        import ph_layout as _layout
+        import ph_speckit as _ps
+        contract = _ps.speckit_contract()
+        staging_root = _ps.cache_root(None) / f"{contract['tag']}-{contract['commit'][:12]}"
+        common = staging_root / "staging" / ".specify" / "scripts" / "bash" / "common.sh"
         if not common.is_file():
             self.skipTest("verified upstream staging not cached on this machine")
+        # The installed runtime adapts the upstream paths (project-harness
+        # relocation); test against the installed bytes, not raw upstream.
+        adapted = _layout.convert_runtime_text(common.read_text(encoding="utf-8"), ".specify/scripts/bash/common.sh")
+        common = self.repo / _layout.RUNTIME / "scripts" / "bash" / "common.sh"
+        common.parent.mkdir(parents=True, exist_ok=True)
+        common.write_text(adapted, encoding="utf-8")
         self.migrate(apply=True)
         mu.select_intent_spec(self.repo, "INT-20260901-login", None, apply=True)
         script = (
@@ -424,7 +436,7 @@ class IntentToSpecTestCase(unittest.TestCase):
         # printf %q only quotes when needed: assert on the plain resolved
         # paths. FEATURE_SPEC must be <feature_dir>/spec.md, never
         # <feature_dir>/spec.md/spec.md - the pointer holds the directory.
-        feature = f"{self.repo}/specs/intent-INT-20260901-login"
+        feature = f"{self.repo}/.agents/project-harness/specs/intent-INT-20260901-login"
         self.assertIn(f"FEATURE_DIR={feature}\n", output, output + proc.stderr)
         self.assertIn(f"FEATURE_SPEC={feature}/spec.md\n", output, output + proc.stderr)
         self.assertNotIn("spec.md/spec.md", output)
@@ -465,7 +477,7 @@ created: "2026-08-01"
         (self.repo / "docs/意图/进行中/新特性").mkdir(parents=True, exist_ok=True)
         self.write("docs/意图/进行中/新特性/INT-20260801-legacy.md", old_layout)
         self.migrate(apply=True)
-        spec = self.spec_bytes("specs/intent-INT-20260801-legacy/spec.md").decode("utf-8")
+        spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260801-legacy/spec.md").decode("utf-8")
         # Alias mapped: 非目标 content fills 范围与非目标, no false NEEDS
         # CLARIFICATION for it.
         self.assertIn("明确不做的范围乙。", spec)
@@ -491,11 +503,11 @@ created: "2026-08-01"
         )
         self.write("docs/意图/已完成/新特性/INT-20260808-done.md", done)
         self.migrate(apply=True)
-        pending = self.spec_bytes("specs/intent-INT-20260901-login/spec.md").decode("utf-8")
+        pending = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260901-login/spec.md").decode("utf-8")
         self.assertIn("**Status**: Draft", pending)
-        started = self.spec_bytes("specs/intent-INT-20260902-crash/spec.md").decode("utf-8")
+        started = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260902-crash/spec.md").decode("utf-8")
         self.assertIn("**Status**: In Progress", started)
-        done_spec = self.spec_bytes("specs/intent-INT-20260808-done/spec.md").decode("utf-8")
+        done_spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260808-done/spec.md").decode("utf-8")
         self.assertIn("**Status**: Complete", done_spec)
         self.assertIn("不自动重新验收或判通过", done_spec)
         # An unrecognized status_dir is recorded as unknown, never guessed.
@@ -506,7 +518,7 @@ created: "2026-08-01"
             ),
         )
         self.migrate(apply=True)
-        odd = self.spec_bytes("specs/intent-INT-20260904-odd/spec.md").decode("utf-8")
+        odd = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260904-odd/spec.md").decode("utf-8")
         self.assertIn("**Status**: Unknown", odd)
         self.assertIn("不推定任何实施或完成状态", odd)
 
@@ -527,7 +539,7 @@ created: "2026-08-01"
             self.migrate(apply=True)
         self.assertIn("differ only by case", str(caught.exception))
         # Nothing was written: the specs root has no spec directory at all.
-        specs_root = self.repo / "specs"
+        specs_root = self.repo / mu.INTENT_SPEC_ROOT
         if specs_root.is_dir():
             live = [p.name for p in specs_root.iterdir()]
             self.assertEqual(live, [], "no spec directory may be created for colliding ids")
@@ -536,7 +548,7 @@ created: "2026-08-01"
         self.migrate(apply=True)
         ledger_path = self.repo / mu.INTENT_LEDGER_REL
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
-        variant = "specs/INTENT-INT-20260901-LOGIN/spec.md"
+        variant = mu.INTENT_SPEC_ROOT + "/INTENT-INT-20260901-LOGIN/spec.md"
         variant_path = self.repo / variant
         if not variant_path.exists():
             variant_path.parent.mkdir(parents=True)
@@ -553,7 +565,8 @@ created: "2026-08-01"
         (self.repo / "docs/意图/待办/新特性/INT-20260901-login.md").unlink()
         outside = Path(self._tmp.name) / "outside"
         outside.mkdir()
-        (self.repo / "specs").symlink_to(outside, target_is_directory=True)
+        (self.repo / mu.INTENT_SPEC_ROOT).parent.mkdir(parents=True, exist_ok=True)
+        (self.repo / mu.INTENT_SPEC_ROOT).symlink_to(outside, target_is_directory=True)
         with self.assertRaises(mu.PHError) as caught:
             self.migrate(apply=True)
         self.assertIn("specs", str(caught.exception))
@@ -575,7 +588,7 @@ created: "2026-08-01"
         # user the recovery: move the edited spec aside, regenerate the
         # baseline, then re-apply the edits.
         self.migrate(apply=True)
-        spec_path = self.repo / "specs/intent-INT-20260901-login/spec.md"
+        spec_path = self.repo / ".agents/project-harness/specs/intent-INT-20260901-login/spec.md"
         edited = spec_path.read_bytes() + "\n用户补充：范围待议。\n".encode("utf-8")
         spec_path.write_bytes(edited)
         (self.repo / mu.INTENT_LEDGER_REL).unlink()
@@ -591,8 +604,8 @@ created: "2026-08-01"
         _shutil.rmtree(spec_path.parent)
         self.migrate(apply=True)
         self.assertEqual(
-            self.spec_bytes("specs/intent-INT-20260901-login/spec.md"),
-            self.spec_bytes("specs/intent-INT-20260901-login/spec.md"),
+            self.spec_bytes(".agents/project-harness/specs/intent-INT-20260901-login/spec.md"),
+            self.spec_bytes(".agents/project-harness/specs/intent-INT-20260901-login/spec.md"),
         )
         mu.verify_intent_spec_layout(self.repo)
         spec_path.write_bytes(edited)  # the user re-applies their edits
@@ -623,7 +636,7 @@ created: "2026-08-01"
         self.assertEqual(len(parsed["sections"]["背景"]), 1)
         self.write("docs/意图/待办/新特性/INT-20260910-dup.md", doc.replace("INT-20260901-login", "INT-20260910-dup"))
         self.migrate(apply=True)
-        spec = self.spec_bytes("specs/intent-INT-20260910-dup/spec.md").decode("utf-8")
+        spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260910-dup/spec.md").decode("utf-8")
         self.assertIn("用户能单点登录。", spec)
         self.assertIn("修正后的目标。", spec)
         self.assertIn("### 背景", spec)
@@ -641,7 +654,7 @@ created: "2026-08-01"
         self.assertIn("```markdown\n## 目标", "\n".join(parsed["sections"]["验收标准"]))
         self.write("docs/意图/待办/新特性/INT-20260911-fence.md", doc.replace("INT-20260901-login", "INT-20260911-fence"))
         self.migrate(apply=True)
-        spec = self.spec_bytes("specs/intent-INT-20260911-fence/spec.md").decode("utf-8")
+        spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260911-fence/spec.md").decode("utf-8")
         self.assertIn("```markdown\n## 目标", spec)
         self.assertIn("这不是真实小节，是示例文档。", spec)
         # The fenced example did not split the 验收标准 body.
@@ -654,7 +667,7 @@ created: "2026-08-01"
         )
         self.write("docs/意图/待办/新特性/INT-20260912-empty.md", doc.replace("INT-20260901-login", "INT-20260912-empty"))
         self.migrate(apply=True)
-        spec = self.spec_bytes("specs/intent-INT-20260912-empty/spec.md").decode("utf-8")
+        spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260912-empty/spec.md").decode("utf-8")
         self.assertIn("NEEDS CLARIFICATION: 原意图没有「关键约束」节（或该节为空）", spec)
 
     def test_history_index_command_points_at_the_installed_script(self):
@@ -679,7 +692,7 @@ created: "2026-08-01"
             self.migrate(apply=True)
         self.assertIn("status_dir", str(caught.exception))
         self.assertFalse((self.repo / mu.INTENT_LEDGER_REL).exists())
-        self.assertFalse((self.repo / "specs/intent-INT-20260913-moved").exists())
+        self.assertFalse((self.repo / ".agents/project-harness/specs/intent-INT-20260913-moved").exists())
 
     def test_missing_or_unrecognized_status_dir_stays_compatible(self):
         # Regular history stays compatible: an entry without status_dir, or
@@ -690,7 +703,7 @@ created: "2026-08-01"
         self.write("docs/意图/已完成/新特性/INT-20260914-nostatus.md", missing)
         result = self.migrate(apply=True)
         self.assertEqual(result["conflicts"], [])
-        spec = self.spec_bytes("specs/intent-INT-20260914-nostatus/spec.md").decode("utf-8")
+        spec = self.spec_bytes(".agents/project-harness/specs/intent-INT-20260914-nostatus/spec.md").decode("utf-8")
         self.assertIn("**Status**: Unknown", spec)
 
     def test_history_index_survives_a_lost_ledger(self):
@@ -805,9 +818,11 @@ created: "2026-08-01"
     def test_specs_path_as_a_file_is_a_plan_conflict(self):
         # `specs` being a regular file used to crash the apply with a bare
         # NotADirectoryError; the dry-run must report it as a conflict.
-        (self.repo / "specs").write_text("not a directory\n", encoding="utf-8")
+        spec_root = self.repo / mu.INTENT_SPEC_ROOT
+        spec_root.parent.mkdir(parents=True, exist_ok=True)
+        spec_root.write_text("not a directory\n", encoding="utf-8")
         plan = self.migrate()
-        self.assertTrue(any("specs" in c and "real directory" in c for c in plan["conflicts"]), plan["conflicts"])
+        self.assertTrue(any("real directory" in c for c in plan["conflicts"]), plan["conflicts"])
         with self.assertRaises(mu.PHError) as caught:
             self.migrate(apply=True)
         self.assertIn("specs", str(caught.exception))
@@ -815,8 +830,8 @@ created: "2026-08-01"
     def test_feature_dir_path_as_a_file_is_a_plan_conflict(self):
         # A non-directory at the planned feature directory (e.g.
         # specs/intent-x as a file) must also be reported, not crash.
-        (self.repo / "specs").mkdir()
-        (self.repo / "specs/intent-INT-20260901-login").write_text("blocker\n", encoding="utf-8")
+        (self.repo / mu.INTENT_SPEC_ROOT).mkdir(parents=True, exist_ok=True)
+        (self.repo / mu.INTENT_SPEC_ROOT / "intent-INT-20260901-login").write_text("blocker\n", encoding="utf-8")
         plan = self.migrate()
         self.assertTrue(any("intent-INT-20260901-login" in c and "real directory" in c for c in plan["conflicts"]), plan["conflicts"])
         with self.assertRaises(mu.PHError):
@@ -831,7 +846,7 @@ created: "2026-08-01"
             FULL_ENTRY.format(status_dir="待办/新特性").replace("INT-20260901-login", "登录改造甲"),
         )
         result = self.migrate(apply=True)
-        self.assertIn("specs/intent-unnamed/spec.md", result["generated"])
+        self.assertIn(".agents/project-harness/specs/intent-unnamed/spec.md", result["generated"])
 
     def test_non_ascii_intent_ids_get_distinct_target_dirs(self):
         # Non-ASCII ids used to collapse to one slug and surface as a
@@ -848,9 +863,9 @@ created: "2026-08-01"
         )
         result = self.migrate(apply=True)
         self.assertEqual(result["conflicts"], [])
-        self.assertIn("specs/intent-unnamed/spec.md", result["generated"])
+        self.assertIn(".agents/project-harness/specs/intent-unnamed/spec.md", result["generated"])
         suffix_b = hashlib.sha256("崩溃修复乙".encode("utf-8")).hexdigest()[:8]
-        self.assertIn(f"specs/intent-unnamed-{suffix_b}/spec.md", result["generated"])
+        self.assertIn(f".agents/project-harness/specs/intent-unnamed-{suffix_b}/spec.md", result["generated"])
         mu.verify_intent_spec_layout(self.repo)
         # Idempotent: the rerun recognizes the same deterministic paths.
         again = self.migrate(apply=True)
@@ -865,18 +880,18 @@ created: "2026-08-01"
         # the ledger, the rerun keeps the persisted path instead of
         # regenerating the spec at the recomputed location.
         self.migrate(apply=True)
-        old_dir = self.repo / "specs/intent-INT-20260902-crash"
-        new_dir = self.repo / "specs/intent-INT-20260902-renamed"
+        old_dir = self.repo / ".agents/project-harness/specs/intent-INT-20260902-crash"
+        new_dir = self.repo / ".agents/project-harness/specs/intent-INT-20260902-renamed"
         old_dir.rename(new_dir)
         ledger_path = self.repo / mu.INTENT_LEDGER_REL
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         for entry in ledger["entries"]:
-            if entry["spec"] == "specs/intent-INT-20260902-crash/spec.md":
-                entry["spec"] = "specs/intent-INT-20260902-renamed/spec.md"
+            if entry["spec"] == ".agents/project-harness/specs/intent-INT-20260902-crash/spec.md":
+                entry["spec"] = ".agents/project-harness/specs/intent-INT-20260902-renamed/spec.md"
         ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         result = self.migrate(apply=True)
         self.assertEqual(result["conflicts"], [])
-        self.assertIn("specs/intent-INT-20260902-renamed/spec.md", result["skipped"])
+        self.assertIn(".agents/project-harness/specs/intent-INT-20260902-renamed/spec.md", result["skipped"])
         self.assertFalse(old_dir.exists())
         self.assertTrue((new_dir / "spec.md").is_file())
         mu.verify_intent_spec_layout(self.repo)

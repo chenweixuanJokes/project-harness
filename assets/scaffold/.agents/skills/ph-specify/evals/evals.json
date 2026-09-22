@@ -1,0 +1,29 @@
+{
+  "skill_name": "ph-specify",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "请使用 ph-specify 处理当前功能。",
+      "expected_output": "显式调用，按阶段读取项目规范，保持该技能职责与写入边界。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "讨论一下 ph-specify 的职责，不执行。",
+      "expected_output": "不触发技能，不写文件。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "使用 ph-specify 处理一个只有后端的功能，现有测试失败且 verification.md 是旧代码结果。",
+      "expected_output": "按阶段识别后端测试要求；不虚构前端任务，不把旧证据或失败当作通过，不擅自修复无关问题。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "讨论这个功能如何验证，先不要执行任何技能。",
+      "expected_output": "不触发技能，仅讨论。",
+      "files": []
+    }
+  ]
+}

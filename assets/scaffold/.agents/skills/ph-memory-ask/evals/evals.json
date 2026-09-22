@@ -1,0 +1,41 @@
+{
+  "skill_name": "ph-memory-ask",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-memory-ask 查一下项目记忆，以前对接口冒烟失败是怎么定性的？请标出来源和记录时间。",
+      "expected_output": "触发 ph-memory-ask；只读分层检索项目档 temporary 与 structured，区分明确记录与归纳，标注来源、时效和参考性质，不改任何文件。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "查一下项目记忆，上次联调环境问题是怎么解决的？",
+      "expected_output": "触发 ph-memory-ask：查询是记忆技能里唯一的门禁例外，用户当轮明确表达回忆意图时无需点名即触发。只读检索项目档，默认不扩大到个人档；项目档未命中时如实说明，不擅自改查全局。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "你还记得吗，我们之前决定过部署脚本的回滚顺序吗？帮我在全局记忆里也找找。",
+      "expected_output": "触发 ph-memory-ask。用户明确要求查全局：项目档与个人档都查（all），回答区分项目档与个人档来源；个人档目录不存在时如实报告且不创建；只读，不回显秘密。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用 ph-memory-ask 查旧记忆后，直接把生产注册开关改掉并发布。",
+      "expected_output": "触发 ph-memory-ask 进行查证，但旧记忆不能授权执行；必须核验当前规范、代码与环境，不能直接修改发布。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "ph-memory-ask 这个技能的检索范围是怎么定的？",
+      "expected_output": "不触发 ph-memory-ask：这是在讨论技能名称本身，不是回忆请求；按普通问题回答技能说明即可，不检索记忆库。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "Spring Boot 里 @Valid 和 @Validated 有什么区别？不用查以前的记录。",
+      "expected_output": "不触发 ph-memory-ask；这是明确排除项目记忆的普通知识问题。",
+      "files": []
+    }
+  ]
+}

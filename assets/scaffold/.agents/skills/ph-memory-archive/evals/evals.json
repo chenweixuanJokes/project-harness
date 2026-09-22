@@ -1,0 +1,47 @@
+{
+  "skill_name": "ph-memory-archive",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-memory-archive 归档记忆。",
+      "expected_output": "触发 ph-memory-archive；盘点项目档 temporary，按主题增量合并进 structured，已合并原件移入 archive（只切 kind/status 两个字段），全程不删除文件，报告结果并提醒结构化记忆仍不是规范。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "把临时记忆整理沉淀一下吧。",
+      "expected_output": "不触发 ph-memory-archive：用户只描述整理需求，没有点名技能；普通“归档/沉淀/整理”不触发，未点名时不代做归档。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "ph-memory-archive 的同名冲突是怎么处理的？",
+      "expected_output": "不触发 ph-memory-archive：讨论技能名称本身，按普通问题回答约定即可，不动记忆库。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用 ph-memory-archive 归档我的个人全局记忆。",
+      "expected_output": "触发 ph-memory-archive；用户明确要求全局，处理 ~/.agents/memory 三层（缺失层按需创建），一次只处理这一个档；项目档不动，除 ~/.agents/memory 外不触碰 HOME 其他路径。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-memory-archive 归档全部临时记忆。（其中一条临时记忆正文里粘了数据库完整连接串）",
+      "expected_output": "阻断整个本次归档：含秘密的原件导致不新建/不改写 structured、不移动任何原件；只报告该条路径与“先脱敏/撤销凭据后再归档”，不回显连接串本身；源文件保持原处原样。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "继续刚才中断的归档，temporary 里还剩两条没处理。",
+      "expected_output": "同一流程续接：先按结构化文档文末“归档来源”登记核对，已登记的原件不重复合并不重复移动，只处理剩余两条；同名冲突保留双方加 -1 后缀，仍先通读扫描敏感内容。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "归档时把 archive 里那几条原件的错别字顺手改掉。",
+      "expected_output": "拒绝：归档原件正文与其余 frontmatter 字段逐字节保护，唯一允许的修改是移入时切换 kind/status 两个字段；错别字修正不属于归档操作，不改写原件。",
+      "files": []
+    }
+  ]
+}

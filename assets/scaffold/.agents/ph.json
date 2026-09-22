@@ -1,13 +1,13 @@
 {
   "$schema": "./ph.schema.json",
-  "template_version": "1.1.15",
+  "template_version": "1.2.1",
   "adapter_mode": "portable",
   "canonical": {
     "root": ".agents",
     "agents": ".agents/AGENTS.md",
     "manifest": ".agents/ph.json",
     "schema": ".agents/ph.schema.json",
-    "memory": ".agents/memory",
+    "memory": ".agents/project-harness/memory",
     "skills": ".agents/skills",
     "scripts": ".agents/scripts"
   },
@@ -38,11 +38,11 @@
     "max_changed_file_bytes": 10485760
   },
   "memory": {
-    "root": ".agents/memory",
+    "root": ".agents/project-harness/memory",
     "directories": {
       "temporary": "temporary",
       "structured": "structured",
-      "archive": "archive"
+      "archive": "../archive/memory"
     },
     "frontmatter_fields": [
       "kind",
@@ -64,6 +64,9 @@
       "ph-merge-update",
       "ph-worktree-enter",
       "ph-worktree-exit",
+      "ph-memory-ask",
+      "ph-memory-learning",
+      "ph-memory-archive",
       "ph-analyze",
       "ph-checklist",
       "ph-clarify",

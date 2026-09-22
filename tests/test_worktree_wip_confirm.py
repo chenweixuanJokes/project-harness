@@ -45,11 +45,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAFFOLD = ROOT / "assets" / "scaffold"
-ENGINEERING = SCAFFOLD / "docs" / "约束规范" / "工程规范"
+ENGINEERING = SCAFFOLD / ".agents" / "project-harness" / "constraints" / "工程规范"
 
 ENTER_SKILL = SCAFFOLD / ".agents/skills/ph-worktree-enter/SKILL.md"
 EXIT_SKILL = SCAFFOLD / ".agents/skills/ph-worktree-exit/SKILL.md"
-PARALLEL_SPEC = ENGINEERING / "Git与并行开发.md"
+PARALLEL_SPEC = ENGINEERING / "Git规范.md"
 CANONICAL_AGENTS = SCAFFOLD / ".agents/AGENTS.md"
 ENTER_SCRIPT = SCAFFOLD / ".agents/scripts/ph_worktree.py"
 EXIT_SCRIPT = ENTER_SCRIPT
@@ -98,9 +98,12 @@ class UnifiedConfirmationContractTests(unittest.TestCase):
         self.assertIn("说明现场", self.spec)
 
     def test_fixed_question_template_and_two_fixed_options(self):
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.agents, "agents")):
+        # since 1.2.1 the gate wording lives in the skills and the parallel
+        # spec doc; the minimal AGENTS.md no longer duplicates it
+        for text, label in ((self.enter, "enter"), (self.exit, "exit")):
             with self.subTest(file=label):
                 self.assertIn(OPTION_SENTENCE, text)
+        # the spec doc words the same rule in its own sentence
         self.assertIn(SPEC_OPTION_SENTENCE, self.spec)
         # the literal options are 是 / 否 - the retired old option texts must
         # not survive anywhere
@@ -203,13 +206,13 @@ class UnifiedConfirmationContractTests(unittest.TestCase):
                 self.assertIn("不得把", text)
                 self.assertIn("当作干净继续", text)
 
-    def test_canonical_agents_rule_index_carries_the_gate(self):
-        self.assertIn("停止推进并执行统一 WIP 确认", self.agents)
-        self.assertIn(OPTION_SENTENCE, self.agents)
-        self.assertIn("不得自动收纳未知文件", self.agents)
-        # the compact rule keeps the corrected semantics
-        self.assertIn("不是对文件内容的逐项审批", self.agents)
-        self.assertIn("授权不是长期授权", self.agents)
+    def test_parallel_spec_carries_the_gate(self):
+        # the rule index moved out of AGENTS.md: the constraint doc and the
+        # skills carry the full gate wording
+        self.assertIn(SPEC_OPTION_SENTENCE, self.spec)
+        self.assertIn("不盲目 `git add -A`", self.spec)
+        self.assertIn("不是对文件内容的逐项审批", self.spec)
+        self.assertIn("授权不是长期授权", self.spec)
 
 
 class UnifiedWipCommandContractTests(unittest.TestCase):
@@ -478,15 +481,15 @@ class ConflictRecoveryContractTests(unittest.TestCase):
                 self.assertIn("不是 WIP", text)
                 self.assertIn("另行确认", text)
 
-    def test_canonical_agents_rule_index_carries_the_conflict_gate(self):
-        self.assertIn("固定冲突问句", self.agents)
-        self.assertIn(KEEP_CONFLICT_OPTION, self.agents)
-        self.assertIn(ABORT_CONFLICT_OPTION, self.agents)
-        self.assertIn("已解决并暂存，请继续", self.agents)
-        self.assertIn("不是 WIP", self.agents)
-        # the compact rule keeps the merge-identity and old-session guidance
-        self.assertIn("核对 merge 身份", self.agents)
-        self.assertIn("doctor", self.agents)
+    def test_parallel_spec_carries_the_conflict_gate(self):
+        self.assertIn("冲突固定问句", self.spec)
+        self.assertIn(KEEP_CONFLICT_OPTION, self.spec)
+        self.assertIn(ABORT_CONFLICT_OPTION, self.spec)
+        self.assertIn("已解决并暂存，请继续", self.spec)
+        self.assertIn("不是 WIP", self.spec)
+        # the spec keeps the merge-identity and old-session guidance
+        self.assertIn("核对 merge 身份", self.spec)
+        self.assertIn("doctor", self.spec)
 
 
 class EvalsCoverageTests(unittest.TestCase):

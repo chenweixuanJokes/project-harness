@@ -200,8 +200,8 @@ def load_release(root: Path) -> dict:
         not isinstance(item, str) or not SKILL_NAME.match(item) for item in skills
     ):
         raise CheckError("illegal release.json: required_skills must be ph-* names")
-    if len(skills) != 4 or len(set(skills)) != 4:
-        raise CheckError("illegal release.json: required_skills must list 4 unique names")
+    if len(skills) != 7 or len(set(skills)) != 7:
+        raise CheckError("illegal release.json: required_skills must list 7 unique names")
     if skills[0] != "ph-init":
         raise CheckError("illegal release.json: required_skills[0] must be ph-init")
     # The pinned spec-kit contract travels as its own top-level release file:
@@ -387,7 +387,7 @@ def parse_frontmatter(text: str, label: str) -> dict[str, str]:
 
 
 def validate_skill(path: Path, expected_name: str) -> None:
-    """Common strict subset shared by all thirteen distributed skills.
+    """Common strict subset shared by all distributed skills.
 
     The skill slot (root ``SKILL.md`` for ``ph-init``, the scaffold directory
     otherwise) and the frontmatter ``name`` must be the same strict kebab-case
@@ -547,6 +547,7 @@ def validate_skills_and_docs(root: Path, skills: list[str]) -> None:
     skill_root = root / "assets" / "scaffold" / ".agents" / "skills"
     if not skill_root.is_dir() or skill_root.is_symlink():
         raise CheckError("missing assets/scaffold/.agents/skills")
+    skills = tuple(skills) + tuple(ph_init.SPECKIT_SKILL_NAMES)
     found: list[str] = []
     for name in skills:
         if name == "ph-init":
@@ -574,9 +575,11 @@ def validate_skills_and_docs(root: Path, skills: list[str]) -> None:
     script = root / "assets" / "scaffold" / ".agents" / "scripts" / "ph_worktree.py"
     if script.is_symlink() or not script.is_file():
         raise CheckError("scaffold must ship the shared .agents/scripts/ph_worktree.py")
-    for name in ph_init.SPECKIT_SKILL_NAMES:
-        if (skill_root / name).exists():
-            raise CheckError(f"scaffold must not ship generated spec-kit skill {name}")
+    import ph_speckit
+    try:
+        ph_speckit.bundled_source(root)
+    except ph_init.PHError as exc:
+        raise CheckError(str(exc)) from exc
 
     for path in iter_files(root):
         if path.suffix == ".json":
@@ -708,7 +711,7 @@ def is_payload_path(rel: str) -> bool:
         return False
     top = rel.split("/", 1)[0]
     # IDE-private state is never release payload, whether tracked or not.
-    if top == ".idea":
+    if top in (".idea", ".zcodeignore"):
         return False
     if top in NON_PAYLOAD_TOP:
         return False

@@ -281,13 +281,18 @@ class InitAdoptionTests(unittest.TestCase):
         (repo / "AGENTS.md").write_text(OLD_RULES_AGENTS, encoding="utf-8")
         custom = {
             "docs/README.md": "# 项目文档\n存量 README 正文。\n",
-            "docs/约束规范/工程规范/文档治理.md": "# 文档治理\n项目定制规范正文。\n",
             "docs/项目Wiki/自定义存量.md": "# 仅项目所有\n",
         }
         for rel, text in custom.items():
             dest = repo / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(text, encoding="utf-8")
+        # since 1.2.1 the scaffold ships no docs/ tree: the "existing file is
+        # preserved" surface is the project-harness home roots, while the
+        # adopt plan itself may still deliver docs/** pages
+        home_custom = ".agents/project-harness/constraints/harness规范/文档治理规范.md"
+        (repo / home_custom).parent.mkdir(parents=True, exist_ok=True)
+        (repo / home_custom).write_text("# 文档治理\n项目定制规范正文。\n", encoding="utf-8")
         merged_doc = custom["docs/README.md"] + "\n并入 PH 文档结构说明。\n"
         merged = self.merged_canonical(OLD_RULES_AGENTS)
         sources = self.rule_pins(
@@ -313,11 +318,12 @@ class InitAdoptionTests(unittest.TestCase):
         self.assertIn("合并写入", mapped["docs/README.md"][1], dry.stdout)
         self.assertEqual(mapped["docs/项目Wiki/迁移笔记.md"][0], "write", dry.stdout)
         self.assertEqual(
-            mapped["docs/约束规范/工程规范/文档治理.md"],
+            mapped[home_custom],
             ("skip", "scaffold: 保留待会话审阅"),
             dry.stdout,
         )
         self.assertNotIn("docs/项目Wiki/自定义存量.md", mapped, dry.stdout)
+        self.assertNotIn("docs/约束规范/工程规范/文档治理.md", mapped, dry.stdout)
 
         applied = ph(repo, "init", "--apply", "--adopt-plan", str(plan))
         self.assert_ok(applied, mode="portable", apply="true")
@@ -327,8 +333,8 @@ class InitAdoptionTests(unittest.TestCase):
             "# 迁移笔记\n由会话整理的存量规则去向。\n",
         )
         self.assertEqual(
-            (repo / "docs" / "约束规范" / "工程规范" / "文档治理.md").read_text(encoding="utf-8"),
-            custom["docs/约束规范/工程规范/文档治理.md"],
+            (repo / home_custom).read_text(encoding="utf-8"),
+            "# 文档治理\n项目定制规范正文。\n",
         )
         self.assertEqual(
             (repo / "docs" / "项目Wiki" / "自定义存量.md").read_text(encoding="utf-8"),
@@ -599,11 +605,15 @@ class InitAdoptionTests(unittest.TestCase):
             self.rule_pins(repo, **{"docs/a": None, "docs/a/b.md": None}),
             {".agents/AGENTS.md": merged, "docs/a": "# a\n", "docs/a/b.md": "# b\n"},
         )
-        # Same shape across the plan and the scaffold docs tree.
+        # Same shape across the plan and the scaffold home tree (the
+        # scaffold deploys documents/架构地图/ as a directory).
         scaffold_cross = self.write_plan(
             repo,
-            self.rule_pins(repo, **{"docs/意图": None}),
-            {".agents/AGENTS.md": merged, "docs/意图": "# 旧意图索引\n"},
+            self.rule_pins(repo, **{".agents/project-harness/documents/架构地图": None}),
+            {
+                ".agents/AGENTS.md": merged,
+                ".agents/project-harness/documents/架构地图": "# 旧式单文件\n",
+            },
             name="cross.json",
         )
         for plan in (internal, scaffold_cross):
@@ -679,6 +689,7 @@ class InitAdoptionTests(unittest.TestCase):
             ({}, "non-empty"),
             ({".agents/AGENTS.md": ""}, "non-empty"),
             ({".agents/AGENTS.md": merged, "docs/new.md": "x"}, "not pinned in sources"),
+            ({".agents/AGENTS.md": merged, ".agents/project-harness/constitution.md": "# [PROJECT_NAME]"}, "materialized navigation"),
         ]
         for files, needle in cases:
             with self.subTest(files=sorted(files)):

@@ -54,7 +54,7 @@ def _speckit_core_names(contract: dict) -> tuple:
     """The ten upstream core names, derived from the bundled speckit.json.
 
     speckit.json is the single maintenance source for the pinned spec-kit
-    contract (release.json keeps `required_skills` for the four PH scaffold
+    contract (release.json keeps `required_skills` for the seven PH scaffold
     skills; speckit.json lists the spec-kit cores that install-time generation
     converts to `ph-*`). No script may re-spell either list; the static pin
     guarding accidental edits lives in tests/test_ph_speckit.py, and a wrong
@@ -79,13 +79,13 @@ def _speckit_core_names(contract: dict) -> tuple:
 SPECKIT_CORE_SKILLS = _speckit_core_names(SPECKIT_CONTRACT)
 SPECKIT_SKILL_NAMES = tuple(f"ph-{core}" for core in SPECKIT_CORE_SKILLS)
 ALL_REQUIRED_SKILL_NAMES = REQUIRED_SKILLS + SPECKIT_SKILL_NAMES
-SPECIFY_DIR = ".specify"
+SPECIFY_DIR = ".agents/project-harness/runtime"
 SPECIFY_MANAGED_MINIMUM = (
-    ".specify/scripts/bash/check-prerequisites.sh",
-    ".specify/scripts/bash/resolve-template.sh",
-    ".specify/templates/spec-template.md",
-    ".specify/memory/constitution.md",
-    ".specify/templates/overrides/constitution-template.md",
+    f"{SPECIFY_DIR}/scripts/bash/check-prerequisites.sh",
+    f"{SPECIFY_DIR}/scripts/bash/resolve-template.sh",
+    f"{SPECIFY_DIR}/templates/spec-template.md",
+    ".agents/project-harness/constitution.md",
+    f"{SPECIFY_DIR}/templates/overrides/constitution-template.md",
 )
 SEMVER = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
 REL_PATH = re.compile(
@@ -119,6 +119,12 @@ FALSE_CORE_SYMLINKS = frozenset({"false", "0", "no", "off"})
 ADOPT_PLAN_VERSION = 1
 ADOPT_CANONICAL = ".agents/AGENTS.md"
 ADOPT_ROOT_ENTRIES = ("AGENTS.md", "CLAUDE.md")
+# Active PH content roots an adopt plan may also carry besides docs/**:
+# legacy 约束规范 / 项目Wiki trees merge into the project-harness home.
+ADOPT_HOME_ROOTS = (
+    ".agents/project-harness/constraints",
+    ".agents/project-harness/documents",
+)
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 ADOPT_UNSAFE_HEAD = re.compile(r"^(?:/|~|[A-Za-z]:[\\/]|[A-Za-z][A-Za-z0-9+.-]*:)")
 ADOPT_NTFS_RESERVED = frozenset('<>:"|?*')
@@ -405,7 +411,7 @@ def validate_manifest(data: dict) -> None:
         "agents": ".agents/AGENTS.md",
         "manifest": ".agents/ph.json",
         "schema": ".agents/ph.schema.json",
-        "memory": ".agents/memory",
+        "memory": ".agents/project-harness/memory",
         "skills": ".agents/skills",
         "scripts": ".agents/scripts",
     }.items():
@@ -476,11 +482,11 @@ def validate_manifest(data: dict) -> None:
     memory = data["memory"]
     if not isinstance(memory, dict):
         raise PHError("illegal manifest: memory must be an object")
-    _const(_need(memory, "root", "memory"), ".agents/memory", "memory.root")
+    _const(_need(memory, "root", "memory"), ".agents/project-harness/memory", "memory.root")
     directories = _need(memory, "directories", "memory")
     if not isinstance(directories, dict):
         raise PHError("illegal manifest: memory.directories must be an object")
-    for key, expected in (("temporary", "temporary"), ("structured", "structured"), ("archive", "archive")):
+    for key, expected in (("temporary", "temporary"), ("structured", "structured"), ("archive", "../archive/memory")):
         _const(_need(directories, key, "memory.directories"), expected, f"memory.directories.{key}")
     fields = _need(memory, "frontmatter_fields", "memory")
     expected_fields = [
@@ -963,7 +969,7 @@ def ph_init_payload_files() -> list[Path]:
         raise PHError("ph-init installation payload is incomplete")
     files.append(skill_md)
     files.append(script)
-    for rel in ("release.json", "speckit.json", "scripts/ph_release.py", "scripts/ph_merge_update.py", "scripts/ph_speckit.py"):
+    for rel in ("release.json", "speckit.json", "assets/speckit-bundle.json", "scripts/ph_release.py", "scripts/ph_merge_update.py", "scripts/ph_speckit.py", "scripts/ph_layout.py"):
         resource = root / rel
         if not resource.is_file() or resource.is_symlink():
             raise PHError(f"ph-init payload missing regular file: {rel}")
@@ -973,6 +979,10 @@ def ph_init_payload_files() -> list[Path]:
         raise PHError("ph-init migrations missing")
     reject_nested_links(migrations, label="ph-init migrations")
     files.extend(iter_files(migrations))
+    references = root / "references"
+    if references.is_dir():
+        reject_nested_links(references, label="ph-init references")
+        files.extend(iter_files(references))
     evals = root / "evals"
     if evals.is_dir():
         reject_nested_links(evals, label="ph-init evals")
@@ -1095,7 +1105,7 @@ def plan_speckit(report: Report, repo: Path) -> None:
         report.add("block", ".", "spec-kit integration has conflicts; resolve them and re-run")
 
 
-def apply_speckit(report: Report, repo: Path) -> str | None:
+def apply_speckit(report: Report, repo: Path) -> dict:
     """Apply the spec-kit install; return the content proof of the override
     it wrote (the sha256 of the constitution override bytes), for the
     post-scaffold baseline recording to bind its refresh against."""
@@ -1111,16 +1121,16 @@ def apply_speckit(report: Report, repo: Path) -> str | None:
     # mirroring how scaffold keeps its planned entries at apply time; adding
     # applied duplicates here would make the apply report diverge from the
     # dry-run plan for the same set.
-    override_sha = None
+    proofs = {}
     for item in payload.get("items") or []:
         if item.get("kind") == "conflict":
             report.add("block", item.get("path", "."), item.get("reason", "spec-kit conflict during apply"))
-        if item.get("path") == ".specify/templates/overrides/constitution-template.md":
-            override_sha = item.get("sha256")
-    return override_sha if isinstance(override_sha, str) else None
+        if item.get("kind") == "write" and isinstance(item.get("sha256"), str):
+            proofs[item["path"]] = item["sha256"]
+    return proofs
 
 
-def record_speckit_baselines(report: Report, repo: Path, override_sha: str | None) -> None:
+def record_speckit_baselines(report: Report, repo: Path, proofs: dict | None) -> None:
     """Re-record the speckit per-file baselines after the scaffold deploy.
 
     A fresh init runs the speckit install first (which records the per-file
@@ -1138,8 +1148,13 @@ def record_speckit_baselines(report: Report, repo: Path, override_sha: str | Non
     """
 
     argv = ["record-baselines", "--repo", str(repo)]
-    if override_sha is not None:
-        argv += ["--refresh-override-sha", override_sha]
+    proofs = proofs or {}
+    for rel, flag in (
+        (f"{SPECIFY_DIR}/templates/overrides/constitution-template.md", "--refresh-override-sha"),
+        (".agents/project-harness/constitution.md", "--refresh-constitution-sha"),
+    ):
+        if rel in proofs:
+            argv += [flag, proofs[rel]]
     try:
         payload = run_speckit(*argv)
         if payload.get("blocked"):
@@ -1174,6 +1189,11 @@ def scaffold_entries() -> list[tuple[Path, str]]:
     for src in iter_files(root):
         rel = posix_rel(src.relative_to(root))
         if rel.startswith(".agents/skills/ph-init/") or rel == ".agents/skills/ph-init":
+            continue
+        if any(rel == f".agents/skills/{name}/SKILL.md" for name in SPECKIT_SKILL_NAMES):
+            continue
+        bundle = skill_root() / "assets" / "speckit-bundle.json"
+        if bundle.is_file() and rel in read_json(bundle).get("files", {}):
             continue
         entries.append((src, rel))
     return entries
@@ -1237,7 +1257,8 @@ def is_docs_rel(rel: str) -> bool:
     """True for repository-relative files under docs/, not docs-prefixed names."""
 
     rel = posix_rel(rel)
-    return rel == "docs" or rel.startswith("docs/")
+    roots = ("docs", ".agents/project-harness/constraints", ".agents/project-harness/documents")
+    return any(rel == root or rel.startswith(root + "/") for root in roots)
 
 
 def docs_dest_issue(repo: Path, dest: Path) -> tuple[str, str] | None:
@@ -1329,7 +1350,12 @@ def safe_adopt_rel(value: object, ctx: str) -> str:
 def adopt_plan_allows_file(rel: str) -> bool:
     """Adopt may write only the merged canonical and explicitly listed docs."""
 
-    return rel == ADOPT_CANONICAL or rel.startswith("docs/")
+    return (
+        rel == ADOPT_CANONICAL
+        or rel == ".agents/project-harness/constitution.md"
+        or rel.startswith("docs/")
+        or any(rel == root or rel.startswith(root + "/") for root in ADOPT_HOME_ROOTS)
+    )
 
 
 def load_adopt_plan(value: str, repo: Path) -> dict:
@@ -1376,7 +1402,7 @@ def load_adopt_plan(value: str, repo: Path) -> dict:
         safe_adopt_rel(rel, "adopt plan file path")
         if not adopt_plan_allows_file(rel):
             raise PHError(
-                f"adopt plan file is outside the allowed write set ({ADOPT_CANONICAL} and docs/**): {rel}"
+                f"adopt plan file is outside the allowed write set ({ADOPT_CANONICAL}, docs/** and the project-harness home roots): {rel}"
             )
         if not isinstance(body, str):
             raise PHError(f"adopt plan file {rel} must be a UTF-8 text body")
@@ -1384,6 +1410,11 @@ def load_adopt_plan(value: str, repo: Path) -> dict:
             body.encode("utf-8")
         except UnicodeEncodeError as exc:
             raise PHError(f"adopt plan file {rel} is not encodable as UTF-8: {exc}") from exc
+        if rel == ".agents/project-harness/constitution.md":
+            if ("<!-- PH-managed constitution override:" not in body
+                    or "## 约束导航" not in body
+                    or "[PROJECT_NAME]" in body or "[PRINCIPLE_" in body):
+                raise PHError("adopt constitution must preserve principles and carry a materialized navigation zone")
         if rel not in sources:
             raise PHError(f"adopt plan file {rel} is not pinned in sources")
     canonical = files.get(ADOPT_CANONICAL)
@@ -2092,7 +2123,7 @@ def check_common(report: Report, repo: Path, *, candidate: dict | None = None) -
     try:
         verification = run_speckit("verify", "--repo", str(repo))
         if not verification.get("ok"):
-            report.add("error", ".specify", "; ".join(verification.get("problems") or ["spec-kit verification failed"]))
+            report.add("error", "project-harness/runtime", "; ".join(verification.get("problems") or ["spec-kit verification failed"]))
     except PHError as exc:
         report.add("error", ".specify", str(exc))
     script = repo / ".agents" / "scripts" / "ph_worktree.py"
@@ -2177,6 +2208,8 @@ def cmd_init(repo: Path, mode: str, apply: bool, adopt: dict | None = None) -> R
             return report
         if adopt is not None:
             apply_adopt_files(repo, adopt)
+            if ".agents/project-harness/constitution.md" in adopt["files"]:
+                override_sha.pop(".agents/project-harness/constitution.md", None)
         apply_scaffold(repo, mode, skip_rels=skip_rels)
         apply_self_install(repo)
         apply_gitignore(repo)

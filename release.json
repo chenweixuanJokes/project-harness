@@ -1,11 +1,14 @@
 {
   "format_version": 1,
-  "version": "1.1.15",
+  "version": "1.2.1",
   "repository": "https://github.com/chenweixuanJokes/ph-init.git",
   "required_skills": [
     "ph-init",
     "ph-merge-update",
     "ph-worktree-enter",
-    "ph-worktree-exit"
+    "ph-worktree-exit",
+    "ph-memory-ask",
+    "ph-memory-learning",
+    "ph-memory-archive"
   ]
 }

@@ -12,8 +12,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAFFOLD = ROOT / "assets/scaffold"
-GUIDE = SCAFFOLD / "docs/约束规范/工程规范/初始化与文档补全.md"
-GOVERNANCE = SCAFFOLD / "docs/约束规范/工程规范/文档治理.md"
+GUIDE = ROOT / "references/接入规范.md"
+GOVERNANCE = SCAFFOLD / ".agents/project-harness/constraints/harness规范/文档治理规范.md"
 AGENTS = SCAFFOLD / ".agents/AGENTS.md"
 EVALS = ROOT / "evals/evals.json"
 
@@ -31,14 +31,19 @@ FRONTMATTER_SCALAR = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$")
 def frontmatter_scalars(text: str) -> dict:
     """Precise, limited frontmatter parse: flat ``key: value`` scalars only.
 
-    The distributed skills keep single-line scalars, so no third-party YAML
-    dependency is needed; anything else fails loudly instead of guessing.
+    Single-line scalars cover every distributed skill; nested blocks (the
+    speckit skills carry ``metadata:`` provenance maps and ``x-ph-upstream``)
+    are skipped rather than parsed, since only top-level scalar slots are
+    asserted. No third-party YAML dependency; malformed top-level lines fail
+    loudly instead of guessing.
     """
     block = FRONTMATTER_BLOCK.match(text)
     if block is None:
         raise AssertionError("missing YAML frontmatter")
     fields = {}
     for raw in block.group(1).splitlines():
+        if raw.startswith((" ", "\t")):
+            continue  # nested continuation of a mapping/list block, not a scalar slot
         parsed = FRONTMATTER_SCALAR.match(raw)
         if parsed is None:
             raise AssertionError(f"cannot parse frontmatter line: {raw!r}")
@@ -57,7 +62,7 @@ class SkillContractTests(unittest.TestCase):
         cls.skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     def test_batch_version_single_ph_version_contract(self):
-        self.assertIn("本批版本为 `1.1.15`", self.skill)
+        self.assertIn("本批版本为 `1.2.1`", self.skill)
         # separate schema version is gone; 1.1.10+ release numbers must not trip the check
         self.assertNotRegex(self.skill, r"1\.1\.1(?![0-9])")
         self.assertIn("urn:ph:schema:project-harness", self.skill)
@@ -138,11 +143,13 @@ class SkillContractTests(unittest.TestCase):
     def test_distributed_skills_share_strict_frontmatter_subset(self):
         release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
         required = release["required_skills"]
-        # 1.1.14 ships four PH scaffold skills; the ten spec-driven skills are
-        # generated from the pinned upstream release at install time and are
-        # therefore not scaffold content.
+        # 1.2.1 ships seven PH scaffold skills (the four core skills plus the
+        # three memory skills) and the ten spec-driven skills as bundled,
+        # already-adapted scaffold content (upstream provenance stays pinned
+        # in speckit.json / speckit-bundle.json).
         self.assertEqual(sorted(required), [
-            "ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
+            "ph-init", "ph-memory-archive", "ph-memory-ask",
+            "ph-memory-learning", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
         ])
         # the spec-kit list's single maintenance source is the top-level
         # contract file: release.json must not carry a second copy of it
@@ -151,7 +158,7 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotIn("speckit", release)
         speckit_names = [f"ph-{core}" for core in contract["skills"]]
         self.assertEqual(len(speckit_names), 10)
-        # the root SKILL.md is the ph-init slot; the other three live in scaffold
+        # the root SKILL.md is the ph-init slot; the other seven live in scaffold
         slots = {
             "ph-init": ROOT / "SKILL.md",
             **{
@@ -165,12 +172,8 @@ class SkillContractTests(unittest.TestCase):
             for child in (SCAFFOLD / ".agents" / "skills").iterdir()
             if child.is_dir()
         )
-        self.assertEqual(scaffold_dirs, sorted(name for name in required if name != "ph-init"))
-        for name in speckit_names:
-            self.assertFalse(
-                (SCAFFOLD / ".agents" / "skills" / name).exists(),
-                f"spec-kit skill {name} must not be scaffold content",
-            )
+        self.assertEqual(scaffold_dirs, sorted([name for name in required if name != "ph-init"] + speckit_names))
+        slots.update({name: SCAFFOLD / ".agents/skills" / name / "SKILL.md" for name in speckit_names})
         for name, path in sorted(slots.items()):
             with self.subTest(skill=name):
                 self.assertTrue(path.is_file(), f"missing skill file for {name}")
@@ -214,7 +217,7 @@ class SkillContractTests(unittest.TestCase):
 class GuideContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.guide = GUIDE.read_text(encoding="utf-8")
+        cls.guide = GUIDE.read_text(encoding="utf-8") + (ROOT / "references/补全规范.md").read_text(encoding="utf-8")
 
     def test_legacy_content_onboarding_rules(self):
         self.assertIn("用旧内容接入", self.guide)
@@ -234,14 +237,16 @@ class GuideContractTests(unittest.TestCase):
         self.assertIn("只允许", self.guide)
 
     def test_migration_requires_authorization_and_preserves_sources(self):
-        for term in ("本轮授权", ".agents/archived", "哈希", "未完成", "不自动搬移或删除"):
+        for term in ("本轮授权", "archive/legacy-backup", "哈希", "未完成", "不自动搬移或删除"):
             self.assertIn(term, self.guide)
         self.assertIn("旧正文", self.guide)
         self.assertIn("历史记录", self.guide)
+        self.assertIn("归并", self.guide)
+        self.assertIn("深链", self.guide)
         self.assertNotIn("仓外备份", self.guide)
 
     def test_legacy_plans_are_not_fabricated_intents(self):
-        self.assertIn("已有计划", self.guide)
+        self.assertIn("已有需求与计划", self.guide)
         self.assertIn("不推定评审", self.guide)
         self.assertIn("交付", self.guide)
         self.assertIn("实施", self.guide)
@@ -256,16 +261,16 @@ class GuideContractTests(unittest.TestCase):
     def test_attachments_follow_body_and_are_not_executed(self):
         self.assertIn("附件", self.guide)
         self.assertIn("不因整理而执行", self.guide)
-        self.assertIn(".agents/archived", self.guide)
+        self.assertIn("archive/legacy-backup", self.guide)
         self.assertIn("可恢复原件", self.guide)
 
     def test_archived_snapshot_convention_is_in_repo(self):
-        archived = SCAFFOLD / ".agents/archived/README.md"
-        self.assertTrue(archived.is_file(), "scaffold must ship .agents/archived/README.md")
+        archived = SCAFFOLD / ".agents/project-harness/archive/legacy-backup/README.md"
+        self.assertTrue(archived.is_file(), "scaffold must ship archive/legacy-backup/README.md")
         text = archived.read_text(encoding="utf-8")
-        for term in (".agents/archived", "pre-init", "原样", "可恢复", "memory/archive", "不自动"):
+        for term in ("archive/legacy-backup", "pre-init", "原样", "可恢复", "archive/memory", "不自动"):
             self.assertIn(term, text)
-        self.assertIn(".agents/archived", self.guide)
+        self.assertIn("archive/legacy-backup", self.guide)
         self.assertIn("可恢复原件", self.guide)
         self.assertIn("plan JSON", self.guide)
         # adopt plan stays outside the repo; source-file backup does not
@@ -332,29 +337,43 @@ class EntryPointsTests(unittest.TestCase):
         cls.governance = GOVERNANCE.read_text(encoding="utf-8")
         cls.agents = AGENTS.read_text(encoding="utf-8")
 
-    def test_governance_declares_init_report_and_legacy_dirs(self):
+    def test_governance_declares_init_report_and_archive_split(self):
         self.assertIn("init-report", self.governance)
-        self.assertIn("归并", self.governance)
+        self.assertIn("archive/legacy-backup", self.governance)
+        self.assertIn("只读追溯", self.governance)
         self.assertNotIn("保留原位", self.governance)
-        self.assertIn("深链", self.governance)
-        self.assertIn(".agents/archived", self.governance)
+        # business docs stay outside PH governance
+        self.assertIn("PH 不占用、不索引", self.governance)
 
-    def test_canonical_agents_navigation_mentions_both(self):
-        self.assertIn("init-report", self.agents)
-        self.assertIn("深链", self.agents)
-        self.assertIn("归并", self.agents)
-        self.assertNotIn("保留原位", self.agents)
-        self.assertIn(".agents/archived", self.agents)
+    def test_canonical_agents_entry_is_minimal_and_points_at_the_constitution(self):
+        # Since 1.2.1 the entry file only routes to the materialized
+        # constitution and the home README; the old skill table, centralized
+        # invocation gate and detailed rules are gone.
+        self.assertIn("constitution.md", self.agents)
+        self.assertIn("project-harness/README.md", self.agents)
+        self.assertIn("基本要求", self.agents)
+        self.assertNotIn("init-report", self.agents)
+        self.assertNotIn(".agents/archived", self.agents)
+        self.assertNotIn("ph-specify", self.agents)
+        self.assertNotIn("十八名固定", self.agents)
 
-    def test_canonical_agents_skill_table_registers_both_sources(self):
-        # The 1.1.14 skill table distinguishes PH scaffold skills from the ten
-        # renamed spec-kit skills and carries the explicit-invocation gate.
-        self.assertIn("十四名固定", self.agents)
-        self.assertIn("ph-specify", self.agents)
-        self.assertIn("GitHub Spec Kit", self.agents)
-        self.assertIn("明确点名", self.agents)
-        self.assertNotIn("ph-docs-sync", self.agents)
-        self.assertNotIn("ph-sure", self.agents)
+    def test_invocation_gate_lives_in_each_skill_metadata(self):
+        # The gate moved from AGENTS.md into every skill's own metadata,
+        # keeping its two standing exceptions: the ph-init in-session
+        # merge-update steps and the ph-memory-ask recollection intent.
+        skills = sorted((SCAFFOLD / ".agents/skills").glob("ph-*/SKILL.md"))
+        # six scaffold skills plus the root ph-init entry make the seven
+        # required skills
+        self.assertGreaterEqual(len(skills), 6)
+        for skill in skills:
+            text = skill.read_text(encoding="utf-8")
+            desc = next(
+                (line for line in text.splitlines() if line.startswith("description:")), "", )
+            self.assertRegex(desc, r"点名|不触发|不按普通描述", f"{skill.name}: {desc}")
+        ask = (SCAFFOLD / ".agents/skills/ph-memory-ask/SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("回忆意图", ask)
+        init_skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("merge-update", init_skill)
 
 
 class EvalsCoverageTests(unittest.TestCase):

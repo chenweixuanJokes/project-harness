@@ -40,7 +40,7 @@
         "agents": { "const": ".agents/AGENTS.md" },
         "manifest": { "const": ".agents/ph.json" },
         "schema": { "const": ".agents/ph.schema.json" },
-        "memory": { "const": ".agents/memory" },
+        "memory": { "const": ".agents/project-harness/memory" },
         "skills": { "const": ".agents/skills" },
         "scripts": { "const": ".agents/scripts" }
       }
@@ -115,7 +115,7 @@
       "additionalProperties": false,
       "required": ["root", "directories", "frontmatter_fields"],
       "properties": {
-        "root": { "const": ".agents/memory" },
+        "root": { "const": ".agents/project-harness/memory" },
         "directories": {
           "type": "object",
           "additionalProperties": false,
@@ -123,7 +123,7 @@
           "properties": {
             "temporary": { "const": "temporary" },
             "structured": { "const": "structured" },
-            "archive": { "const": "archive" }
+            "archive": { "const": "../archive/memory" }
           }
         },
         "frontmatter_fields": {

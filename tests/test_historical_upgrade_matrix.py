@@ -43,7 +43,15 @@ constitution governance override; and ``intent-to-spec`` runs the real
 prepared migration script over the fixture intent tree. The 1.1.13 draft
 items ``intent-verify-acceptance-contract`` and ``sure-skill`` were
 withdrawn before publication and no longer exist in
-``migrations/index.json`` (see the handler notes below).
+``migrations/index.json`` (see the handler notes below). The 1.1.16 hop has
+one handler: ``memory-skills`` installs the four release-byte memory skills
+(ask/capture/archive carry the new contract for names 1.1.14 retired, so
+the retirement item must archive the old copies first; learning is new),
+merges the recollection-intent query exception into the canonical AGENTS
+gate and the memory README (skill table, personal tier, rewrite boundary),
+and refreshes the governance wording - while every memory content file in
+the three tiers stays byte-for-byte identical, which the final assertions
+prove.
 
 The semantic merge is performed by explicit per-migration-item handlers. A
 migration item that is not in the handler registry fails the test instead of
@@ -140,9 +148,20 @@ NEW_INTENT = ("ph-intent-new", "ph-intent-impl", "ph-intent-drop")
 # historical fixture verification.
 HISTORICAL_ELEVEN_SKILLS = BASE_SKILLS + NEW_INTENT + ("ph-merge-update", "ph-docs-sync")
 HISTORICAL_TWELVE_SKILLS = HISTORICAL_ELEVEN_SKILLS + ("ph-intent-verify",)
-TARGET_SCAFFOLD_SKILLS = ("ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit")
+TARGET_SCAFFOLD_SKILLS = (
+    "ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
+    "ph-memory-ask", "ph-memory-learning", "ph-memory-archive",
+)
+# Memory names the 1.2.1 target re-ships with a new contract after 1.1.14
+# retired them: the 1.1.14 hop still archives the old copies (retire_managed
+# below), then the 1.2.1 memory-skills item installs the release-byte skills.
+# ph-memory-capture is NOT re-shipped (its duty moved into ph-memory-learning),
+# so it stays in the retired set below and must be gone from the final state.
+REINTRODUCED_MEMORY_SKILLS = {"ph-memory-ask", "ph-memory-archive"}
 # Skills 1.1.14 removes from the managed install (the unshipped ph-sure draft
-# sibling included): same membership as scripts/ph_merge_update.RETIRED_SKILLS.
+# sibling included) that the CURRENT release does not ship again: the final
+# state must not carry them. Same membership as
+# scripts/ph_merge_update.RETIRED_SKILLS minus the reintroduced memory names.
 RETIRED_TARGET_SKILLS = set(HISTORICAL_TWELVE_SKILLS) - set(TARGET_SCAFFOLD_SKILLS) | {"ph-sure"}
 SPECKIT_TARGET_SKILLS = tuple(f"ph-{core}" for core in _speckit_seed.contract()["skills"])
 TARGET_SKILLS = TARGET_SCAFFOLD_SKILLS  # retained name for scope-coverage reads
@@ -170,6 +189,10 @@ CODEX_ARCHIVE_SUFFIX = "-pre-update"
 CODEX_ARCHIVE_CHILD = "codex-skills"
 
 W = "docs/约束规范/工程规范"
+# 1.2.1 terminal home and its live constraints guides
+HOME = ".agents/project-harness"
+NW = f"{HOME}/constraints/工程规范"
+OVERWRITE_REL = f"{HOME}/constraints/harness规范/对用户提问规范.md"
 PENDING_ROOTS = ("待办", "实施")
 INTENT_KINDS = ("新特性", "问题记录")
 LEGACY_COMPLETED = "已完成"
@@ -592,7 +615,11 @@ ENGINE_ENSURE = {
             "docs/意图/已废弃/README.md",
             f"{W}/README.md", f"{W}/文档治理.md", f"{W}/意图与访谈.md",
         ],
-        "skills": CORE_NON_INIT + NEW_INTENT,
+        # CORE_NON_INIT names the historical layout (kept for LAYOUT_SKILLS);
+        # the memory names this scope once refreshed are owned by the
+        # 1.1.14 retirement + 1.1.16 memory-skills pairing instead, so the
+        # merged chain skips re-syncing them here.
+        "skills": tuple(n for n in CORE_NON_INIT + NEW_INTENT if n not in REINTRODUCED_MEMORY_SKILLS),
         "agents": True,
     },
     "intent-skill-names": {
@@ -663,8 +690,10 @@ ENGINE_ENSURE = {
             f"{W}/Git与并行开发.md", f"{W}/README.md", f"{W}/初始化与文档补全.md",
             f"{W}/对用户提问.md", f"{W}/意图与访谈.md", ".agents/memory/README.md",
         ],
-        "skills": NEW_INTENT + ("ph-memory-capture", "ph-memory-ask",
-                                "ph-worktree-enter", "ph-worktree-exit", "ph-merge-update"),
+        # The ph-memory-capture / ph-memory-ask refresh this item once owned
+        # is superseded by the 1.1.14 retirement + 1.2.1 memory-skills
+        # pairing; the memory README merge stays owned here.
+        "skills": NEW_INTENT + ("ph-worktree-enter", "ph-worktree-exit", "ph-merge-update"),
         "agents": True,
     },
     "prepare-star-fork": {"payload": True, "skills": ("ph-merge-update",)},
@@ -838,8 +867,12 @@ ENGINE_ENSURE = {
         # hop. This item also owns the rule-document rewrites that replace
         # retired-skill call sites with agent-executes-the-document wording
         # (the engineering specs, the intent template, and the three memory
-        # READMEs).
-        "retire_managed": sorted(RETIRED_TARGET_SKILLS),
+        # READMEs). The three memory names are archived here too even though
+        # the 1.1.16 target re-ships them: the old pre-1.1.14 copies must
+        # leave the managed install with a backup before the memory-skills
+        # item installs the new-contract release bytes over a clean path
+        # (user-customized same-name directories block that item instead).
+        "retire_managed": sorted(RETIRED_TARGET_SKILLS | REINTRODUCED_MEMORY_SKILLS),
         "docs": [
             f"{W}/意图与访谈.md", f"{W}/文档治理.md", f"{W}/初始化与文档补全.md",
             "docs/意图/_模板.md",
@@ -847,6 +880,27 @@ ENGINE_ENSURE = {
             ".agents/memory/structured/README.md",
             ".agents/memory/temporary/README.md",
         ],
+    },
+    "memory-skills": {
+        # 1.1.16 release deltas this item owns: the four memory skills
+        # installed from the release scaffold (ask/capture/archive carry the
+        # new contract for names 1.1.14 retired, learning is new), the
+        # recollection-intent query exception in the canonical AGENTS gate,
+        # the memory README's skill table / personal tier / rewrite-boundary
+        # sections, and the governance wording pointing memory corrections at
+        # the skills. The ph-init runtime materials (release.json and the
+        # manifest's required_names grow to seven plus ten, scripts, the
+        # migration registration) ride with the payload refresh. Memory
+        # content itself is never touched: the final assertions prove the
+        # three tiers byte-for-byte.
+        "payload": True,
+        "skills": ("ph-memory-ask", "ph-memory-learning", "ph-memory-archive"),
+        "docs": [
+            ".agents/memory/README.md",
+            f"{W}/文档治理.md",
+            f"{W}/初始化与文档补全.md",
+        ],
+        "agents": True,
     },
     "speckit-core-integration": {
         # 1.1.14 release deltas this item owns: the ten spec-driven skills
@@ -890,6 +944,163 @@ ENGINE_ENSURE = {
         "docs": [f"{W}/意图与访谈.md"],
     },
 }
+
+# Pre-1.2.1 scaffold doc paths -> their 1.2.1 successor (or None when the
+# file is retired outright: its content is either superseded by a shipped
+# archive copy or its mechanism is retired with the intent tree). The
+# ph-home-restructure item owns the whole new home tree; earlier hops' doc
+# scopes referenced the old layout and are superseded by the restructure.
+LEGACY_DOC_MAP = {
+    "docs/README.md": None,
+    "docs/约束规范/README.md": None,
+    "docs/约束规范/前端规范/README.md": None,
+    "docs/约束规范/前端规范/前端规范.md": f"{HOME}/constraints/前端规范/技术规范.md",
+    "docs/约束规范/后端规范/README.md": None,
+    "docs/约束规范/后端规范/后端规范.md": f"{HOME}/constraints/后端规范/技术规范.md",
+    "docs/约束规范/测试规范/README.md": None,
+    "docs/约束规范/测试规范/测试规范.md": f"{HOME}/constraints/测试规范/门禁规范.md",
+    "docs/约束规范/架构决策/README.md": None,
+    "docs/约束规范/架构决策/_模板.md": f"{HOME}/constraints/架构决策/_模板.md",
+    f"{W}/README.md": None,
+    f"{W}/Git与并行开发.md": f"{HOME}/constraints/工程规范/Git规范.md",
+    f"{W}/初始化与文档补全.md": None,
+    f"{W}/安全与配置.md": f"{HOME}/constraints/工程规范/安全规范.md",
+    f"{W}/构建发布与运维.md": None,
+    f"{W}/文档治理.md": f"{HOME}/constraints/harness规范/文档治理规范.md",
+    f"{W}/对用户提问.md": f"{HOME}/constraints/harness规范/对用户提问规范.md",
+    f"{W}/意图与访谈.md": None,  # retired: shipped copy lives in archive/constraints-history
+    "docs/项目Wiki/README.md": f"{HOME}/documents/README.md",
+    "docs/项目Wiki/功能地图.md": f"{HOME}/documents/功能地图.md",
+    "docs/项目Wiki/开发指南.md": f"{HOME}/documents/开发指南.md",
+    "docs/项目Wiki/项目概述.md": f"{HOME}/documents/项目概述.md",
+    "docs/项目Wiki/架构地图/README.md": f"{HOME}/documents/架构地图/README.md",
+    "docs/项目Wiki/架构地图/前端架构.md": f"{HOME}/documents/架构地图/前端架构.md",
+    "docs/项目Wiki/架构地图/后端架构.md": f"{HOME}/documents/架构地图/后端架构.md",
+    "docs/项目Wiki/架构地图/架构地图.md": f"{HOME}/documents/架构地图/架构地图.md",
+    "docs/项目Wiki/领域/README.md": f"{HOME}/documents/领域/README.md",
+    "docs/项目Wiki/领域/_模板.md": f"{HOME}/documents/领域/_模板.md",
+    ".agents/archived/README.md": f"{HOME}/archive/legacy-backup/README.md",
+    ".agents/memory/README.md": f"{HOME}/memory/README.md",
+    ".agents/memory/structured/README.md": f"{HOME}/memory/structured/README.md",
+    ".agents/memory/temporary/README.md": f"{HOME}/memory/temporary/README.md",
+}
+
+# The full 1.2.1 home scaffold tree: owned by ph-home-restructure (its docs
+# scope below is built from this list so scope coverage stays exact).
+HOME_SCAFFOLD_RELS = [
+    '.agents/project-harness/README.md',
+    '.agents/project-harness/archive/constraints-history/意图与访谈.md',
+    '.agents/project-harness/archive/legacy-backup/README.md',
+    '.agents/project-harness/archive/memory/README.md',
+    '.agents/project-harness/constraints/harness规范/对用户提问规范.md',
+    '.agents/project-harness/constraints/harness规范/文档治理规范.md',
+    '.agents/project-harness/constraints/前端规范/技术规范.md',
+    '.agents/project-harness/constraints/前端规范/构建规范.md',
+    '.agents/project-harness/constraints/前端规范/样式规范.md',
+    '.agents/project-harness/constraints/前端规范/自测规范.md',
+    '.agents/project-harness/constraints/后端规范/技术规范.md',
+    '.agents/project-harness/constraints/后端规范/数据规范.md',
+    '.agents/project-harness/constraints/后端规范/构建规范.md',
+    '.agents/project-harness/constraints/后端规范/自测规范.md',
+    '.agents/project-harness/constraints/工程规范/Git规范.md',
+    '.agents/project-harness/constraints/工程规范/安全规范.md',
+    '.agents/project-harness/constraints/架构决策/_模板.md',
+    '.agents/project-harness/constraints/测试规范/前端测试规范/前端冒烟测试规范.md',
+    '.agents/project-harness/constraints/测试规范/前端测试规范/前端单元测试规范.md',
+    '.agents/project-harness/constraints/测试规范/前端测试规范/前端回归测试规范.md',
+    '.agents/project-harness/constraints/测试规范/前端测试规范/前端测试用例/_模板.md',
+    '.agents/project-harness/constraints/测试规范/后端测试规范/后端冒烟测试规范.md',
+    '.agents/project-harness/constraints/测试规范/后端测试规范/后端单元测试规范.md',
+    '.agents/project-harness/constraints/测试规范/后端测试规范/后端回归测试规范.md',
+    '.agents/project-harness/constraints/测试规范/后端测试规范/后端测试用例/_模板.md',
+    '.agents/project-harness/constraints/测试规范/用例规范.md',
+    '.agents/project-harness/constraints/测试规范/稳定性规范.md',
+    '.agents/project-harness/constraints/测试规范/门禁规范.md',
+    '.agents/project-harness/documents/README.md',
+    '.agents/project-harness/documents/功能地图.md',
+    '.agents/project-harness/documents/开发指南.md',
+    '.agents/project-harness/documents/架构地图/README.md',
+    '.agents/project-harness/documents/架构地图/前端架构.md',
+    '.agents/project-harness/documents/架构地图/后端架构.md',
+    '.agents/project-harness/documents/架构地图/架构地图.md',
+    '.agents/project-harness/documents/项目概述.md',
+    '.agents/project-harness/documents/领域/README.md',
+    '.agents/project-harness/documents/领域/_模板.md',
+    '.agents/project-harness/memory/README.md',
+    '.agents/project-harness/memory/structured/README.md',
+    '.agents/project-harness/memory/structured/_template.md',
+    '.agents/project-harness/memory/temporary/README.md',
+    '.agents/project-harness/memory/temporary/_template.md',
+    '.agents/project-harness/specs/README.md',
+]
+
+
+def _remap_engine_ensure() -> None:
+    """Translate every pre-1.2.1 doc scope to the 1.2.1 terminal layout.
+
+    Entries whose file is retired outright are dropped: their delta is
+    superseded by the ph-home-restructure item (or by the intent retirement).
+    """
+
+    keep = set(HOME_SCAFFOLD_RELS) | {".agents/scripts/ph_worktree.py"}
+    for spec in ENGINE_ENSURE.values():
+        if "docs" in spec:
+            remapped = [LEGACY_DOC_MAP.get(rel, rel) for rel in spec["docs"]]
+            spec["docs"] = [rel for rel in remapped if rel is not None and rel in keep]
+        if "overwrite" in spec:
+            remapped = [LEGACY_DOC_MAP.get(rel, rel) for rel in spec["overwrite"]]
+            spec["overwrite"] = tuple(rel for rel in remapped if rel is not None and rel in keep)
+
+
+_remap_engine_ensure()
+
+ENGINE_ENSURE["ph-home-restructure"] = {
+    # 1.2.1 release deltas this item owns: the whole project-harness home
+    # (constraints/documents/memory/specs/archive) moved out of the legacy
+    # roots with per-file byte preservation, the manifest/schema path
+    # re-keying (payload refresh carries the scripts), the runtime
+    # relocation, and the minimal canonical AGENTS.md. The question spec's
+    # 1.1.12 wholesale-overwrite authorization carries over: the customized
+    # legacy copy that the move lands on the new path is replaced (with a
+    # recoverable backup) by the release-root bytes.
+    "restructure": True,
+    "payload": True,
+    "agents": True,
+    "schema": True,
+    "overwrite": (f"{HOME}/constraints/harness规范/对用户提问规范.md",),
+    # the ph-merge-update skill body carries the 1.2.1 completion contract
+    # and the relocated paths, so a 1.1.14/1.1.15 project needs it refreshed
+    # by this item too (the 1.1.0 merge-update item is not in this chain)
+    # worktree skills' bodies also moved to the relocated paths in 1.2.1
+    "skills": ("ph-merge-update", "ph-worktree-enter", "ph-worktree-exit"),
+    "docs": list(HOME_SCAFFOLD_RELS),
+}
+ENGINE_ENSURE["constitution-materialization"] = {
+    # 1.2.1 release deltas this item owns: the materialized project
+    # constitution at project-harness/constitution.md (real project name, no
+    # placeholders, marker-wrapped per-file navigation with usage moments)
+    # and the same-source override template refresh the runtime relocation
+    # re-pointed at the new depth.
+    "constitution": True,
+    "materialize": True,
+}
+ENGINE_ENSURE["intent-retirement"] = {
+    # 1.2.1 release deltas this item owns: the legacy intent mechanism
+    # retires. The real prepared migration first makes sure every eligible
+    # entry's content lives under project-harness/specs/ (superseding the
+    # 1.1.14 intent-to-spec intermediate state), then the whole docs/意图
+    # tree moves into the unified archive as the recoverable original and
+    # the retired interview doc stays a shipped archive copy.
+    "intent_spec": True,
+    "retire_intents": True,
+}
+
+ENGINE_ENSURE["bundled-speckit-acceptance"] = {
+    "payload": True,
+    "speckit": True,
+    "docs": [f"{HOME}/constraints/测试规范/门禁规范.md"],
+}
+
 SPECIAL_SCAFFOLD_RELS = {".gitignore", ".agents/ph.json", ".agents/ph.schema.json", ".agents/AGENTS.md"}
 
 
@@ -1061,11 +1272,21 @@ class MergeEngine:
         dest.write_bytes(target_bytes + disk[len(hist_bytes):])
         self.mutations.append(f"merge {rel} (PH body -> target, project tail preserved)")
 
-    def _sync_tree(self, repo_dir: Path, target_dir: Path, hist_dir: Path | None) -> bool:
-        """Bring one managed directory to target bytes, preserving customized files."""
+    def _sync_tree(
+        self, repo_dir: Path, target_dir: Path, hist_dir: Path | None,
+        skip: frozenset[str] = frozenset(),
+    ) -> bool:
+        """Bring one managed directory to target bytes, preserving customized files.
+
+        ``skip`` names target-relative files that are not portable artifacts
+        of the target tree (rendered per-repo content) and must not be
+        compared against it.
+        """
         target_rels = {p.relative_to(target_dir).as_posix(): p for p in iter_regular_files(target_dir, strict=True)}
         changed = False
         for sub, target_path in sorted(target_rels.items()):
+            if sub in skip:
+                continue
             rel = f"{repo_dir.relative_to(self.repo).as_posix()}/{sub}"
             hist_path = (hist_dir / sub) if (hist_dir is not None and (hist_dir / sub).exists()) else None
             outcome = self.ensure_file(rel, target_path, hist_path)
@@ -1155,7 +1376,9 @@ class MergeEngine:
         --apply archives into the same date dir this engine already used -
         and a fresh semantic archive starts today's UTC date.
         """
-        archived = self.repo / ".agents" / "archived"
+        # 1.2.1: the unified project-harness archive replaced the old
+        # top-level .agents/archived base
+        archived = self.repo / f"{HOME}/archive/legacy-backup"
         if archived.is_dir() and not archived.is_symlink():
             for child in sorted(archived.iterdir()):
                 if (child.name.endswith(CODEX_ARCHIVE_SUFFIX) and child.is_dir()
@@ -1322,28 +1545,64 @@ class MergeEngine:
             self.mutations.append("retire embedded worktree scripts: " + ", ".join(retired))
         return retired
 
+    def ensure_speckit_file(self, rel: str, target: Path) -> str:
+        """Bring one speckit-owned file to the seed bytes, with the manifest
+        baseline as the ownership proof — mirroring the real engine's
+        classify_skill/classify_specify_file: a file still at its recorded
+        baseline belongs to the install and is replaced by the new
+        generation; anything else is a project customization to preserve."""
+        dest = self.repo / rel
+        target_bytes = target.read_bytes()
+        if dest.is_file() and dest.read_bytes() == target_bytes:
+            return "ok"
+        baseline = None
+        manifest = self.repo / ".agents" / "ph.json"
+        if manifest.is_file():
+            section = (json.loads(manifest.read_text(encoding="utf-8")).get("speckit") or {})
+            baseline = (section.get("files") or {}).get(rel)
+        if (
+            dest.is_file()
+            and isinstance(baseline, str)
+            and len(baseline) == 64
+            and all(c in "0123456789abcdef" for c in baseline)
+            and hashlib.sha256(dest.read_bytes()).hexdigest() == baseline
+        ):
+            dest.write_bytes(target_bytes)
+            self.mutations.append(f"replace {rel} (speckit baseline drift)")
+            return "replace"
+        return self.ensure_file(rel, target, None)
+
     def install_speckit(self) -> None:
         """speckit-core-integration: copy the real pinned-generation install
-        (ten ph-* skills plus .specify) from the shared seed, mirroring the
-        Claude adapters in this case's adapter mode. The workflow-engine
-        assets are absent from the seed by contract."""
+        (ten ph-* skills plus the adapted runtime) from the shared seed,
+        mirroring the Claude adapters in this case's adapter mode. Since the
+        1.2.1 seed carries the relocated layout, the runtime lands under
+        project-harness/runtime; the workflow-engine assets are absent by
+        contract."""
         seed = _speckit_seed.ensure_seed()
         copied = []
         for name in SPECKIT_TARGET_SKILLS:
-            self._sync_tree(
-                self.repo / ".agents" / "skills" / name,
-                seed / ".agents" / "skills" / name,
-                None,
-            )
+            skill_dir = seed / ".agents" / "skills" / name
+            for path in sorted(iter_regular_files(skill_dir, strict=True)):
+                rel = f".agents/skills/{name}/{path.relative_to(skill_dir).as_posix()}"
+                self.ensure_speckit_file(rel, path)
             copied.append(f".agents/skills/{name}")
             self.rebuild_mirrors(name)
-        changed_specify = self._sync_tree(self.repo / ".specify", seed / ".specify", None)
-        if changed_specify:
-            copied.append(".specify/")
+        import ph_speckit
+        # The constitution override is rendered against THIS repo's
+        # constraints (constitution-governance-zone owns that write); the
+        # seed's copy is its own build-time render and must not be compared.
+        override_sub = ph_speckit.CONSTITUTION_OVERRIDE_REL.removeprefix(f"{HOME}/runtime/")
+        changed_runtime = self._sync_tree(
+            self.repo / f"{HOME}/runtime", seed / f"{HOME}/runtime", None,
+            skip=frozenset({override_sub}),
+        )
+        if changed_runtime:
+            copied.append(f"{HOME}/runtime/")
         self.mutations.append(
             f"install pinned spec-kit generation: {len(SPECKIT_TARGET_SKILLS)} ph-* skills, "
-            ".specify shared infrastructure (official generator output, ph-renamed; "
-            "workflow-engine assets excluded)"
+            "adapted runtime shared infrastructure (official generator output, ph-renamed, "
+            "relocated to project-harness/runtime; workflow-engine assets excluded)"
         )
 
     def ensure_constitution_override(self) -> None:
@@ -1352,6 +1611,9 @@ class MergeEngine:
         priority-1 project template (existing copies with the PH marker are
         refreshed; the file keeps its recoverable backup semantics)."""
         import ph_speckit
+        from content_fixture import complete_documentation_project
+        complete_documentation_project(self.repo, self.prepared.root)
+        self.rewritten.update(rel for rel in HOME_SCAFFOLD_RELS if "/constraints/" in rel)
         seed = _speckit_seed.ensure_seed()
         contract = ph_speckit.speckit_contract()
         data = ph_speckit.render_constitution_override(self.repo, seed, contract)
@@ -1404,7 +1666,7 @@ class MergeEngine:
         # The ledger's entries are the authoritative outcome; the script's own
         # generated/restored/skipped spec lists must cover exactly them.
         ledger = json.loads(
-            (self.repo / "specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8")
+            (self.repo / f"{HOME}/specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8")
         )
         covered_sources = {e["source"] for e in ledger["entries"]}
         assert covered_sources == eligible, f"intent-to-spec covered {covered_sources} != the fixture entries {eligible}"
@@ -1421,6 +1683,164 @@ class MergeEngine:
     def ensure_schema(self):
         self.ensure_scaffold(".agents/ph.schema.json")
 
+    def _legacy_successor(self, old_rel: str) -> str | None:
+        """1.2.1 successor of a pre-1.2.1 scaffold doc path (None = retired)."""
+        if old_rel in LEGACY_DOC_MAP:
+            return LEGACY_DOC_MAP[old_rel]
+        if old_rel.startswith(".agents/memory/"):
+            return "{}/memory/{}".format(HOME, old_rel[len(".agents/memory/"):])
+        if old_rel.startswith(".agents/archived/"):
+            # deep legacy-archive content (pre-init snapshots etc.) is real
+            # user history, not a live successor path: retiring it in place
+            # would destroy it instead of preserving the read-only original
+            return "{}/archive/legacy-backup/{}".format(HOME, old_rel)
+        return old_rel
+
+    def restructure_home(self) -> None:
+        """ph-home-restructure: move every legacy PH tree into the home.
+
+        Per legacy file: a live successor path receives the bytes (project
+        customizations win over any earlier template copy and are recorded
+        as preserved when the successor is a managed scaffold path);
+        superseded templates and retired files move into the unified archive
+        under legacy-backup, keeping their pre-upgrade relative path. The
+        emptied legacy directories are then retired to the engine trash.
+        """
+
+        repo = self.repo
+        hist_root = self.hist.scaffold_dir
+        moved = []
+        for root in ("docs/约束规范", "docs/项目Wiki", ".agents/memory", ".agents/archived"):
+            base = repo / root
+            if not base.is_dir() or base.is_symlink():
+                continue
+            for path in sorted(iter_regular_files(base, strict=True)):
+                old_rel = path.relative_to(repo).as_posix()
+                data = path.read_bytes()
+                hist_file = hist_root / old_rel
+                hist_bytes = hist_file.read_bytes() if hist_file.is_file() else None
+                is_template = hist_bytes is not None and hist_bytes == data
+                successor = self._legacy_successor(old_rel)
+                if successor is None:
+                    successor = f"{HOME}/archive/legacy-backup/{old_rel}"
+                dest = repo / successor
+                if dest.is_symlink():
+                    raise AssertionError(f"refusing to write through symlink: {successor}")
+                if dest.is_file() and dest.read_bytes() == data:
+                    moved.append(f"{old_rel} -> {successor} (bytes already in place)")
+                    self.trash_move(path)
+                    continue
+                if is_template:
+                    # superseded template: the target scaffold re-deploys the
+                    # successor, so the legacy copy just goes to the trash
+                    self.trash_move(path)
+                    moved.append(f"{old_rel} superseded by {successor} (template)")
+                    continue
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(data)
+                moved.append(f"{old_rel} -> {successor} (project content carried)")
+                if successor in self.prepared.scaffold_files:
+                    self.preserved.add(successor)
+                self.trash_move(path)
+            self.trash_move(base)
+        # stray legacy top-level docs files (e.g. docs/README.md): superseded
+        # templates go to the trash, customized ones get a legacy-backup
+        # snapshot, and the emptied docs/ root is retired with the intent tree
+        for stray in ("docs/README.md",):
+            path = repo / stray
+            if not path.is_file() or path.is_symlink():
+                continue
+            data = path.read_bytes()
+            hist_file = hist_root / stray
+            is_template = hist_file.is_file() and hist_file.read_bytes() == data
+            if is_template:
+                self.trash_move(path)
+                moved.append(f"{stray} superseded (template)")
+            else:
+                snapshot = repo / f"{HOME}/archive/legacy-backup/{stray}"
+                snapshot.parent.mkdir(parents=True, exist_ok=True)
+                snapshot.write_bytes(data)
+                self.trash_move(path)
+                moved.append(f"{stray} -> archive/legacy-backup/{stray}")
+        # spec-kit reinstall through the install mapping is part of this
+        # item's contract: the ten skills carry the 1.2.1 Chinese gated
+        # descriptions and the runtime relocates to project-harness/runtime.
+        # A chain that already ran the 1.1.14 speckit install re-syncs
+        # byte-identically; a 1.1.14/1.1.15-era project still carrying the
+        # old root .specify gets its runtime relocated here before the
+        # legacy tree is retired.
+        self.install_speckit()
+        for legacy in (".specify", "specs"):
+            node = repo / legacy
+            if node.is_dir() and not node.is_symlink():
+                self.trash_move(node)
+                moved.append(f"{legacy}/ retired (runtime/specs live under {HOME})")
+        # manifest re-key: the memory paths and the required skill list move
+        # to the 1.2.1 shape (the speckit section is re-keyed wholesale by
+        # the post-loop baseline record; template_version advances only at
+        # finalize).
+        manifest_rel = ".agents/ph.json"
+        manifest_path = repo / manifest_rel
+        template = json.loads(
+            (self.prepared.scaffold_dir / manifest_rel).read_text(encoding="utf-8")
+        )
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["canonical"]["memory"] = template["canonical"]["memory"]
+        manifest["memory"] = template["memory"]
+        manifest.setdefault("skills", {})["required_names"] = template["skills"]["required_names"]
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        moved.append(".agents/ph.json memory paths and required_names re-keyed")
+        self.mutations.append(
+            "restructure home: " + "; ".join(moved[:4])
+            + (f" (+{len(moved) - 4} more)" if len(moved) > 4 else "")
+        )
+
+    def materialize_constitution(self) -> None:
+        """constitution-materialization: render the live constitution at
+        project-harness/constitution.md from the seeded skeleton plus the
+        (post-restructure) constraints tree."""
+        import ph_speckit
+        from content_fixture import complete_documentation_project
+        complete_documentation_project(self.repo, self.prepared.root)
+        self.rewritten.update(rel for rel in HOME_SCAFFOLD_RELS if "/constraints/" in rel)
+        seed = _speckit_seed.ensure_seed()
+        contract = ph_speckit.speckit_contract()
+        data = ph_speckit.render_live_constitution(self.repo, seed, contract)
+        rel = ph_speckit.CONSTITUTION_MEMORY_REL
+        dest = self.repo / rel
+        if dest.is_file() and dest.read_bytes() == data:
+            return
+        if dest.exists() or dest.is_symlink():
+            if not dest.is_file():
+                raise AssertionError(f"constitution destination is not a regular file: {rel}")
+            self.trash_move(dest)
+            self.mutations.append(f"backup+materialize {rel}")
+        else:
+            self.mutations.append(f"materialize {rel}")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+
+    def retire_intent_tree(self) -> list[str]:
+        """intent-retirement: archive the whole legacy intent tree under the
+        unified archive (legacy-backup keeps the pre-upgrade relative path)
+        and retire the emptied docs/ root."""
+        extra = []
+        tree = self.repo / "docs" / "意图"
+        if tree.is_dir() and not tree.is_symlink():
+            base = self.repo / f"{HOME}/archive/legacy-backup/docs"
+            base.mkdir(parents=True, exist_ok=True)
+            dest = base / "意图"
+            assert not dest.exists(), f"intent archive destination already exists: {dest}"
+            tree.rename(dest)
+            extra.append(
+                "docs/意图/ 整树退役 -> project-harness/archive/legacy-backup/docs/意图/（原件按相对路径归档）"
+            )
+        docs_root = self.repo / "docs"
+        if docs_root.is_dir() and not docs_root.is_symlink() and not any(docs_root.iterdir()):
+            self.trash_move(docs_root)
+            extra.append("docs/ 空根目录已退役")
+        return extra
+
     # -- intent entry migration --------------------------------------------
 
     @staticmethod
@@ -1434,9 +1854,23 @@ class MergeEngine:
         # Bring a missing or still-templated index to target bytes first, but
         # never re-classify an index this engine has already rewritten (the
         # row append and the carried custom tail land in the same file).
+        # The 1.2.1 target retired the intent tree, so a legacy index may
+        # have no prepared-scaffold successor: sync the historical template
+        # when one exists, create the file fresh otherwise, and append to the
+        # on-disk file as-is (the retirement item archives it verbatim).
         if rel not in self.rewritten:
-            self.ensure_scaffold(rel)
+            if (self.prepared.scaffold_dir / rel).is_file():
+                self.ensure_scaffold(rel)
+            elif not (self.repo / rel).is_file():
+                hist = self.hist.scaffold_dir / rel
+                if hist.is_file():
+                    (self.repo / rel).parent.mkdir(parents=True, exist_ok=True)
+                    (self.repo / rel).write_bytes(hist.read_bytes())
         self.rewritten.add(rel)
+        readme = self.repo / rel
+        if not readme.is_file():
+            readme.parent.mkdir(parents=True, exist_ok=True)
+            readme.write_text("", encoding="utf-8")
         readme = self.repo / rel
         text = self._drop_empty_row(readme.read_text(encoding="utf-8"))
         if not text.endswith("\n"):
@@ -1512,6 +1946,11 @@ def _make_handler(item_id):
     def handler(engine: MergeEngine):
         mark = len(engine.mutations)
         extra = []
+        if spec.get("restructure"):
+            # the legacy->home move must land BEFORE this item's ensures so
+            # the carried project customizations are what the ensure step
+            # then preserves
+            engine.restructure_home()
         overwritten_rels = set(spec.get("overwrite", ()))
         for rel in spec.get("overwrite", ()):
             if rel not in engine.prepared.scaffold_files:
@@ -1535,8 +1974,12 @@ def _make_handler(item_id):
             engine.install_speckit()
         if spec.get("constitution"):
             engine.ensure_constitution_override()
+        if spec.get("materialize"):
+            engine.materialize_constitution()
         if spec.get("intent_spec"):
             engine.migrate_intents_to_spec()
+        if spec.get("retire_intents"):
+            extra.extend(engine.retire_intent_tree())
         if spec.get("payload"):
             engine.ensure_payload()
         if spec.get("agents"):
@@ -1669,6 +2112,9 @@ def check_scope_coverage(case, prepared: PreparedTarget, hist: HistoricalTree, i
     for item in item_ids:
         spec = ENGINE_ENSURE[item]
         ensure_rels.update(spec.get("docs", []))
+        if spec.get("speckit"):
+            bundle = json.loads((prepared.root / "assets/speckit-bundle.json").read_text())
+            ensure_rels.update(bundle["files"])
         ensure_skills.update(spec.get("skills", ()))
         payload = payload or bool(spec.get("payload"))
         agents = agents or bool(spec.get("agents"))
@@ -1817,6 +2263,39 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     governance = repo / W / "文档治理.md"
     governance.write_bytes(governance.read_bytes() + GOVERNANCE_APPEND.encode("utf-8"))
 
+    # Project memory content in the three-tier layout: the 1.1.16
+    # memory-skills merge installs skills and rule documents only, so these
+    # files must survive byte-for-byte (the final assertions prove it).
+    memory_root = repo / ".agents" / "memory"
+    (memory_root / "temporary").mkdir(parents=True, exist_ok=True)
+    (memory_root / "structured").mkdir(parents=True, exist_ok=True)
+    temp_memory = memory_root / "temporary" / "20260909-matrix-note.md"
+    temp_memory.write_text(
+        "---\n"
+        "kind: temporary\nstatus: active\n"
+        'created: "2026-09-09"\nupdated: "2026-09-09"\n'
+        "provenance: user-utterance\nconfidence: medium\n"
+        'review_after: ""\nsupersedes: ""\nsensitivity: internal\n'
+        "topics:\n  - matrix-demo\n"
+        "---\n\n"
+        "# 升级矩阵样例临时记忆\n\n"
+        "记忆正文保持原文：临时记忆必须在记忆技能升级后逐字节保留。\n",
+        encoding="utf-8",
+    )
+    struct_memory = memory_root / "structured" / "矩阵主题.md"
+    struct_memory.write_text(
+        "---\n"
+        "kind: structured\nstatus: active\n"
+        'created: "2026-09-09"\nupdated: "2026-09-09"\n'
+        "provenance: agent-summary\nconfidence: medium\n"
+        'review_after: ""\nsupersedes: ""\nsensitivity: internal\n'
+        "topics:\n  - matrix-demo\n"
+        "---\n\n"
+        "# 矩阵主题\n\n"
+        "结构化记忆正文保持原文：归档原件与结构化文档都必须逐字节保留。\n",
+        encoding="utf-8",
+    )
+
     # File-internal project question rule for the 1.1.12 overwrite policy:
     # question-execution-contract must replace the file wholesale (with a
     # recoverable backup) instead of preserving this customization.
@@ -1827,11 +2306,14 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     # project question rule is ordinary customization to preserve - so the
     # fixture only injects it while the overwrite hop is actually in the chain.
     question_rel = f"{W}/对用户提问.md"
+    # the overwrite is recorded against the 1.2.1 successor path: the
+    # restructure item carries the customized legacy bytes there before the
+    # carried-over wholesale-overwrite authorization replaces them
     overwritten_bytes: dict[str, bytes] = {}
     question_spec = repo / question_rel
     if question_spec.is_file() and semver_tuple(version) < (1, 1, 12):
         question_spec.write_bytes(question_spec.read_bytes() + QUESTION_APPEND.encode("utf-8"))
-        overwritten_bytes[question_rel] = question_spec.read_bytes()
+        overwritten_bytes[OVERWRITE_REL] = question_spec.read_bytes()
 
     # User-owned content inside the retired .codex adapter area: non ph-*
     # entries must survive the 1.1.9 tool-neutral retirement byte-for-byte.
@@ -1846,6 +2328,16 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     index = repo / "docs" / "意图" / active_feature / "README.md"
     index.write_bytes(index.read_bytes() + INDEX_CUSTOM_BLOCK.encode("utf-8"))
 
+    # Deep user history inside the legacy .agents/archived tree: the
+    # restructure must retire it into the unified backup (byte-for-byte),
+    # never trash it as if it were a live successor of itself.
+    archived_snap = repo / ".agents" / "archived" / "2026-01-15-pre-update" / "snap.md"
+    archived_snap.parent.mkdir(parents=True, exist_ok=True)
+    archived_snap.write_text(
+        "# 升级矩阵注入的深层次归档快照\n\n非模板用户历史，升级后必须逐字节保留在统一归档。\n",
+        encoding="utf-8",
+    )
+
     def write_entry(template, name, target_dir):
         path = repo / "docs" / "意图" / target_dir / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1857,22 +2349,27 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     delivered = write_entry(DELIVERED_ENTRY, DELIVERED_NAME, delivered_dir)
     dropped = write_entry(DROPPED_ENTRY, DROPPED_NAME, "已废弃/新特性")
 
+    # Terminal-state keys: the restructure item carries these bytes out of
+    # the legacy layout, so the final byte checks read the new locations.
     preserved = {
-        "docs/项目Wiki/项目概述.md": wiki.read_bytes(),
-        "docs/约束规范/后端规范/后端规范.md": backend.read_bytes(),
-        f"{W}/文档治理.md": governance.read_bytes(),
+        f"{HOME}/documents/项目概述.md": wiki.read_bytes(),
+        f"{HOME}/constraints/后端规范/技术规范.md": backend.read_bytes(),
+        f"{HOME}/constraints/harness规范/文档治理规范.md": governance.read_bytes(),
         ".codex/skills/my-tool/SKILL.md": codex_tool_skill.read_bytes(),
-        f"docs/意图/已废弃/新特性/{DROPPED_NAME}": dropped.read_bytes(),
+        f"{HOME}/archive/legacy-backup/docs/意图/已废弃/新特性/{DROPPED_NAME}": dropped.read_bytes(),
+        f"{HOME}/memory/temporary/20260909-matrix-note.md": temp_memory.read_bytes(),
+        f"{HOME}/memory/structured/矩阵主题.md": struct_memory.read_bytes(),
+        f"{HOME}/archive/legacy-backup/.agents/archived/2026-01-15-pre-update/snap.md": archived_snap.read_bytes(),
     }
     # An entry that the migration chain must relocate, with the classification
     # evidence the fixture wrote into its 记录 section.
     moved = []  # (name, src_dir, dst_dir, original_text, reason)
     if not old_layout:
-        preserved[f"docs/意图/{active_feature}/{FEATURE_NAME}"] = feature.read_bytes()
-        preserved[f"docs/意图/{started_dir}/{STARTED_NAME}"] = started.read_bytes()
-        preserved[f"docs/意图/{active_feature}/README.md"] = index.read_bytes()
+        preserved[f"{HOME}/archive/legacy-backup/docs/意图/{active_feature}/{FEATURE_NAME}"] = feature.read_bytes()
+        preserved[f"{HOME}/archive/legacy-backup/docs/意图/{started_dir}/{STARTED_NAME}"] = started.read_bytes()
+        preserved[f"{HOME}/archive/legacy-backup/docs/意图/{active_feature}/README.md"] = index.read_bytes()
         if semver_tuple(version) > (1, 1, 1):
-            preserved[f"docs/意图/{delivered_dir}/{DELIVERED_NAME}"] = delivered.read_bytes()
+            preserved[f"{HOME}/archive/legacy-backup/docs/意图/{delivered_dir}/{DELIVERED_NAME}"] = delivered.read_bytes()
     if version == "1.1.1":
         moved.append((DELIVERED_NAME, delivered_dir, "实施/新特性", delivered.read_text(encoding="utf-8"), REASON_DELIVERED))
     if old_layout:
@@ -1886,14 +2383,14 @@ def insert_project_customizations(repo: Path, case: dict) -> dict:
     # the pending index block via the entry migration instead of keeping the
     # file untouched, so their customized pending index is the rewritten one.
     customized_scaffold = {
-        "docs/项目Wiki/项目概述.md",
-        "docs/约束规范/后端规范/后端规范.md",
-        f"{W}/文档治理.md",
+        f"{HOME}/documents/项目概述.md",
+        f"{HOME}/constraints/后端规范/技术规范.md",
+        f"{HOME}/constraints/harness规范/文档治理规范.md",
     }
     if not old_layout:
-        customized_scaffold.add("docs/意图/待办/新特性/README.md")
+        customized_scaffold.add(f"{HOME}/archive/legacy-backup/docs/意图/待办/新特性/README.md")
     if overwritten_bytes:
-        customized_scaffold.add(question_rel)
+        customized_scaffold.add(OVERWRITE_REL)
     return {
         "preserved_bytes": preserved,
         "moved_entries": moved,
@@ -2021,12 +2518,14 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             self.assertTrue(evidence and evidence.strip(), f"empty evidence for {item['id']}")
             item["status"] = status
             item["evidence"] = evidence
-        if "speckit-core-integration" in item_ids:
+        if "speckit-core-integration" in item_ids or "ph-home-restructure" in item_ids:
             # The real ph_speckit install writes the per-file content baselines
-            # into .agents/ph.json once everything (skills, .specify, and the
+            # into .agents/ph.json once everything (skills, runtime, and the
             # constitution override from the later item) is on disk; the
             # fixture mirrors that manifest write exactly once, after the
-            # item loop, because verify pins the recorded baselines.
+            # item loop, because verify pins the recorded baselines. A
+            # 1.1.14/1.1.15-era project gets its relocated runtime (and the
+            # re-keyed baselines) from the ph-home-restructure item.
             engine.record_speckit_baselines()
         if "tool-neutral-adapters" in item_ids:
             self.assertIsNotNone(
@@ -2086,12 +2585,19 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         for rel, expected in custom["preserved_bytes"].items():
             path = repo / rel
             self.assertTrue(path.is_file(), f"preserved file missing after upgrade: {rel}")
-            self.assertEqual(path.read_bytes(), expected, f"preserved content drifted: {rel}")
+            if "/constraints/" in rel and not path.read_bytes() == expected:
+                archived = repo / HOME / "archive/content-before-fill" / rel.split("/constraints/", 1)[1]
+                self.assertEqual(archived.read_bytes(), expected, f"original missing: {rel}")
+                for marker in (BACKEND_APPEND.strip(), GOVERNANCE_APPEND.split("\n")[-2]):
+                    if marker and marker.encode() in expected:
+                        self.assertIn(marker, path.read_text(), f"active custom rule lost: {rel}")
+            else:
+                self.assertEqual(path.read_bytes(), expected, f"preserved content drifted: {rel}")
         # 7b) 1.1.12 question-spec overwrite: the file must be byte-identical
         # to the release root (no merged-in old wording or project rule), and
         # when the historical install carried the spec, its pre-overwrite
         # original must stay recoverable in the engine trash.
-        question_rel = f"{W}/对用户提问.md"
+        question_rel = OVERWRITE_REL
         target_question = (prepared.scaffold_dir / question_rel).read_bytes()
         self.assertFalse((repo / question_rel).is_symlink())
         self.assertEqual(
@@ -2112,19 +2618,22 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         else:
             self.assertNotIn(question_rel, engine.overwrite_backups,
                              "a never-customized question spec must not be backed up")
+        # moved entries land in the retired tree, which the 1.2.1 restructure
+        # archived verbatim: read the moved bytes from the archive original
         for name, src_dir, dst_dir, original, reason in custom["moved_entries"]:
-            path = repo / "docs" / "意图" / dst_dir / name
+            tree_root = repo / f"{HOME}/archive/legacy-backup/docs/意图"
+            path = tree_root / dst_dir / name
             self.assertTrue(path.is_file(), f"moved intent entry missing: {dst_dir}/{name}")
             expected = original.replace(
                 f"status_dir: {src_dir}", f"status_dir: {dst_dir}", 1
             ) + migration_record(src_dir, dst_dir, reason)
             self.assertEqual(path.read_text(encoding="utf-8"), expected, f"moved entry drifted: {dst_dir}/{name}")
             self.assertFalse(
-                (repo / "docs" / "意图" / src_dir / name).exists(),
+                (repo / f"{HOME}/archive/legacy-backup/docs/意图" / src_dir / name).exists(),
                 f"source entry not retired: {src_dir}/{name}",
             )
             row = index_row(name, src_dir, dst_dir)
-            index = (repo / "docs" / "意图" / dst_dir / "README.md").read_text(encoding="utf-8")
+            index = (tree_root / dst_dir / "README.md").read_text(encoding="utf-8")
             self.assertIn(row, index, f"index row for moved entry missing: {dst_dir}/README.md")
             self.assertEqual(index.count(row), 1, f"index row not inserted exactly once: {dst_dir}/README.md")
         agents = repo / ".agents" / "AGENTS.md"
@@ -2166,25 +2675,35 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         for name in ("ph-worktree-enter", "ph-worktree-exit"):
             self.assertFalse((repo / ".agents" / "skills" / name / "scripts").exists(),
                              f"embedded worktree script dir must be retired: {name}")
-        self.assertTrue((repo / ".specify" / "memory" / "constitution.md").is_file())
-        self.assertFalse((repo / ".specify" / "workflows").exists(),
+        # 1.2.1 terminal layout: no root .specify, the constitution is
+        # materialized inside the home, and the override template lives in
+        # the relocated runtime.
+        self.assertFalse((repo / ".specify").exists(), "root .specify must be gone")
+        self.assertFalse((repo / "specs").exists(), "root specs/ must be gone")
+        materialized = repo / f"{HOME}/constitution.md"
+        self.assertTrue(materialized.is_file())
+        materialized_text = materialized.read_text(encoding="utf-8")
+        self.assertNotIn("[PROJECT_NAME]", materialized_text)
+        self.assertNotIn("[PRINCIPLE_1", materialized_text)
+        self.assertIn("## 约束导航", materialized_text)
+        self.assertFalse((repo / f"{HOME}/runtime/workflows").exists(),
                          "workflow-engine assets must not be installed")
-        override = repo / ".specify" / "templates" / "overrides" / "constitution-template.md"
+        override = repo / f"{HOME}/runtime/templates/overrides/constitution-template.md"
         self.assertTrue(override.is_file())
         override_text = override.read_text(encoding="utf-8")
-        self.assertIn("## PH 管理区：本仓库约束规范导航", override_text)
-        # The links are written for the MATERIALIZED location (upstream copies
-        # the override to .specify/memory/constitution.md), so they are
-        # resolved from there, not from the override's own deeper directory.
-        materialized_base = repo / ".specify" / "memory"
-        for link in [line for line in override_text.splitlines() if "](../../docs/" in line]:
+        self.assertIn("## 约束导航", override_text)
+        # The links are written for the MATERIALIZED location
+        # (project-harness/constitution.md), so they are resolved from the
+        # home root, not from the override's own deeper directory.
+        materialized_base = repo / HOME
+        for link in [line for line in override_text.splitlines() if "](constraints/" in line]:
             target = (materialized_base / link.split("](", 1)[1].split(")", 1)[0]).resolve()
-            self.assertTrue(target.is_file(), f"broken constitution link: {link}")
+            self.assertTrue(target.exists() and not target.is_symlink(), f"broken constitution link: {link}")
         for name in OLD_ALIASES:
             for base in (".agents", ".claude", ".codex"):
                 self.assertFalse((repo / base / "skills" / name).exists(), f"legacy alias still live: {base}/skills/{name}")
-        intent_roots = {p.name for p in (repo / "docs" / "意图").iterdir() if p.is_dir()}
-        self.assertEqual(intent_roots, {"待办", "实施", "已废弃", "访谈纪要"})
+        # the intent tree's own layout is asserted by the retirement block
+        # above (docs/意图 retired and archived verbatim)
         # Tool-neutral adapter topology (1.1.9): the canonical .agents tree,
         # the root entry, and the Claude adapters are all that remains. The
         # historical .codex/skills/ph-* mirrors are gone (archived in-project
@@ -2229,8 +2748,9 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             set(engine.codex_seen or ()), expected_codex,
             "unexpected set of live codex adapters at semantic-merge time",
         )
+        codex_archive_root = repo / f"{HOME}/archive/legacy-backup"
         archive_days = sorted(
-            child for child in (repo / ".agents/archived").iterdir()
+            child for child in (codex_archive_root.iterdir() if codex_archive_root.is_dir() else [])
             if child.name.endswith(CODEX_ARCHIVE_SUFFIX) and (child / CODEX_ARCHIVE_CHILD).is_dir()
         )
         if expected_codex:
@@ -2275,8 +2795,8 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             rel for rel in custom["customized_scaffold_paths"] if rel in ensured_rels
         } - set(custom["overwritten_bytes"])
         self.assertEqual(
-            {rel for rel in engine.preserved if not rel.startswith(".agents/skills/")},
-            expected_preserved,
+            {rel for rel in engine.preserved if not rel.startswith(".agents/skills/")} - engine.rewritten,
+            expected_preserved - engine.rewritten,
             "engine preserved an unexpected set of scaffold files",
         )
         self.assertEqual(
@@ -2292,7 +2812,12 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             self.assertTrue(disk.is_file(), f"scaffold file missing after upgrade: {rel}")
             if disk.read_bytes() != target_path.read_bytes():
                 self.assertIn(rel, allowed_drift, f"unexplained scaffold drift: {rel}")
-        # The intent tree must be exactly target scaffold plus the sample entries.
+        # 5a) intent retirement: the legacy tree is gone from the repo root
+        # and survives verbatim as the recoverable archive original.
+        self.assertFalse((repo / "docs" / "意图").exists(), "the intent tree must be retired")
+        self.assertFalse((repo / "docs").exists(), "an emptied docs/ root must be retired")
+        archived_tree = repo / f"{HOME}/archive/legacy-backup/docs/意图"
+        self.assertTrue(archived_tree.is_dir(), "the intent tree must be archived, not deleted")
         expected_extras = {
             f"待办/新特性/{FEATURE_NAME}",
             f"实施/问题记录/{STARTED_NAME}",
@@ -2300,31 +2825,41 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             f"已废弃/新特性/{DROPPED_NAME}",
             "历史索引.md",
         }
-        intent_files = {
-            p.relative_to(repo / "docs" / "意图").as_posix()
-            for p in iter_regular_files(repo / "docs" / "意图")
+        # the archived tree keeps the four canonical status roots and every
+        # fixture entry plus the migration's history index; legacy status
+        # roots the entry migration retired must be gone
+        archived_files = {
+            p.relative_to(archived_tree).as_posix() for p in iter_regular_files(archived_tree)
         }
-        scaffold_intent = {
-            rel[len("docs/意图/"):] for rel in prepared.scaffold_files if rel.startswith("docs/意图/")
-        }
-        self.assertEqual(intent_files, scaffold_intent | expected_extras)
+        for extra in expected_extras:
+            self.assertIn(extra, archived_files, f"archived intent entry missing: {extra}")
+        archived_roots = {p.name for p in archived_tree.iterdir() if p.is_dir()}
+        self.assertEqual(archived_roots, {"待办", "实施", "已废弃", "访谈纪要"})
+        for legacy_root in (LEGACY_INPROGRESS, LEGACY_COMPLETED):
+            if (hist.scaffold_dir / "docs" / "意图" / legacy_root).is_dir():
+                self.assertNotIn(legacy_root, archived_roots,
+                                 f"retired legacy root survived the archive: {legacy_root}")
         # 5b) intent-to-spec: the ledger maps exactly the three spec-eligible
         # fixture entries to their deterministic specs; the dropped entry and
         # every interview stay history-only; originals are byte-identical
         # (proven by source_sha256 matching the on-disk bytes); the generated
         # specs carry no fabricated plan/tasks artifacts; and the feature
         # pointer was never created or rewritten by the migration.
-        ledger = json.loads((repo / "specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8"))
+        ledger = json.loads(
+            (repo / f"{HOME}/specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8")
+        )
         self.assertEqual(ledger["schema"], "ph.intent-ledger/1")
-        self.assertEqual(ledger["specs_root"], "specs")
+        self.assertEqual(ledger["specs_root"], f"{HOME}/specs")
         by_source = {e["source"]: e for e in ledger["entries"]}
         self.assertEqual(set(by_source), {
             f"docs/意图/待办/新特性/{FEATURE_NAME}",
             f"docs/意图/实施/问题记录/{STARTED_NAME}",
             f"docs/意图/实施/新特性/{DELIVERED_NAME}",
         })
+        archived_docs_root = repo / f"{HOME}/archive/legacy-backup/docs"
         for source, entry in by_source.items():
-            source_path = repo / source
+            # the migrated original survives byte-for-byte inside the archive
+            source_path = archived_docs_root / source[len("docs/"):]
             self.assertEqual(
                 hashlib.sha256(source_path.read_bytes()).hexdigest(), entry["source_sha256"],
                 f"migrated intent original drifted: {source}",
@@ -2349,13 +2884,13 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
                 {p.name for p in spec_dir.iterdir()}, {"spec.md"},
                 f"no plan/tasks artifacts may be generated: {spec_dir}",
             )
-        history_index = (repo / "docs" / "意图" / "历史索引.md").read_text(encoding="utf-8")
+        history_index = (archived_tree / "历史索引.md").read_text(encoding="utf-8")
         for name in (FEATURE_NAME, STARTED_NAME, DELIVERED_NAME, DROPPED_NAME):
             self.assertIn(name, history_index)
         self.assertIn("唯一后续维护位置", history_index)
         self.assertIn("select-intent-spec", history_index)
-        self.assertFalse((repo / ".specify" / "feature.json").exists())
-        pending_index_path = repo / "docs" / "意图" / "待办" / "新特性" / "README.md"
+        self.assertFalse((repo / f"{HOME}/runtime/feature.json").exists())
+        pending_index_path = archived_tree / "待办" / "新特性" / "README.md"
         block = INDEX_CUSTOM_BLOCK.encode("utf-8")
         final_index = pending_index_path.read_bytes()
         self.assertEqual(
@@ -2375,7 +2910,7 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             # stay byte-identical to what the fixture wrote.
             self.assertEqual(
                 final_index,
-                custom["preserved_bytes"]["docs/意图/待办/新特性/README.md"],
+                custom["preserved_bytes"][f"{HOME}/archive/legacy-backup/docs/意图/待办/新特性/README.md"],
             )
 
         # 9) Idempotency: repeat inspect / verify / finalize --apply.
@@ -2394,7 +2929,7 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         # backup copy appears, and the recoverable pre-overwrite original
         # keeps its bytes (a retry must not clobber the backup with newer
         # content).
-        question_rel = f"{W}/对用户提问.md"
+        question_rel = OVERWRITE_REL
         backup_before = engine.overwrite_backups.get(question_rel)
         mutations_before = list(engine.mutations)
         trash_names = sorted(p.name for p in self.trash_run.glob(f"*-{Path(question_rel).name}"))

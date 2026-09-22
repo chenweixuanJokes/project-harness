@@ -31,6 +31,9 @@ REQUIRED_SKILLS = [
     "ph-merge-update",
     "ph-worktree-enter",
     "ph-worktree-exit",
+    "ph-memory-ask",
+    "ph-memory-learning",
+    "ph-memory-archive",
 ]
 # The pre-1.1.8 era shipped exactly these ten skills (ph-docs-sync arrived in
 # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14); the synthetic legacy
@@ -66,6 +69,20 @@ def _bump_patch(version: str, delta: int) -> str:
 CURRENT = _read_release_version()
 NEXT = _bump_patch(CURRENT, 1)
 LEGACY_VERSION = "1.1.7"
+
+
+def _published_predecessor() -> str:
+    """The from_version of the migration hop that lands on CURRENT.
+
+    Since 1.2.1 the release chain may use merged hops (1.1.15 -> 1.2.1),
+    so the published predecessor is read from migrations/index.json
+    instead of being derived arithmetically.
+    """
+
+    data = json.loads((REPO_ROOT / "migrations/index.json").read_text(encoding="utf-8"))
+    starts = [h["from_version"] for h in data["migrations"] if h["to_version"] == CURRENT]
+    assert len(starts) == 1, starts
+    return starts[0]
 
 
 def run(argv, cwd=None):
@@ -170,12 +187,12 @@ class CheckReleaseTests(unittest.TestCase):
         self.assertNotIn("schema_version", result)
 
     def test_skill_list_contract(self):
-        # 1.1.14 ships thirteen skills; the synthetic pre-1.1.8 legacy fixture
+        # 1.2.1 ships seventeen skills; the synthetic pre-1.1.8 legacy fixture
         # must keep exactly the historical ten (ph-docs-sync arrived in
         # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14) instead of
         # slicing the current list, so new release skills never leak into
         # legacy fixtures.
-        self.assertEqual(len(REQUIRED_SKILLS), 4)
+        self.assertEqual(len(REQUIRED_SKILLS), 7)
         self.assertEqual(len(LEGACY_TEN_SKILLS), 10)
         self.assertNotIn("ph-docs-sync", LEGACY_TEN_SKILLS)
         self.assertNotIn("ph-intent-verify", LEGACY_TEN_SKILLS)
@@ -373,7 +390,7 @@ class CheckReleaseTests(unittest.TestCase):
         self.assert_fails(repo, "does not match HEAD", tag=f"v{CURRENT}")
 
     def test_complete_chain_across_untagged_intermediate_passes(self):
-        published = _bump_patch(CURRENT, -2)
+        published = _published_predecessor()
         repo = self.git_repo("ph-check-chain-ok-")
         self.commit_all(repo, f"v{published}")
         proc = run(["git", "tag", "-a", f"v{published}", "-m", f"v{published}"], cwd=repo)
@@ -383,14 +400,16 @@ class CheckReleaseTests(unittest.TestCase):
         self.assertEqual(result["version"], CURRENT)
 
     def test_broken_chain_across_untagged_intermediate_rejected(self):
-        published = _bump_patch(CURRENT, -2)
-        intermediate = _bump_patch(CURRENT, -1)
+        # 1.2.1 landed as a merged hop, so the synthetic break removes the
+        # hop into CURRENT itself; the validator must still refuse a chain
+        # whose latest published tag no longer reaches the working version.
+        published = _published_predecessor()
         repo = self.git_repo("ph-check-chain-gap-")
         hops = json.loads((repo / "migrations/index.json").read_text(encoding="utf-8"))["migrations"]
         hops = [
             hop
             for hop in hops
-            if not (hop["from_version"] == published and hop["to_version"] == intermediate)
+            if not (hop["from_version"] == published and hop["to_version"] == CURRENT)
         ]
         self.set_index(repo, hops)
         self.commit_all(repo, f"v{published}")

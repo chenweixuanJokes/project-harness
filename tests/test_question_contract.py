@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Contract tests for the rewritten question spec (PH 1.1.12).
 
-The spec ``docs/约束规范/工程规范/对用户提问.md`` is organized as an execution
+The spec ``.agents/project-harness/constraints/harness规范/对用户提问规范.md`` is organized as an execution
 contract: whether to ask / the right channel with real tool execution /
 question quality / handling real answers / correcting mistakes and recovery /
 boundary examples / a completion checklist. It has no numbered sections, so
@@ -18,7 +18,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAFFOLD = ROOT / "assets/scaffold"
-QUESTIONS = SCAFFOLD / "docs/约束规范/工程规范/对用户提问.md"
+QUESTIONS = SCAFFOLD / ".agents/project-harness/constraints/harness规范/对用户提问规范.md"
 
 SECTIONS = (
     "何时需要用户决定",
@@ -133,15 +133,22 @@ class AppliedContractClausesTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # The intent skills were retired with 1.1.14: the interview loop is
-        # now governed by 意图与访谈.md alone, so only that file is checked.
-        cls.interview = (SCAFFOLD / "docs/约束规范/工程规范/意图与访谈.md").read_text(encoding="utf-8")
+        # The intent tree was retired with 1.2.1: 意图与访谈.md is kept only
+        # as read-only history under archive/constraints-history, and it must
+        # not resurface as a live constraints document.
+        cls.interview = (
+            SCAFFOLD / ".agents/project-harness/archive/constraints-history/意图与访谈.md"
+        ).read_text(encoding="utf-8")
+        cls.constraints = SCAFFOLD / ".agents/project-harness/constraints"
+        self_check = [p for p in cls.constraints.rglob("意图与访谈*")]
+        assert self_check == [], self_check
 
     def test_interview_one_question_one_answer_requires_actual_call(self):
         # 意图与访谈 §3: same actual-call rule with the semantic anchor
+        # (links are textified in the archive copy).
         self.assertIn("实际调用可用问答工具", self.interview)
         self.assertIn("文字选项和口头承诺不能替代调用", self.interview)
-        self.assertIn("./对用户提问.md#通过正确通道实际提问", self.interview)
+        self.assertIn("见工程规范/对用户提问.md", self.interview)
 
     def test_drop_reason_is_an_open_question_not_a_fake_option(self):
         # 意图与访谈 §3: unconfirmed motives are not offered, the "补充原因后
@@ -168,9 +175,9 @@ class QuestionReferenceTests(unittest.TestCase):
         self.assertEqual(offenders, [])
 
     def test_index_row_describes_the_contract(self):
-        index = (SCAFFOLD / "docs/约束规范/工程规范/README.md").read_text(encoding="utf-8")
-        self.assertIn("./对用户提问.md", index)
-        self.assertIn("何时需要用户决定", index)
+        contract = SCAFFOLD / ".agents/project-harness/constraints/harness规范/对用户提问规范.md"
+        self.assertIn("使用时机：", contract.read_text(encoding="utf-8"))
+        self.assertFalse((contract.parent / "README.md").exists())
 
     def test_contract_has_old_vs_new_and_recovery_evals(self):
         data = json.loads((ROOT / "evals/evals.json").read_text(encoding="utf-8"))

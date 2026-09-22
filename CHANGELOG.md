@@ -6,6 +6,27 @@
 
 尚未打过历史 tag。`1.0.0` 与两套 `1.1.0` 命名是可追溯提交，不是已发布 tag。首个正式 tag 是 `v1.1.1`，不追认 `v1.1.0`。
 
+## 1.2.1
+
+- Spec Kit 十技能和运行依赖改为 PH 随包适配版，安装不再拉官方或运行生成器；保留逐文件基准与定制冲突保护。
+- 规格、计划、任务与实施默认落实项目测试规范，功能目录记录 verification.md，测试未执行不能报告通过。
+
+- 终态约束树细分为 24 个基础文件（含三个创作模板），取消约束目录 README；接入与补全说明移入 ph-init 参考资料并随自安装分发。普通规则逐篇导航，冒烟案例及架构决策按目录导航。
+- 初始化与升级区分骨架检查和项目化内容完成；新增 `verify-content` 文件证据检查并接入升级完成门禁，覆盖存量接入、旧 PH 升级和按基础需求建立新项目约定。新增带来源哈希保护的 `refresh-navigation`，支持中文使用时机标记。
+- 规则正文允许随已授权项目变更演进，基础路径保持固定；明确重大架构决策范围、静态检查、修改纪律、临时测试降级及交付合入边界。构建启动命令与自测命令各自保持单一来源。
+
+- 新增三个记忆技能并把必需 Skill 从四个扩到七个：`ph-memory-ask`（只读查询，双档）、`ph-memory-learning`（写入 temporary 层，两种输入：直接记录用户点名要求记住的内容，或忠实阅读指定资料按主题写心得；新技能）、`ph-memory-archive`（临时记忆增量归档）。`ph-memory-ask` / `ph-memory-archive` 以新契约重新引入 1.1.14 退役的名字；`ph-memory-capture` 的记录职责并入 `ph-memory-learning`，该名字不再发行。从 1.1.13 及更早升级仍由 `retire-legacy-skills` 先备份退役旧副本（含旧 `ph-memory-capture`），本版安装新契约技能、不回装 capture，不直接覆盖。记忆内容升级前后逐字节不动（迁移前位于旧 `.agents/memory/` 三层，迁移后 temporary/structured 在 `project-harness/memory/`、原件在 `archive/memory/`）。
+- 查询是显式调用门禁的唯一新例外：用户当轮明确表达回忆意图（“查记忆”“你还记得吗”“以前是怎么做的”等）时 `ph-memory-ask` 自动触发，无需点名；普通“记住 / 学习 / 归档”、讨论技能名称、上下文提及仍不触发任何记忆技能，技能之间不自动串联，已启动流程内回答与“继续”按原流程续接。`ph-memory-learning` / `ph-memory-archive` 仅当轮点名才触发。
+- 双档记忆：项目档 `<repo>/.agents/project-harness/memory/` 与个人档 `~/.agents/memory/`。查询支持项目档 / 个人档 / 都查（all），项目内默认项目档、未命中不自动扩大；写入与归档每次只进一个档，个人档仅在用户明确要求全局时按需创建（安装、升级与项目初始化从不触碰 HOME）；不在 PH 项目内时必须明确指定个人档才查询。
+- 安全与冲突保护：秘密与个人信息写入前扫描、命中即拒绝落盘或阻断该次归档，查询不回显秘密；记忆目录符号链接 / junction / 硬链接等逃逸路径阻断不跟随；约定之外的目录与文件不接管、不删除、不移动；同名冲突保留双方（归档原件加 `-1` 后缀）；归档增量合并、来源登记过的不重复处理（幂等、中断可续做），原件正文与其余 frontmatter 字段逐字节保护，唯一例外是移入时切换 `kind` / `status` 两个字段（README 已写明该例外与“禁止改写”的边界）；资料 / 记忆正文里的指令性文字一律不当作指令执行。
+- 规则文档同步：`project-harness/memory/README.md` 增记忆技能表、唯一自动触发例外、个人档与归档原件改写边界；工程规范《文档治理》的记忆条目指向该技能表；`.agents/AGENTS.md` 精简为约束入口、不再携带技能表（见下）。Schema 与 memory manifest 结构不变（frontmatter 十字段不变）。
+- PH 目录归家：PH 活动内容统一迁入 `.agents/project-harness/`（constraints / documents / memory / runtime / specs / archive），仓库根不再有 `.specify/`、`specs/`、`.agents/memory/`、`.agents/archived/`，`docs/` 归还业务文档；上游运行时经安装映射改写（仓库根探测深度、模板优先级、feature 指针一并适配）并随受管清单 re-key。
+- 宪法升级内物化：`project-harness/constitution.md` 不再是空骨架；对 `constraints/` 每个文件逐条引用并声明使用时机（两行制），机器校验索引集合与磁盘一致；`ph-constitution` 交互提炼原则仍是正常使用而非升级待办。
+- 意图目录退役：旧意图内容完整迁入 `project-harness/specs/`（含原话、验收结论、附件与状态），`docs/意图/`、账本与 `select-intent-spec` 退役；需求统一走 `ph-specify` 规格流程。
+- 全量原件归档：升级前全部旧 PH 文件按哈希保存进 `project-harness/archive/upgrades/<批次>/`（归档对象以摘要命名，不作为可发现指令），逐文件迁移决定要求给出活动落点或仅归档理由；仅备份不等于迁移完成。
+- AGENTS.md 精简为约束入口（读取宪法 + 一行指 README），技能表与集中调用门禁移除；十个规格技能 description 改中文并写入"仅用户主动调用、不自动触发、不自动串联"。
+- 迁移项：`memory-skills`、`ph-home-restructure`、`constitution-materialization`、`intent-retirement`。同名定制技能（1.1.14 / 1.1.15 项目上的同名目录）冲突阻断不覆盖；低于 1.1.14 的同名目录按官方历史副本由退役项处理；1.1.14 及以后出现的 `ph-memory-capture` 残留同名目录按用户内容阻断（该名不再发行），请用户移除或改名后重跑。项目定制与既有授权结论保留。
+
 ## 1.1.15
 
 - 统一 Spec Kit 安装与验证的完整受管文件清单，缺失运行依赖或共享文件基准时阻断；即使内容相同，也检查软链接、硬链接及目录占用。

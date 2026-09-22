@@ -167,12 +167,17 @@ class ReleaseIntegrationTests(unittest.TestCase):
                     legacy = repo / "docs/意图/进行中/新特性/INT-keep.md"
                     legacy.parent.mkdir(parents=True)
                     legacy.write_text("# Original intent\nDo not reclassify.\n")
+                    # the intent tree is retired; a legacy project may still
+                    # carry such files and they must survive untouched
                     pending = repo / "docs/意图/待办/新特性/README.md"
-                    pending.write_text(pending.read_text() + "\nCustom project index entry\n")
+                    pending.parent.mkdir(parents=True, exist_ok=True)
+                    pending.write_text("# 待办\nCustom project index entry\n")
                     wiki = repo / "docs/项目Wiki/项目概述.md"
+                    wiki.parent.mkdir(parents=True, exist_ok=True)
+                    wiki.write_text("# 项目概述\nReviewed subagent project facts\n")
                     rules = repo / "docs/约束规范/后端规范/后端规范.md"
-                    wiki.write_text(wiki.read_text() + "\nReviewed subagent project facts\n")
-                    rules.write_text(rules.read_text() + "\nProject-specific approved exception\n")
+                    rules.parent.mkdir(parents=True, exist_ok=True)
+                    rules.write_text("# 后端规范\nProject-specific approved exception\n")
                     retained_paths = (agents, legacy, pending, wiki, rules)
                     retained = tuple(path.read_bytes() for path in retained_paths)
                     inspected = json.loads(command(sys.executable, str(merge), "inspect", "--repo", str(repo)))
@@ -189,6 +194,8 @@ class ReleaseIntegrationTests(unittest.TestCase):
                     # the mandatory intent-to-spec item's artifacts are part of
                     # the applied state verify checks; run the real item
                     command(sys.executable, str(merge), "migrate-intents", "--repo", str(repo), "--apply")
+                    from content_fixture import complete_documentation_project
+                    complete_documentation_project(repo, root)
                     command(sys.executable, str(merge), "verify", "--repo", str(repo))
                     before = digest(repo)
                     command(sys.executable, str(merge), "finalize", "--repo", str(repo))

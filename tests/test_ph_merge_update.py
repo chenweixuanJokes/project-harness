@@ -74,12 +74,16 @@ CHAIN_110 = [
     "constitution-governance-zone",
     "intent-to-spec",
     "speckit-integrity-gates",
+    "memory-skills",
+    "ph-home-restructure",
+    "constitution-materialization",
+    "intent-retirement", "bundled-speckit-acceptance",
 ]
 CHAIN_100 = ["intent-domain", *CHAIN_110]
 CHAIN_111 = CHAIN_110[6:]  # everything after the 1.1.0 -> 1.1.1 hop
-CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates"]
-CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates"]
-CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates"]
+CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"]
+CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"]
+CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"]
 CHAIN_112 = [
     "init-docs-workflow",
     "docs-guidance",
@@ -122,7 +126,29 @@ class MergeUpdateTests(unittest.TestCase):
         src = self._speckit_seed
         for name in ph_init.SPECKIT_SKILL_NAMES:
             copy_tree(src / ".agents/skills" / name, repo / ".agents/skills" / name)
-        copy_tree(src / ".specify", repo / ".specify")
+        # 1.2.1 layout: the seed's .specify tree installs through the layout
+        # mapping (runtime relocation + materialized constitution), so the
+        # fixture matches what a real install produces on a fresh repo.
+        import ph_layout as _layout
+        # The seed itself is built through the real install, so its runtime
+        # and materialized constitution already sit at the 1.2.1 layout.
+        for source in sorted(((src / _layout.HOME) / "runtime").rglob("*")):
+            if not source.is_file():
+                continue
+            dest = repo / source.relative_to(src).as_posix()
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, dest)
+        shutil.copy2(src / _layout.CONSTITUTION, repo / _layout.CONSTITUTION)
+        constraints = repo / _layout.CONSTRAINTS
+        constraints.mkdir(parents=True, exist_ok=True)
+        from content_fixture import complete_documentation_project
+        complete_documentation_project(repo, REPO_ROOT)
+        (repo / _layout.HOME / "documents").mkdir(parents=True, exist_ok=True)
+        (repo / _layout.HOME / "documents" / "README.md").write_text("# 项目资料\n", encoding="utf-8")
+        archive_memory = repo / _layout.HOME / "archive" / "memory"
+        archive_memory.mkdir(parents=True, exist_ok=True)
+        (archive_memory / "README.md").write_text("# 记忆归档原件\n", encoding="utf-8")
+        live = repo / _layout.CONSTITUTION
         scripts = repo / ".agents" / "scripts"
         scripts.mkdir(parents=True, exist_ok=True)
         shutil.copy2(
@@ -134,7 +160,10 @@ class MergeUpdateTests(unittest.TestCase):
         override = repo / ph_speckit.CONSTITUTION_OVERRIDE_REL
         override.parent.mkdir(parents=True, exist_ok=True)
         override.write_bytes(ph_speckit.render_constitution_override(repo, staging, contract))
-        ph_speckit.cmd_record_baselines(repo, None)
+        live.write_bytes(ph_speckit.render_live_constitution(repo, staging, contract))
+        ph_speckit.cmd_record_baselines(
+            repo, None, refresh_override_sha=ph_init.sha256_file(override), refresh_constitution_sha=ph_init.sha256_file(live)
+        )
 
     def setUp(self):
         self._temps = []
@@ -206,7 +235,18 @@ class MergeUpdateTests(unittest.TestCase):
         data["skills"]["required_names"] = list(names or NEW_INTENT and (BASE_SKILLS + NEW_INTENT))
         if extra:
             data.update(extra)
-        self.write_json(repo / ".agents" / "ph.json", data)
+        disk = repo / ".agents" / "ph.json"
+        if disk.is_file():
+            # Simulate an upgrade: the project manifest keeps its installed
+            # speckit section (baselines + provenance) instead of the blank
+            # template section wiping it.
+            try:
+                existing = json.loads(disk.read_text(encoding="utf-8"))
+            except Exception:
+                existing = None
+            if isinstance(existing, dict) and isinstance(existing.get("speckit"), dict):
+                data["speckit"] = existing["speckit"]
+        self.write_json(disk, data)
         schema_src = SCAFFOLD / ".agents" / "ph.schema.json"
         (repo / ".agents" / "ph.schema.json").write_bytes(schema_src.read_bytes())
         return data
@@ -249,7 +289,13 @@ class MergeUpdateTests(unittest.TestCase):
 
         The retirement item archives the retired skills out of the managed
         install (mirrors included) and the speckit item installs the ten
-        upstream skills plus the .specify shared infrastructure.
+        upstream skills plus the .specify shared infrastructure. The 1.2.1
+        target re-ships ph-memory-ask and ph-memory-archive with a new
+        contract and ships the new ph-memory-learning, so this helper folds
+        that later hop's install in as the merged final operation: archive
+        the old copies, then install the release-byte memory skills (the
+        memory-skills item's own work). ph-memory-capture stays retired -
+        nothing installs it again.
         """
         for name in set(RETIRED_SKILLS) | {"ph-sure"}:
             for rel in (
@@ -267,6 +313,12 @@ class MergeUpdateTests(unittest.TestCase):
         if codex_root.exists():
             shutil.rmtree(codex_root)
         self.seed_speckit(repo)
+        self.install_memory_skills(repo)
+
+    def install_memory_skills(self, repo: Path) -> None:
+        """The 1.2.1 memory-skills item: install the three release-byte skills."""
+        for name in ("ph-memory-ask", "ph-memory-learning", "ph-memory-archive"):
+            copy_tree(SCAFFOLD / ".agents" / "skills" / name, repo / ".agents" / "skills" / name)
 
     def apply_speckit_with_retire_na(self, repo: Path) -> None:
         """The 1.1.8-era codex tests keep the retired skills canonical (the
@@ -330,7 +382,9 @@ class MergeUpdateTests(unittest.TestCase):
         return out
 
     def archived_codex_dir(self, repo: Path) -> Path | None:
-        root = repo / ".agents" / "archived"
+        # 1.2.1: retired codex adapters land in the unified project-harness
+        # archive, not a top-level .agents/archived directory
+        root = repo / ".agents" / "project-harness" / "archive" / "legacy-backup"
         if not root.is_dir():
             return None
         for child in sorted(root.iterdir()):
@@ -394,18 +448,39 @@ class MergeUpdateTests(unittest.TestCase):
         self.install_receipt()
         repo = self.fixture_110_current()
         self.write_state(repo)
-        index = repo / "docs/意图/待办/新特性/README.md"
-        custom = index.read_text(encoding="utf-8") + "\n[用户需求](INT-custom.md)\n"
+        index = repo / ".agents/project-harness/documents/README.md"
+        custom = index.read_text(encoding="utf-8") + "\n[项目定制规则](../constraints/custom-rule.md)\n"
         index.write_text(custom, encoding="utf-8")
-        intent = index.parent / "INT-custom.md"
-        intent.write_text("# 用户需求\n保留原文\n", encoding="utf-8")
+        intent = repo / ".agents/project-harness/constraints/custom-rule.md"
+        intent.write_text("# 项目定制规则\n使用时机：触及本项目定制规则的工作前阅读。\n", encoding="utf-8")
+        report_path = repo / ".agents/project-harness/init-report.json"
+        report = json.loads(report_path.read_text())
+        report["documents"]["custom-rule.md"] = {
+            "status": "adopted", "sha256": ph_init.sha256_file(intent),
+            "evidence": "本测试新增的项目定制规则", "reason": "验证新增专题不会在升级中丢失",
+            "semantic_review": True,
+        }
+        report_path.write_text(json.dumps(report, ensure_ascii=False))
+        # A new constraints file must enter the constitution navigation before
+        # finalize: the complete-index contract refuses an uncovered file.
+        constitution = repo / ".agents/project-harness/constitution.md"
+        text = constitution.read_text(encoding="utf-8")
+        marker = text.index(ph_speckit.PH_OVERRIDE_MARKER)
+        head, zone = text[:marker], text[marker:]
+        zone = zone.replace(
+            "## 约束导航\n\n",
+            "## 约束导航\n\n- [项目定制规则](constraints/custom-rule.md)\n  使用时机：触及本项目定制规则的工作前阅读。\n",
+            1,
+        )
+        constitution.write_text(head + zone, encoding="utf-8")
         ph_merge_update.finalize_payload(repo, True)
         result = ph_merge_update.inspect_payload(repo)
         self.assertTrue(result["up_to_date"])
         self.assertFalse(result["can_finalize"])
         self.assertIsNone(result["suggested_state"])
         self.assertEqual(index.read_text(encoding="utf-8"), custom)
-        self.assertEqual(intent.read_text(encoding="utf-8"), "# 用户需求\n保留原文\n")
+        self.assertEqual(intent.read_text(encoding="utf-8"), "# 项目定制规则\n使用时机：触及本项目定制规则的工作前阅读。\n")
+        self.assertIn("constraints/custom-rule.md", constitution.read_text(encoding="utf-8"))
 
     def test_docs_migration_from_112_preserves_project_content(self):
         self.install_receipt()
@@ -434,7 +509,7 @@ class MergeUpdateTests(unittest.TestCase):
                                "question-execution-contract", "explicit-invocation-rules",
                                "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills",
                                "speckit-core-integration", "constitution-governance-zone",
-                               "intent-to-spec", "speckit-integrity-gates"])
+                               "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"])
         state = self.write_state(repo, from_version="1.1.2", items=ids)
         before_manifest = manifest_path.read_bytes()
         for status in ("pending", "blocked"):
@@ -456,9 +531,8 @@ class MergeUpdateTests(unittest.TestCase):
         repo = self.fixture_110_current()
         self.write_state(repo)
         ph_merge_update.finalize_payload(repo, True)
-        template = repo / "docs/意图/_模板.md"
-        template.write_text("status_dir: 进行中/新特性\n", encoding="utf-8")
-        with self.assertRaisesRegex(ph_init.PHError, "must default status_dir"):
+        (repo / ".agents/project-harness/constitution.md").unlink()
+        with self.assertRaisesRegex(ph_init.PHError, "constitution"):
             ph_merge_update.inspect_payload(repo)
 
     def fixture_110_current(self, mode="portable"):
@@ -597,6 +671,124 @@ class MergeUpdateTests(unittest.TestCase):
                 self.assertTrue(ph_merge_update.finalize_payload(repo, True)["complete"])
                 ph_init.load_repo_manifest(repo)
                 self.assertTrue(ph_merge_update.inspect_payload(repo)["up_to_date"])
+
+    def fixture_at_115(self, mode="portable"):
+        """A 1.1.15 install: four PH skills plus the ten spec-kit skills and
+        no memory skills (PH shipped none between 1.1.14 and 1.1.15)."""
+        repo = self.git_repo(f"ph-merge-v115-{mode}-")
+        names = ["ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit"]
+        self.write_manifest(repo, mode=mode, version="1.1.15", names=names)
+        self.write_agents(repo)
+        for name in names:
+            if name == "ph-init":
+                copy_tree(REPO_ROOT, repo / ".agents" / "skills" / "ph-init")
+            else:
+                self.write_skill(repo, name)
+        self.seed_speckit(repo)
+        self.write_intent_layout(repo, in_progress=True)
+        self.seed_adapters(repo, mode, names + list(ph_init.SPECKIT_SKILL_NAMES), codex=False)
+        self.seed_gitignore(repo)
+        return repo
+
+    def test_memory_same_name_custom_skill_blocks_inspect(self):
+        # 1.1.14+ projects live in a window where no PH release ships the
+        # memory names: a same-named directory there is project content on a
+        # PH-reserved name and blocks the memory-skills item instead of being
+        # overwritten by the 1.1.16 install.
+        self.install_receipt()
+        repo = self.fixture_at_115()
+        custom = repo / ".agents/skills/ph-memory-ask/SKILL.md"
+        custom.parent.mkdir(parents=True, exist_ok=True)
+        custom_body = (
+            "---\nname: ph-memory-ask\ndescription: team custom memory lookup\n---\n"
+            "# our own memory skill\n项目自建记忆查询，升级不得覆盖。\n"
+        )
+        custom.write_text(custom_body, encoding="utf-8")
+        before = self.tree_snapshot(repo)
+
+        inspected = ph_merge_update.inspect_payload(repo)
+        self.assertEqual(inspected["from"], "1.1.15")
+        self.assertEqual(inspected["to"], CURRENT)
+        self.assertEqual(inspected["profile"], "speckit-current")
+        self.assertTrue(
+            any("ph-memory-ask" in conflict and CURRENT in conflict for conflict in inspected["conflicts"]),
+            inspected["conflicts"],
+        )
+        self.assertFalse(inspected["can_finalize"])
+        self.assertEqual(self.tree_snapshot(repo), before)
+        self.assertEqual(custom.read_text(encoding="utf-8"), custom_body)
+
+    def test_capture_residual_above_114_blocks_memory_item(self):
+        # ph-memory-capture is retired since 1.1.14 and the 1.2.1 target folds
+        # its duty into ph-memory-learning without re-shipping the name: a
+        # live directory at 1.1.14+ is user content on a PH-reserved retired
+        # name and blocks the memory-skills item; nothing deletes it silently.
+        self.install_receipt()
+        repo = self.fixture_at_115()
+        residual = repo / ".agents/skills/ph-memory-capture/SKILL.md"
+        residual.parent.mkdir(parents=True, exist_ok=True)
+        residual.write_text(
+            "---\nname: ph-memory-capture\ndescription: user-restored copy\n---\n"
+            "# manually restored capture\n用户手动恢复的旧记录技能。\n",
+            encoding="utf-8",
+        )
+        before = self.tree_snapshot(repo)
+
+        inspected = ph_merge_update.inspect_payload(repo)
+        self.assertEqual(inspected["from"], "1.1.15")
+        self.assertTrue(
+            any("ph-memory-capture" in conflict for conflict in inspected["conflicts"]),
+            inspected["conflicts"],
+        )
+        self.assertFalse(inspected["can_finalize"])
+        self.assertEqual(self.tree_snapshot(repo), before)
+        self.assertTrue(residual.read_text(encoding="utf-8").startswith("---\n"))
+
+    def test_memory_historical_copy_below_114_is_not_a_conflict(self):
+        # Below 1.1.14 PH shipped the old same-named memory skills as scaffold
+        # content: the live copies are the official historical skill, the
+        # retire-legacy-skills item archives them, and the memory-skills item
+        # installs the new contract - no same-name conflict may fire.
+        self.install_receipt()
+        repo = self.fixture_at_119()
+        for name in ("ph-memory-ask", "ph-memory-capture", "ph-memory-archive", "ph-memory-learning"):
+            self.assertTrue((repo / ".agents" / "skills" / name / "SKILL.md").is_file(), name)
+        inspected = ph_merge_update.inspect_payload(repo)
+        self.assertEqual(inspected["from"], "1.1.9")
+        self.assertEqual(inspected["profile"], "1.1.0-current-names")
+        # the fixture also carries a synthetic docs-sync placeholder that
+        # conflicts on its own; the memory names must NOT appear at all
+        self.assertFalse(
+            any("ph-memory" in conflict for conflict in inspected["conflicts"]),
+            inspected["conflicts"],
+        )
+
+    def test_memory_pin_rejects_drifted_install(self):
+        # While the disk is below 1.2.1 an applied memory-skills item pins the
+        # installed memory skills to the release bytes: a drifted (customized)
+        # ph-memory-ask must not pass as the installed one.
+        self.install_receipt()
+        repo = self.fixture_at_119()
+        self.write_state(repo, from_version="1.1.9", items=CHAIN_119)
+        self.apply_114_migration(repo)
+        # the re-shipped memory skills are live while retire-legacy-skills is
+        # applied: the 1.2.1 target ships them, so the retirement gate must
+        # NOT reject them as leftovers; ph-memory-capture is retired and not
+        # re-shipped, so it must be gone from the managed install instead.
+        for name in ("ph-memory-ask", "ph-memory-learning", "ph-memory-archive"):
+            self.assertTrue((repo / ".agents" / "skills" / name / "SKILL.md").is_file(), name)
+        self.assertFalse((repo / ".agents" / "skills" / "ph-memory-capture").exists())
+        self.assertTrue(ph_merge_update.verify_payload(repo)["ok"])
+
+        drifted = repo / ".agents/skills/ph-memory-ask/SKILL.md"
+        drifted.write_text(
+            "---\nname: ph-memory-ask\ndescription: drifted body\n---\n# drifted\n",
+            encoding="utf-8",
+        )
+        with self.assertRaises(ph_init.PHError) as ctx:
+            ph_merge_update.verify_payload(repo)
+        self.assertIn("ph-memory-ask", str(ctx.exception))
+        self.assertIn("does not match the release skill", str(ctx.exception))
 
     def test_docs_sync_same_name_custom_skill_blocks_inspect(self):
         self.install_receipt()
@@ -953,6 +1145,11 @@ class MergeUpdateTests(unittest.TestCase):
         archived_dir = self.archived_codex_dir(repo)
         self.assertIsNotNone(archived_dir)
         for name in TARGET_SKILLS:
+            if name == "ph-memory-learning":
+                # learning never existed in a 1.1.8 install: no historical
+                # codex mirror ever pointed at it, so there is no record
+                self.assertFalse((repo / ".codex" / "skills" / name).exists())
+                continue
             record = archived_dir / name
             self.assertTrue(record.is_file(), name)
             self.assertEqual(
@@ -971,7 +1168,7 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(again["retired_codex"], [])
         self.assertEqual(self.tree_snapshot(repo), after_upgrade)
         self.assertEqual(
-            sorted(p.name for p in (repo / ".agents" / "archived").iterdir()),
+            sorted(p.name for p in (repo / ".agents" / "project-harness" / "archive" / "legacy-backup").iterdir()),
             [archived_dir.parent.name],
             "a repeated finalize must not create a second archive directory",
         )
@@ -1184,7 +1381,7 @@ class MergeUpdateTests(unittest.TestCase):
         for name, item in audited.items():
             self.assertEqual(
                 item["dest"],
-                f".agents/archived/{archived_dir.parent.name}/codex-skills/{name}",
+                f".agents/project-harness/archive/legacy-backup/{archived_dir.parent.name}/codex-skills/{name}",
             )
             self.assertEqual(item["kind"], "symlink-record")
             self.assertIn("managed relative symlink", item["reason"])
@@ -1410,13 +1607,17 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertIsNotNone(self.archived_codex_dir(repo))
 
         # complete rerun must re-verify live files
-        (repo / "docs/意图/待办/README.md").unlink()
+        constraint = repo / ".agents/project-harness/constraints/工程规范/Git规范.md"
+        original = constraint.read_bytes()
+        retained = repo / "git-rule-test-backup"
+        constraint.rename(retained)
         code, _out, err = self.invoke("verify", "--repo", str(repo))
         self.assertEqual(code, 2)
-        self.assertIn("docs/意图/待办/README.md", err)
+        self.assertIn("Git规范.md", err)
 
         # versions written, state not complete -> recover
-        (repo / "docs/意图/待办/README.md").write_bytes((SCAFFOLD / "docs/意图/待办/README.md").read_bytes())
+        retained.rename(constraint)
+        self.assertEqual(constraint.read_bytes(), original)
         state = json.loads((self.update_dir(repo) / "state.json").read_text())
         state["status"] = "in_progress"
         self.write_json(self.update_dir(repo) / "state.json", state)
@@ -1606,10 +1807,33 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertIn("ph-init", err)
 
         (repo / ".agents" / "skills" / "ph-init" / "release.json").write_bytes((REPO_ROOT / "release.json").read_bytes())
-        (repo / "docs/意图/_模板.md").write_text("status_dir: 进行中/新特性\n", encoding="utf-8")
+        (repo / ".agents/project-harness/constitution.md").write_text("# [PROJECT_NAME] Constitution\n", encoding="utf-8")
         code, _out, err = self.invoke("verify", "--repo", str(repo))
         self.assertEqual(code, 2)
-        self.assertIn("must default status_dir", err)
+        self.assertIn("skeleton", err)
+
+    def test_verify_blocks_unresolvable_active_feature_pointer(self):
+        repo = self.fixture_110_current()
+        self.install_receipt()
+        self.write_state(repo)
+        code, _out, err = self.invoke("verify", "--repo", str(repo))
+        self.assertEqual(code, 0, err)
+        runtime = repo / ".agents" / "project-harness" / "runtime"
+        feature_json = runtime / "feature.json"
+        # a pointer still at the retired root specs/ tree resolves nowhere
+        feature_json.write_text(json.dumps({"feature_directory": "specs/001-gone"}) + "\n", encoding="utf-8")
+        code, _out, err = self.invoke("verify", "--repo", str(repo))
+        self.assertEqual(code, 2)
+        self.assertIn("feature.json", err)
+        self.assertIn("001-gone", err)
+        # an adapted pointer at the home specs root passes
+        feature_json.write_text(
+            json.dumps({"feature_directory": ".agents/project-harness/specs/001-live"}) + "\n",
+            encoding="utf-8",
+        )
+        (runtime.parent / "specs" / "001-live").mkdir(parents=True, exist_ok=True)
+        code, _out, err = self.invoke("verify", "--repo", str(repo))
+        self.assertEqual(code, 0, err)
 
     def test_verify_surfaces_sync_plan_block(self):
         repo = self.fixture_110_current()

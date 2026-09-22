@@ -8,21 +8,23 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 ROOT = Path(__file__).resolve().parents[1]
 SCAFFOLD = ROOT / "assets/scaffold"
-DOCS = SCAFFOLD / "docs"
-ENGINEERING = DOCS / "约束规范/工程规范"
+DOCS = SCAFFOLD / ".agents/project-harness/documents"
+ENGINEERING = SCAFFOLD / ".agents/project-harness/constraints/工程规范"
 
 
 class DocsTemplateTests(unittest.TestCase):
     def test_engineering_guides_are_indexed_and_skill_reachable(self):
-        index = (ENGINEERING / "README.md").read_text(encoding="utf-8")
-        for name in ("初始化与文档补全.md", "安全与配置.md", "构建发布与运维.md"):
+        constraints = ENGINEERING.parent
+        self.assertFalse(list(constraints.rglob("README.md")))
+        for name in ("Git规范.md", "安全规范.md"):
             self.assertTrue((ENGINEERING / name).is_file())
-            self.assertIn(f"./{name}", index)
         skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("assets/scaffold/docs/约束规范/工程规范/初始化与文档补全.md", skill)
+        for name in ("接入规范.md", "补全规范.md", "项目化验收.md"):
+            self.assertTrue((ROOT / "references" / name).is_file())
+            self.assertIn("references/" + name, skill)
 
     def test_workbook_test_cases_and_conditional_components_are_mapped(self):
-        guide = (ENGINEERING / "初始化与文档补全.md").read_text(encoding="utf-8")
+        guide = (ROOT / "references/补全规范.md").read_text(encoding="utf-8")
         self.assertIn("F29 / F31 / F33", guide)
         self.assertIn("F30 / F32 / F34", guide)
         for component in ("Kong", "Eureka", "Apollo"):
@@ -62,9 +64,9 @@ class DocsTemplateTests(unittest.TestCase):
 
     def test_docs_migration_keeps_single_version_contract(self):
         release = json.loads((ROOT / "release.json").read_text())
-        self.assertEqual(release["version"], "1.1.15")
+        self.assertEqual(release["version"], "1.2.1")
         self.assertNotIn("schema_version", release)  # single PH version since 1.1.8
-        self.assertEqual(len(release["required_skills"]), 4)
+        self.assertEqual(len(release["required_skills"]), 7)
         self.assertIn("ph-merge-update", release["required_skills"])
         self.assertIn("ph-worktree-exit", release["required_skills"])
         speckit = json.loads((REPO_ROOT / "speckit.json").read_text(encoding="utf-8"))
@@ -216,11 +218,14 @@ class DocsTemplateTests(unittest.TestCase):
             self.assertIn(term, doc)
 
     def test_explicit_invocation_gate_registered_everywhere(self):
-        # The gate sentence lives in the rule index; since 1.1.14 the intent
-        # spec has no per-skill invocation wording (the intent skills were
-        # retired), so it is checked for its no-auto-trigger statement instead.
-        self.assertIn("点名", (SCAFFOLD / ".agents/AGENTS.md").read_text(encoding="utf-8"))
-        interview = (SCAFFOLD / "docs/约束规范/工程规范/意图与访谈.md").read_text(encoding="utf-8")
+        # Since 1.2.1 the entry file is minimal and delegates to the
+        # constitution; each skill's own metadata carries the invocation
+        # gate, and the retired interview doc survives only as history.
+        agents = (SCAFFOLD / ".agents/AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn("constitution.md", agents)
+        interview = (
+            SCAFFOLD / ".agents/project-harness/archive/constraints-history/意图与访谈.md"
+        ).read_text(encoding="utf-8")
         self.assertIn("不自动触发", interview)
         banned = ("即使没点名本技能——都必须使用", "即使没说出归档二字——都必须使用",
                   "或调用 ph-worktree-exit，都必须使用本技能", "完成时调用 `ph-worktree-exit`",

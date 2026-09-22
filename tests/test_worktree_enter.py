@@ -139,7 +139,7 @@ class WorktreeEnterTests(unittest.TestCase):
         self.assertIn("不代为转交其他技能、不自动弹冲突处理问句", skill)
         self.assertIn("不问 WIP、不创建隔离工作区", skill)
         self.assertNotIn("先按 `ph-worktree-exit`", skill)
-        doc = (REPO_ROOT / "assets/scaffold/docs/约束规范/工程规范/Git与并行开发.md").read_text(encoding="utf-8")
+        doc = (REPO_ROOT / "assets/scaffold/.agents/project-harness/constraints/工程规范/Git规范.md").read_text(encoding="utf-8")
         self.assertIn("另起的 `ph-worktree-enter` 调用遇冲突态只提示用户处于合并状态", doc)
 
     def test_enter_in_merge_conflict_state_errors_before_any_wip_flow(self):
@@ -223,7 +223,7 @@ class WorktreeEnterTests(unittest.TestCase):
         the question contract's boundary example must state this.
         """
         skill = (REPO_ROOT / "assets/scaffold/.agents/skills/ph-worktree-enter/SKILL.md").read_text(encoding="utf-8")
-        questions = (REPO_ROOT / "assets/scaffold/docs/约束规范/工程规范/对用户提问.md").read_text(encoding="utf-8")
+        questions = (REPO_ROOT / "assets/scaffold/.agents/project-harness/constraints/harness规范/对用户提问规范.md").read_text(encoding="utf-8")
         # authorization premise and source-branch semantics in the skill
         self.assertIn("用户明确要求", skill)
         self.assertIn("当前所在分支", skill)
