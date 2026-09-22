@@ -20,6 +20,8 @@ x-ph-upstream:
 
 只对影响验收含义且无法从项目事实与规则查明的业务歧义提问。不要询问是否运行项目规定的测试。更新需求质量检查不代表已经执行实现验收。
 
+附带人读版：本次更新 spec.md 后，按 `.agents/skills/ph-human/references/human-writing.md` 的规范把它的当前内容写成同功能目录的人读伴读：正文先写仓外临时文件，再经 `python3 .agents/scripts/ph_human.py publish` 发布，文件映射与文末机器元数据由脚本处理，正文不自带元数据。伴读是快照解释，不是权威规则或验收源；缺产物不编伴读，本次未写机器产物时不生成。直接读取该写作规范执行，不调用 ph-human，也不触发任何其他技能。
+
 
 
 ## User Input
@@ -303,3 +305,15 @@ Report completion (after questioning loop ends or early termination):
 - [ ] Spec quality checklist re-validated against updated spec (if `FEATURE_DIR/checklists/requirements.md` exists)
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
 - [ ] Completion reported to user with questions answered, sections touched, checklist status, and coverage summary
+
+## PH 下一步建议（固定输出）
+
+完成报告与 extension hook 处理结束后、结束本次回复前，向用户原样输出下面代码块内的固定文案作为收尾。这只是建议：本技能不自动调用任何技能，等用户明确点名后再执行。
+
+```text
+下一步建议执行:
+- 压缩会话（/compact）后再继续
+- 后续可执行的 skills（按场景选择）:
+  - $ph-plan - 关键疑点已澄清，进入计划
+  - $ph-clarify - 还有其他主题要澄清，再来一轮（单轮最多 5 问，可反复）
+```

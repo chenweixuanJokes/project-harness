@@ -947,6 +947,101 @@ class PhReleaseTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("官方地址不用再下一次", stderr.getvalue())
 
+    def make_entry(self, home, *, version=None, junk_only=False, symlink=False):
+        entry = home / ".agents" / "skills" / "ph-init"
+        if symlink:
+            target = home / "entry-target"
+            target.mkdir(parents=True)
+            entry.parent.mkdir(parents=True, exist_ok=True)
+            entry.symlink_to(target, target_is_directory=True)
+            return entry
+        entry.mkdir(parents=True)
+        if junk_only:
+            (entry / "SKILL.md").write_text("# not a ph-init tree\n", encoding="utf-8")
+            return entry
+        receipt = {
+            "version": version,
+            "tag": f"v{version}",
+            "commit": "0" * 40,
+            "source": FIXED_SOURCE,
+        }
+        (entry / ".ph-source.json").write_text(
+            json.dumps(receipt, indent=2) + "\n", encoding="utf-8"
+        )
+        (entry / "OLD.txt").write_text("old tree\n", encoding="utf-8")
+        return entry
+
+    def test_user_entry_refreshes_older_tree_with_trash_backup(self):
+        files = self.release_files()
+        transport, commit = self.transport_for(files)
+        prepared = self.prepare(transport, "latest")
+        home = self.temp_dir("ph-user-home-")
+        self.make_entry(home, version="1.1.12")
+        entry = home / ".agents" / "skills" / "ph-init"
+        result = ph_release.refresh_user_entry(prepared.root, home=home)
+        self.assertEqual(result["action"], "refreshed")
+        self.assertEqual(result["from_version"], "1.1.12")
+        self.assertEqual(result["version"], CURRENT_VERSION)
+        self.assertEqual(
+            (entry / "SKILL.md").read_text(encoding="utf-8"), "# ph-init\n"
+        )
+        self.assertFalse((entry / "OLD.txt").exists())
+        receipt = json.loads((entry / ".ph-source.json").read_text(encoding="utf-8"))
+        self.assertEqual(receipt["version"], CURRENT_VERSION)
+        backup = Path(result["backup"])
+        self.assertTrue(backup.is_dir())
+        self.assertEqual(
+            (backup / "OLD.txt").read_text(encoding="utf-8"), "old tree\n"
+        )
+        self.assertEqual(backup.parent, home / "trash")
+
+    def test_user_entry_never_downgrades_or_reasks_same_version(self):
+        files = self.release_files()
+        transport, _ = self.transport_for(files)
+        prepared = self.prepare(transport, "latest")
+        for version in (CURRENT_VERSION, "9.9.9"):
+            home = self.temp_dir("ph-user-home-")
+            entry = self.make_entry(home, version=version)
+            before = (entry / "OLD.txt").read_bytes()
+            result = ph_release.refresh_user_entry(prepared.root, home=home)
+            self.assertEqual(result["action"], "skip", version)
+            self.assertIn("no downgrade", result["reason"])
+            self.assertEqual((entry / "OLD.txt").read_bytes(), before)
+            self.assertFalse((home / "trash").exists())
+
+    def test_user_entry_skips_absent_unknown_and_symlink_entries(self):
+        files = self.release_files()
+        transport, _ = self.transport_for(files)
+        prepared = self.prepare(transport, "latest")
+        absent = self.temp_dir("ph-user-home-")
+        result = ph_release.refresh_user_entry(prepared.root, home=absent)
+        self.assertEqual(result["action"], "skip")
+        self.assertIn("not installed", result["reason"])
+        self.assertFalse((absent / ".agents" / "skills" / "ph-init").exists())
+        unknown = self.temp_dir("ph-user-home-")
+        entry = self.make_entry(unknown, junk_only=True)
+        result = ph_release.refresh_user_entry(prepared.root, home=unknown)
+        self.assertEqual(result["action"], "skip")
+        self.assertIn("cannot be determined", result["reason"])
+        self.assertEqual(
+            (entry / "SKILL.md").read_text(encoding="utf-8"), "# not a ph-init tree\n"
+        )
+        linked = self.temp_dir("ph-user-home-")
+        link = self.make_entry(linked, symlink=True)
+        result = ph_release.refresh_user_entry(prepared.root, home=linked)
+        self.assertEqual(result["action"], "skip")
+        self.assertIn("not a plain directory", result["reason"])
+        self.assertTrue(link.is_symlink())
+
+    def test_user_entry_requires_prepared_receipt(self):
+        root = self.temp_dir("ph-user-root-")
+        (root / "release.json").write_text("{}\n", encoding="utf-8")
+        home = self.temp_dir("ph-user-home-")
+        self.make_entry(home, version="1.1.12")
+        with self.assertRaises(ph_release.PHReleaseError):
+            ph_release.refresh_user_entry(root, home=home)
+        self.assertTrue((home / ".agents" / "skills" / "ph-init" / "OLD.txt").exists())
+
     def test_ensure_star_targets_new_official_name(self):
         session = ScriptedApiSupport(
             {

@@ -1,6 +1,6 @@
 ---
 name: ph-init
-description: "初始化、检查或同步本仓库的项目级 Harness（PH）：从唯一 GitHub 源准备正式发行版，安装 canonical、七个 PH skills 与 project-harness 目录结构，并从 PH 随包资产安装十个基于固定官方 Spec Kit 的适配版 ph-* skills 与运行时。存量项目用旧内容接入：盘点后在仓外生成 sources 快照与合并候选，经 init --adopt-plan 安装，不先装模板盖旧正文；init 会话按代码与实时官方资料逐项补全文档并产出覆盖报告。调用门禁：仅当用户当轮明确点名 ph-init（如「用 ph-init 初始化这个仓库」）并要求使用时才调用；只说“初始化 PH”“检查 PH”“同步 PH”“升级 PH”“bootstrap harness”等普通描述、上下文提及或讨论技能名称都不触发。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。已装项目的安装、检查、同步、升正式版都由本 Skill 接；用户已请求的升级在本会话按 merge-update 步骤做完，不另开技能。不要把编码客户端内置的初始化向导（如 /init）、厂商脚手架、git init、目标仓 git pull、或 ph-worktree-* 误判为本技能。"
+description: "初始化、检查或同步本仓库的项目级 Harness（PH）：从唯一 GitHub 源准备正式发行版，安装 canonical、八个 PH skills 与 project-harness 目录结构，并从 PH 随包资产安装十个基于固定官方 Spec Kit 的适配版 ph-* skills 与运行时。存量项目用旧内容接入：盘点后在仓外生成 sources 快照与合并候选，经 init --adopt-plan 安装，不先装模板盖旧正文；init 会话按代码与实时官方资料逐项补全文档并产出覆盖报告。调用门禁：仅当用户当轮明确点名 ph-init（如「用 ph-init 初始化这个仓库」）并要求使用时才调用；只说“初始化 PH”“检查 PH”“同步 PH”“升级 PH”“bootstrap harness”等普通描述、上下文提及或讨论技能名称都不触发。已显式启动的同一流程内，用户回答提问或说“继续”仍按原流程接收反馈与恢复，不要求每轮重复点名，也不触发其他技能。已装项目的安装、检查、同步、升正式版都由本 Skill 接；用户已请求的升级在本会话按 merge-update 步骤做完，不另开技能。不要把编码客户端内置的初始化向导（如 /init）、厂商脚手架、git init、目标仓 git pull、或 ph-worktree-* 误判为本技能。"
 ---
 
 # ph-init
@@ -39,7 +39,7 @@ PH 面向多种编码客户端：约束与技能的正式存放位置（canonica
 
 ## 唯一源与准备
 
-正式源只有 `https://github.com/chenweixuanJokes/project-harness.git`。官方仓库由 `ph-init` 更名而来，产品名 Project Harness；技能名与安装路径不随仓库名变化，仍是 `ph-init` 与 `ph-*`。旧地址 `https://github.com/chenweixuanJokes/ph-init.git` 经 GitHub 重定向指向同一仓库：1.1.8 及以后入口按旧地址 prepare 也能取到新包，不是错误；`FIXED_SOURCE` 等固定标识与 `release.json.repository`、`receipt.source`、`state.source.repository` 在 1.x 保留旧地址的兼容含义，存量值不改写、不当作错误。`latest` 取数值最大的稳定 tag（排除预发布与非版本标签），并固定到该 tag 的 commit。本批版本为 `1.2.1`（七个 PH 必需 Skill 加十个上游规格技能）。PH 只有这一个版本号：不再有独立的 Schema 版本，发行包与项目清单都不携带 `schema_version` 字段，schema 标识固定为无版本的 `urn:ph:schema:project-harness`；`template_version` 仍表示项目已完成升级的 PH 版本。
+正式源只有 `https://github.com/chenweixuanJokes/project-harness.git`。官方仓库由 `ph-init` 更名而来，产品名 Project Harness；技能名与安装路径不随仓库名变化，仍是 `ph-init` 与 `ph-*`。旧地址 `https://github.com/chenweixuanJokes/ph-init.git` 经 GitHub 重定向指向同一仓库：1.1.8 及以后入口按旧地址 prepare 也能取到新包，不是错误；`FIXED_SOURCE` 等固定标识与 `release.json.repository`、`receipt.source`、`state.source.repository` 在 1.x 保留旧地址的兼容含义，存量值不改写、不当作错误。`latest` 取数值最大的稳定 tag（排除预发布与非版本标签），并固定到该 tag 的 commit。本批版本为 `1.2.2`（八个 PH 必需 Skill 加十个上游规格技能）。PH 只有这一个版本号：不再有独立的 Schema 版本，发行包与项目清单都不携带 `schema_version` 字段，schema 标识固定为无版本的 `urn:ph:schema:project-harness`；`template_version` 仍表示项目已完成升级的 PH 版本。
 
 ### Spec Kit 集成（固定正式版）
 
@@ -49,7 +49,7 @@ PH 面向多种编码客户端：约束与技能的正式存放位置（canonica
 
 安装使用 scripts/ph_speckit.py，先 dry-run 再 --apply。逐文件内容基准仍记录在 .agents/ph.json.speckit.files；来源标记不构成未修改证明。受管文件磁盘字节与旧基准一致才可更新，用户定制冲突不得覆盖。普通 scaffold 部署不重复写这些文件，最后重新记录基准。包损坏或冲突阻止安装，不推进版本。
 
-运行时位于 .agents/project-harness/runtime，项目宪法位于 project-harness/constitution.md；宪法保留项目原则并导航现行约束。十技能按阶段默认落实项目测试规范，不新增验收入口、不自动串联技能。ph-implement 默认完成必要测试与证据记录，不能以任务打勾代替验收；没有合并授权不得为交付自动合入。
+运行时位于 .agents/project-harness/runtime，项目宪法位于 project-harness/constitution.md；宪法保留项目原则并导航现行约束。十技能按阶段默认落实项目测试规范，不新增验收入口、不自动串联技能。十技能在产出机器产物时附带生成同功能目录的人读伴读（快照解释，非权威规则或验收源）：映射、来源哈希与受管写入由 `.agents/scripts/ph_human.py` 完成，写作规范与按需盘点刷新由 ph-human 技能提供（ph-human 仅用户点名时触发；十技能直接读取其规范文件，不调用它、不自动串联技能）。ph-implement 默认完成必要测试与证据记录，不能以任务打勾代替验收；没有合并授权不得为交付自动合入。十技能在完成报告与 extension hook 处理结束后，固定输出「下一步建议执行」收尾文案：先建议压缩会话，再按场景列出后续可点名执行的技能；只建议，不自动调用。
 
 
 当前这份 Skill 可能是旧用户入口或 shadow 副本。**初始化必须先准备发行根，再读该根的 `SKILL.md` 并只执行该根脚本**。不要用眼前这份本地 `assets/scaffold` 冒充最新版。离线内核可以安装它携带的确定版本，但不代表最新正式版。
@@ -67,6 +67,14 @@ python3 <release-root>/scripts/ph_release.py support
 ```
 
 记下 JSON 里的 `root`。后续 dry-run 与 apply 固定同一 `version`/`commit`。预检可以下载，不得改目标。
+
+prepare 成功后，顺带执行一次用户级入口刷新：
+
+```text
+python3 <release-root>/scripts/ph_release.py user-entry
+```
+
+它把 `~/.agents/skills/ph-init` 整树刷新为该发行根（旧树先移入 `~/trash` 备份，来源回执随树写入；刷新失败自动还原，不会留下半份入口）。入口不存在、不是普通目录、版本无法判定或不旧于本包时返回 `action: skip` 与原因，这不是错误：不新建入口、不降级、不当作安装失败。只从准备好的发行根运行，不在开发树或项目内执行。
 
 旧版（1.1.7 及更早）用户级入口的 prepare 会**必然拒绝 1.1.8 及以后发行包**：旧脚本必查发行元数据里的 `schema_version`，新版包已删除该键。这是预期现象，不重试、不回退、不假称自动恢复。一次性入口切换使用首个无独立 Schema 版本的已发布标签 v1.1.8：把 v1.1.8 clone 到一个**新的仓外安全目录**（如 `mktemp -d` 创建），不覆盖用户级入口与目标项目，不用 `main` 或本地开发树冒充发行；先在该目录运行 `python3 <新目录>/scripts/ph_release.py prepare --version 1.1.8` 并读取返回根的 Skill，再用这份新工具准备并固定后续发行根。**1.1.8-1.1.13 入口无法直接准备 1.1.14**（1.1.14 起必需技能名单拆为 4 个 scaffold 技能加 10 个安装期生成的规格驱动技能，旧校验器按 manifest 与 `required_skills` 全等校验会以 skills.required_names mismatch 拒绝；这是设计使然，不要绕过）：把 v1.1.14 标签本身 clone 到新的仓外安全目录，运行该目录的 `python3 <clone>/scripts/ph_release.py prepare --version 1.1.14 --repo <target>`（其自带校验器验证本版发行并写入 receipt），再用返回根执行升级。之后只用 1.1.14 根按 merge-update 步骤合并、verify、finalize；旧 `schema_version` 字段仅在 finalize 验收通过后随版本写入一起移除。已经持有本次 prepare 的固定 1.1.14 root 时，读取其中 Skill 后直接进入分流，不再次 prepare。
 
@@ -106,7 +114,7 @@ python3 <project-or-installed-ph-init>/scripts/ph_init.py sync [--apply] [--mode
 
 ## 工作流
 
-1. **确认动作与范围并分流**。读目标 `.agents/ph.json`（没有就当未安装）。对目标跑 `prepare`，记下发行根。只要是 check/sync 就不生成文档、不升版本。然后：
+1. **确认动作与范围并分流**。读目标 `.agents/ph.json`（没有就当未安装）。对目标跑 `prepare`，记下发行根，随后执行一次 `python3 <发行根>/scripts/ph_release.py user-entry`，把用户级 ph-init 入口顺带刷新到本包（跳过即向用户报告原因，不新建、不降级、不重试）。只要是 check/sync 就不生成文档、不升版本。然后：
    1. 已装且仓内版本**小于**发行根：读该根 `assets/scaffold/.agents/skills/ph-merge-update/SKILL.md`，**本会话按那份执行**（inspect → 按迁移说明语义合并 → verify → finalize）。旧项目没装这个 Skill 也以发行根这份为准。禁止 `init --apply` / `--adopt-plan`，不另开技能，不自动 finalize。
    2. 已装且版本相同：报告已接入；要 check / sync / 续做文档就走对应分支，不重跑安装、不升版本。
    3. 已装且仓内版本**大于**本包：停止，说明不要降级；换匹配或更新的正式包。
@@ -129,6 +137,7 @@ python3 <project-or-installed-ph-init>/scripts/ph_init.py sync [--apply] [--mode
 
 - 未调用编码客户端内置的初始化向导（如 `/init`），未对目标 `git pull`。
 - 初始化的 dry 与 apply 来自同一 prepare `commit`；dry-run 未改目标，准备失败未用本地旧模板装“最新”。
+- 本会话 prepare 成功后已执行 `user-entry` 并按结果处理：已刷新（旧入口备份在 `~/trash`）或明确跳过（不存在 / 非普通目录 / 版本无法判定 / 不旧于本包）；未新建入口、未降级、未把跳过当失败。
 - 未先安装模板再盖旧正文：存量内容经仓外合并候选接入，`sources` 快照与 plan 均在仓外生成，发行树未被改动；已有正文以复用 / 引用登记，未复制第二套，冲突未擅自裁决。
 - `--adopt-plan` 仅用于尚无 `.agents/ph.json` 的目标；`--apply` 后已装内核 `check` 通过；未为原生读取 `.agents/skills` 的客户端另建重复技能目录。
 - spec-kit 集成来自 PH 随包适配版，来源与文件哈希符合发行清单，安装不依赖官方生成缓存；十技能目录与 frontmatter 已统一改 `ph-` 前缀、上游来源映射在 `x-ph-upstream` 与 `.agents/ph.json.speckit` 中可查；仓库根无 `.specify/` 与 `specs/`，运行时落在 `project-harness/runtime/` 且脚本可真实执行；constitution 已物化在 `project-harness/constitution.md`，逐文件引用当前 `project-harness/constraints/` 文档并写明使用时机（无占位、无待确认遗留）；与用户自定义同名技能冲突时未覆盖而是阻断上报。

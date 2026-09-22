@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -49,7 +50,7 @@ RUNTIME_TEMPLATES = f"{ph_layout.RUNTIME}/templates"
 RUNTIME_SCRIPTS = f"{ph_layout.RUNTIME}/scripts/bash"
 STATIC_REQUIRED_SKILLS = (
     "ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
-    "ph-memory-ask", "ph-memory-learning", "ph-memory-archive",
+    "ph-memory-ask", "ph-memory-learning", "ph-memory-archive", "ph-human",
 )
 
 
@@ -1001,6 +1002,57 @@ class WorkflowExclusionTests(unittest.TestCase):
             self.assertTrue(
                 any("must not be installed" in p for p in result["problems"]), result["problems"]
             )
+
+
+class NextStepEpilogueTests(unittest.TestCase):
+    """The 1.2.2 fixed closing copy contract for the ten bundled skills."""
+
+    EXPECTED_NEXT = {
+        "constitution": ("specify",),
+        "specify": ("clarify", "plan"),
+        "clarify": ("plan", "clarify"),
+        "plan": ("checklist", "tasks"),
+        "checklist": ("tasks", "analyze", "implement"),
+        "tasks": ("analyze", "implement", "taskstoissues"),
+        "analyze": ("implement", "specify", "clarify", "plan", "tasks"),
+        "implement": ("converge", "tasks", "checklist"),
+        "converge": ("implement",),
+        "taskstoissues": (),
+    }
+
+    def epilogue_tail(self, core: str) -> str:
+        root = ph_speckit.bundled_source()
+        text = (root / ph_speckit.SKILL_BASELINE_RELS[core]).read_text(encoding="utf-8")
+        marker = "## PH 下一步建议（固定输出）"
+        self.assertIn(marker, text, core)
+        return text.rsplit(marker, 1)[1]
+
+    def test_every_skill_carries_the_fixed_epilogue(self):
+        root = ph_speckit.bundled_source()
+        for core, rel in ph_speckit.SKILL_BASELINE_RELS.items():
+            text = (root / rel).read_text(encoding="utf-8")
+            self.assertIn("## PH 下一步建议（固定输出）", text, core)
+            self.assertIn("下一步建议执行:", text, core)
+            self.assertIn("- 压缩会话（/compact）后再继续", text, core)
+            self.assertIn("- 后续可执行的 skills（按场景选择）:", text, core)
+            self.assertIn("不自动调用任何技能", text, core)
+            tail = self.epilogue_tail(core)
+            self.assertNotIn("\n## ", tail, f"{core}: the epilogue must be the closing section")
+
+    def test_epilogue_next_sets_match_the_flow(self):
+        skill_names = ph_speckit.speckit_contract()["skills"]
+        for core, expected in self.EXPECTED_NEXT.items():
+            tail = self.epilogue_tail(core)
+            # word-boundary match: "$ph-tasks" must not hit "$ph-taskstoissues"
+            mentioned = {
+                name for name in skill_names
+                if re.search(rf"\$ph-{re.escape(name)}(?!\w)", tail)
+            }
+            self.assertEqual(mentioned, set(expected), core)
+
+    def test_terminal_skills_declare_no_next_skill(self):
+        for core in ("converge", "taskstoissues"):
+            self.assertIn("无 -", self.epilogue_tail(core), core)
 
 
 if __name__ == "__main__":

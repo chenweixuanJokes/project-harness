@@ -20,6 +20,8 @@ x-ph-upstream:
 
 保留仅向 tasks.md 追加任务的边界。核对验收场景及 verification.md 的已有证据，缺少必要测试、运行证据或证据与当前状态不符时追加可追溯任务。不得把代码阅读认定为运行通过，不直接修代码或修改验收记录；无缺口时不写空章节。
 
+附带人读版：仅当本次实际追加或更新了 tasks.md 任务时，按 `.agents/skills/ph-human/references/human-writing.md` 的规范把它的当前内容写成同功能目录的人读伴读：正文先写仓外临时文件，再经 `python3 .agents/scripts/ph_human.py publish` 发布，文件映射与文末机器元数据由脚本处理，正文不自带元数据。伴读是快照解释，不是权威规则或验收源；缺产物不编伴读，本次未写机器产物时不生成。直接读取该写作规范执行，不调用 ph-human，也不触发任何其他技能。
+
 
 
 ## User Input
@@ -288,3 +290,15 @@ After producing the result, check if `.agents/project-harness/runtime/extensions
     After emitting the block above you MUST actually invoke the hook and wait for it to finish before continuing. Run it the same way you would run the command yourself in this agent/session (the invocation may differ from the literal `{command}` id shown above, e.g. a skills-mode agent runs it as `/skill:speckit-...` or `$speckit-...`). Emitting the block alone does not run the hook.
 
 - If no hooks are registered or `.agents/project-harness/runtime/extensions.yml` does not exist, skip silently
+
+## PH 下一步建议（固定输出）
+
+完成报告与 extension hook 处理结束后、结束本次回复前，向用户原样输出下面代码块内的固定文案作为收尾。这只是建议：本技能不自动调用任何技能，等用户明确点名后再执行。
+
+```text
+下一步建议执行:
+- 压缩会话（/compact）后再继续
+- 后续可执行的 skills（按场景选择）:
+  - $ph-implement - 本轮追加了收敛任务，继续实现
+  - 无 - 已 converged：进入代码评审 / 开 PR（本功能流程到此收敛）
+```

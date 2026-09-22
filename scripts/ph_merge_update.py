@@ -60,6 +60,7 @@ RELEASE_ONLY_SKILLS = {
     "ph-memory-ask": ("memory-skills", "1.2.1"),
     "ph-memory-learning": ("memory-skills", "1.2.1"),
     "ph-memory-archive": ("memory-skills", "1.2.1"),
+    "ph-human": ("human-readable-companion", "1.2.2"),
 }
 # First release at or above which a same-named memory-skill directory is
 # unmanaged project content rather than the official pre-1.1.14 copy.

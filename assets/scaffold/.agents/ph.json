@@ -1,6 +1,6 @@
 {
   "$schema": "./ph.schema.json",
-  "template_version": "1.2.1",
+  "template_version": "1.2.2",
   "adapter_mode": "portable",
   "canonical": {
     "root": ".agents",
@@ -67,6 +67,7 @@
       "ph-memory-ask",
       "ph-memory-learning",
       "ph-memory-archive",
+      "ph-human",
       "ph-analyze",
       "ph-checklist",
       "ph-clarify",

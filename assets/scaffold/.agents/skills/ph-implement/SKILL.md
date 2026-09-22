@@ -20,6 +20,8 @@ x-ph-upstream:
 
 实施前核对任务是否遗漏项目强制验证；在本次授权范围内补齐必要测试任务，不调用其它技能。实现后按门禁执行验证，修复本次问题并复验；无关既有失败如实报告，不扩大修复范围或降低门禁。使用 `.agents/project-harness/runtime/templates/verification-template.md` 在当前功能目录维护 verification.md，记录实际命令、代码及环境状态、结果和证据。失败、未执行、有依据不适用分别记录，缺测试不等于不适用。相关变化后旧证据不得继续宣称通过；同一状态下符合门禁的有效证据可复用。任务打勾不能替代运行证据。区分实现自测通过、合入前回归通过与实际合入交付；合并、生产写入、付费及外部发送仍需授权。
 
+附带人读版：本次写出或更新 verification.md 后，按 `.agents/skills/ph-human/references/human-writing.md` 的规范把它的当前内容写成同功能目录的人读伴读：正文先写仓外临时文件，再经 `python3 .agents/scripts/ph_human.py publish` 发布，文件映射与文末机器元数据由脚本处理，正文不自带元数据。伴读是快照解释，不是权威规则或验收源；缺产物不编伴读，本次未写机器产物时不生成。直接读取该写作规范执行，不调用 ph-human，也不触发任何其他技能。
+
 
 
 ## User Input
@@ -238,3 +240,16 @@ Report final status with summary of completed work.
 - [ ] Implementation validated against specification, plan, and test coverage
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
 - [ ] Completion reported to user with summary of completed work
+
+## PH 下一步建议（固定输出）
+
+完成报告与 extension hook 处理结束后、结束本次回复前，向用户原样输出下面代码块内的固定文案作为收尾。这只是建议：本技能不自动调用任何技能，等用户明确点名后再执行。
+
+```text
+下一步建议执行:
+- 压缩会话（/compact）后再继续
+- 后续可执行的 skills（按场景选择）:
+  - $ph-converge - 对照规格核对实现，补齐缺口任务
+  - $ph-tasks - 任务清单缺失或不完整时先补齐
+  - $ph-checklist - 需求质量清单拦下时，补充生成或修订清单后人工评审
+```

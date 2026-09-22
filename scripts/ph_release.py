@@ -7,6 +7,8 @@ Callers cannot supply an arbitrary remote. After a successful download,
 an existing GitHub login may be used to star and fork the official repo.
 Those optional actions never change the source or fail the prepare.
 This script does not initialize projects, merge updates or invoke ph_init.
+``user-entry`` refreshes an existing user-level ph-init bootstrap copy from
+the prepared root it runs in; it never creates or downgrades one.
 
 No third-party deps. Temporary trees are never auto-deleted; callers
 must move leftovers into ``~/trash``.
@@ -18,9 +20,11 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -1005,6 +1009,77 @@ def write_source_receipt(root: Path, info: SourceInfo) -> None:
     path.write_text(json.dumps(source_receipt(info), indent=2) + "\n", encoding="utf-8")
 
 
+def user_entry_version(entry: Path) -> str | None:
+    """Best-effort version of an installed user entry, or None when unknown."""
+
+    for rel in (SOURCE_RECEIPT_NAME, "release.json"):
+        path = entry / rel
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if not isinstance(data, dict):
+            continue
+        version = data.get("version")
+        if isinstance(version, str) and SEMVER.fullmatch(version):
+            return version
+    return None
+
+
+def refresh_user_entry(root: Path, *, home: Path | None = None) -> dict[str, object]:
+    """Refresh an existing user-level ph-init bootstrap entry from a prepared root.
+
+    The entry is a whole-tree copy under ``<home>/.agents/skills/ph-init``. It
+    is never created, never downgraded, and left untouched when its version
+    cannot be determined or it is not a plain directory. A refresh first moves
+    the old tree into the ``<home>/trash`` recovery directory and restores it
+    when the copy fails, so a failed refresh never leaves a half entry behind.
+    """
+
+    receipt_path = root / SOURCE_RECEIPT_NAME
+    if receipt_path.is_symlink() or not receipt_path.is_file():
+        raise PHReleaseError(
+            "user-entry must run from a prepared release root: .ph-source.json is missing"
+        )
+    receipt = read_json_object(receipt_path, "release receipt")
+    target = receipt.get("version")
+    if not isinstance(target, str) or not SEMVER.fullmatch(target):
+        raise PHReleaseError("illegal .ph-source.json: version is not semver")
+    home = home if home is not None else Path.home()
+    entry = home / ".agents" / "skills" / "ph-init"
+    result: dict[str, object] = {"action": "skip", "entry": str(entry), "version": target}
+    if entry.is_symlink() or (entry.exists() and not entry.is_dir()):
+        result["reason"] = "user entry is not a plain directory; left untouched"
+        return result
+    if not entry.exists():
+        result["reason"] = "user entry is not installed; nothing to refresh"
+        return result
+    current = user_entry_version(entry)
+    if current is None:
+        result["reason"] = "user entry version cannot be determined; left untouched"
+        return result
+    result["from_version"] = current
+    if _parse_semver(current) >= _parse_semver(target):
+        result["reason"] = f"user entry {current} is not older than {target}; no downgrade"
+        return result
+    trash = home / "trash"
+    backup = trash / f"ph-release-user-entry-{os.getpid()}-{time.time_ns()}-{entry.name}"
+    trash.mkdir(parents=True, exist_ok=True)
+    try:
+        entry.rename(backup)
+    except OSError as exc:
+        raise PHReleaseError(f"cannot move the old user entry to {backup}: {exc}") from exc
+    try:
+        shutil.copytree(root, entry)
+    except Exception:
+        backup.rename(entry)
+        raise
+    result["action"] = "refreshed"
+    result["reason"] = f"refreshed user entry {current} -> {target}; old tree moved to trash"
+    result["backup"] = str(backup)
+    return result
+
+
 def resolve_target_repo(explicit: str | None) -> Path | None:
     if explicit:
         start = Path(explicit).expanduser()
@@ -1131,6 +1206,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "support",
         help="add a star and create an account-level copy when already signed in",
     )
+    sub.add_parser(
+        "user-entry",
+        help="refresh an existing user-level ph-init entry from this prepared root",
+    )
     return parser
 
 
@@ -1143,6 +1222,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "support":
         offer_official_support(after_download=False)
+        return 0
+    if args.command == "user-entry":
+        root = Path(__file__).resolve().parents[1]
+        sys.stdout.write(json.dumps(refresh_user_entry(root), indent=2) + "\n")
         return 0
     raise PHReleaseError(f"unsupported command: {args.command}")
 

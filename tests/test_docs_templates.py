@@ -64,9 +64,9 @@ class DocsTemplateTests(unittest.TestCase):
 
     def test_docs_migration_keeps_single_version_contract(self):
         release = json.loads((ROOT / "release.json").read_text())
-        self.assertEqual(release["version"], "1.2.1")
+        self.assertEqual(release["version"], "1.2.2")
         self.assertNotIn("schema_version", release)  # single PH version since 1.1.8
-        self.assertEqual(len(release["required_skills"]), 7)
+        self.assertEqual(len(release["required_skills"]), 8)
         self.assertIn("ph-merge-update", release["required_skills"])
         self.assertIn("ph-worktree-exit", release["required_skills"])
         speckit = json.loads((REPO_ROOT / "speckit.json").read_text(encoding="utf-8"))
@@ -236,6 +236,23 @@ class DocsTemplateTests(unittest.TestCase):
             for phrase in banned:
                 self.assertNotIn(phrase, text, f"{skill}: {phrase}")
             self.assertIn("ph-", text)
+
+    def test_maintainer_docs_link_overall_release_spec_without_withdrawn_docs(self):
+        for name in (
+            "README.md",
+            "docs/README.md",
+            "docs/约束规范/工程规范/README.md",
+            "docs/约束规范/工程规范/版本与合并升级.md",
+        ):
+            text = (ROOT / name).read_text(encoding="utf-8")
+            self.assertNotIn("插件安装.md", text, name)
+            self.assertNotIn("插件发行与安装.md", text, name)
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("docs/约束规范/工程规范/版本与合并升级.md", readme)
+        engineering_index = (
+            ROOT / "docs/约束规范/工程规范/README.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("](./版本与合并升级.md)", engineering_index)
 
 
 if __name__ == "__main__":

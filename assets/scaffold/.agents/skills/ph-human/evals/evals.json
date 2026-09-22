@@ -1,0 +1,59 @@
+{
+  "skill_name": "ph-human",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-human 看看 specs/001-用户认证 这个功能目录的人读伴读状态。",
+      "expected_output": "先读本技能正文确认这是点名调用，再运行 python3 .agents/scripts/ph_human.py status --repo <仓库根> --feature .agents/project-harness/specs/001-用户认证（用户给的是短路径时先核实真实目录）。把 JSON 状态翻译给人看：fresh/stale/orphan/user_modified/snapshot 各是什么、missing 是哪些根级机器产物没有伴读。只读不写；快照型（analysis-human/issues-human）说明只能由 ph-analyze / ph-taskstoissues 重新运行产生，本技能不凭空生成。不调用其他技能。本 eval 是行为定义，不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用 ph-human 刷新 001-用户认证 的伴读：spec.md 昨天改过了，plan 伴读也旧了。",
+      "expected_output": "status 确认 stale 后，逐篇读机器产物全文，按 references/human-writing.md 成文（正文开头写来源与日期、快照声明；保留 FR/任务编号、风险、未知项与实际状态；不写套话/自评/生成过程），正文先写到仓外临时文件，再运行 publish --source <机器产物相对路径> --candidate <临时文件> --skill ph-human 发布。文末机器元数据由脚本附加，不自己写。发布后复跑 status 报告最终状态；用户改动或无页脚的阻断项只报告不覆盖，交用户决定。未改动任何机器产物。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用 ph-human 给 002-报表导出 生成 analysis-human.md，上次 ph-analyze 跑完没生成。",
+      "expected_output": "拒绝凭空生成：analysis-human.md 是 ph-analyze 本次调用报告的快照，只能由再次运行 ph-analyze 真实产生；本技能缺真实来源不编产物（缺源不编）。如实说明原因并建议用户点名 ph-analyze 重跑。不为满足请求改写机器产物或调用其他技能。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "tasks-human.md 被我手动加了项目备注，用 ph-human 更新它的时候别动我的备注。",
+      "expected_output": "status 会显示 user_modified：正文与记录的正文哈希不符。脚本发布被阻断（不覆盖用户改动），本技能如实报告阻断原因，说明两种选择：保留备注继续用旧伴读，或用户把文件移开后发布新版（新版本不保证保留备注）。不擅自合并、不覆盖、不绕过脚本直接写文件。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "帮我把规格目录下所有文档都写成人看的版本吧，不用点哪个技能，你直接干。",
+      "expected_output": "不触发：用户没有点名 ph-human，普通任务描述不启动本技能，也不借 ph-specify 等其他技能名义代跑。按调用门禁不执行、不写盘，可说明需要用户明确点名 ph-human 才执行。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-human 全部扫一遍伴读，顺便把 spec-human.md 也再生成一份它的说明。",
+      "expected_output": "status --all 扫描 .agents/project-harness/specs 全部功能目录与宪法伴读并报告状态；对 spec-human.md 的请求拒绝：任何 -human.md 都是伴读不是机器源，不生成伴读的伴读（不递归）。其余待刷新项按正常流程处理。本 eval 不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "为 specs/001 的 spec.md（四个 User Story 与 FR-001..FR-010 的需求规格）写一份人读版伴读。",
+      "expected_output": "按 references/human-writing.md 成文：开头声明来源文件名与日期、快照口径（伴读是快照解释，以 spec.md 原文为准）；问题驱动讲清四个故事的优先级与失败口径；引用的 FR/SC 编号保持源里原样（User Story 写作 User Story，不换算成源里没有的缩写）；无 NEEDS CLARIFICATION 时如实说没有，未决项不凭空补；不写套话/自评/生成过程。成文经 python3 .agents/scripts/ph_human.py publish 发布，不直接手写落盘。本 eval 是行为定义，不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "为 specs/001 的 contracts/xxx.md（一份配置契约，含 YAML 示例与校验规则）写人读版伴读。",
+      "expected_output": "契约类伴读要点：位置与形态（谁在读这份配置）、字段约束逐条翻译成『缺了会怎样』的失败口径、与构建期的对应关系（改清单要动哪几处）、如实声明边界（不支持的事直说不支持）。标识原样保留；来源与快照声明齐备；把 User Story 1 写成 US1 这类源里没有的缩写不算保留原样。发布走 ph_human.py publish，落在 feature 根 contracts-xxx-human.md。本 eval 是行为定义，不表示已实测。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "为 specs/001 的 tasks.md（21 个任务、部分完成）写人读版伴读。",
+      "expected_output": "任务清单伴读要点：主线逻辑（阶段怎么推进、MVP 在哪可以停下）、当前真实进度（哪些勾了哪些没勾，按 tasks.md 实际状态，不粉饰）、并行与依赖提示、两条纪律（测试先写、未执行不得记通过）。T 编号原样保留可对回。源更新后重写时经 publish 受管替换，不覆盖用户手改。本 eval 是行为定义，不表示已实测。",
+      "files": []
+    }
+  ]
+}

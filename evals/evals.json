@@ -180,6 +180,12 @@
       "prompt": "用 ph-intent-verify 验收刚做完的登录超时修复，宿主有结构化问答工具。",
       "expected_output": "不触发 ph-init：这是 ph-intent-verify 的职责（用户点名该技能并要求验收）；PH 技能互不代为调用，普通描述与点名其他技能都不触发本技能。本 eval 不表示已实测。",
       "files": []
+    },
+    {
+      "id": 31,
+      "prompt": "用 ph-init 把这个仓库升到最新正式版。升级过程中顺便看下用户目录里那份旧 ph-init 入口（~/.agents/skills/ph-init 还是 1.1.15 的）要不要一起更新。",
+      "expected_output": "触发 ph-init。prepare 固定新发行根后，本会话顺带执行一次发行根的 ph_release.py user-entry：用户级入口存在且版本更旧时整树刷新为本包，旧树先移入 ~/trash 备份，失败自动还原，不留下半份入口；入口不存在、非普通目录、版本无法判定或不旧于本包时返回 skip 并把原因报告用户，不新建、不降级、不当作安装或升级失败，也不在开发树或项目内执行该命令。入口刷新不写目标项目任何内容，后续仍按 merge-update 步骤 inspect → 语义合并 → verify → finalize 完成。本 eval 不表示已实测。",
+      "files": []
     }
   ]
 }

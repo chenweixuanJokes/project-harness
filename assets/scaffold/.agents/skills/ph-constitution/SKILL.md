@@ -20,6 +20,8 @@ x-ph-upstream:
 
 维护项目测试规范的导航与适用关系，不复制门槛或命令，不用上游通用建议替换已有项目规则。保留项目原则与人工定制。
 
+附带人读版：本次更新 constitution.md 后，按 `.agents/skills/ph-human/references/human-writing.md` 的规范把它的当前内容写成同功能目录的人读伴读：正文先写仓外临时文件，再经 `python3 .agents/scripts/ph_human.py publish` 发布，文件映射与文末机器元数据由脚本处理，正文不自带元数据。伴读是快照解释，不是权威规则或验收源；缺产物不编伴读，本次未写机器产物时不生成。直接读取该写作规范执行，不调用 ph-human，也不触发任何其他技能。
+
 
 
 ## User Input
@@ -191,3 +193,14 @@ Check if `.agents/project-harness/runtime/extensions.yml` exists in the project 
     ```
     After emitting the block above you MUST actually invoke the hook and wait for it to finish before continuing. Run it the same way you would run the command yourself in this agent/session (the invocation may differ from the literal `{command}` id shown above, e.g. a skills-mode agent runs it as `/skill:speckit-...` or `$speckit-...`). Emitting the block alone does not run the hook.
 - If no hooks are registered or `.agents/project-harness/runtime/extensions.yml` does not exist, skip silently
+
+## PH 下一步建议（固定输出）
+
+完成报告与 extension hook 处理结束后、结束本次回复前，向用户原样输出下面代码块内的固定文案作为收尾。这只是建议：本技能不自动调用任何技能，等用户明确点名后再执行。
+
+```text
+下一步建议执行:
+- 压缩会话（/compact）后再继续
+- 后续可执行的 skills（按场景选择）:
+  - $ph-specify - 宪法已建立或更新完，开始为新功能写规格
+```

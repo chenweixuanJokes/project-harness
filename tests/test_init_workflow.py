@@ -62,7 +62,7 @@ class SkillContractTests(unittest.TestCase):
         cls.skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     def test_batch_version_single_ph_version_contract(self):
-        self.assertIn("本批版本为 `1.2.1`", self.skill)
+        self.assertIn("本批版本为 `1.2.2`", self.skill)
         # separate schema version is gone; 1.1.10+ release numbers must not trip the check
         self.assertNotRegex(self.skill, r"1\.1\.1(?![0-9])")
         self.assertIn("urn:ph:schema:project-harness", self.skill)
@@ -143,12 +143,12 @@ class SkillContractTests(unittest.TestCase):
     def test_distributed_skills_share_strict_frontmatter_subset(self):
         release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
         required = release["required_skills"]
-        # 1.2.1 ships seven PH scaffold skills (the four core skills plus the
-        # three memory skills) and the ten spec-driven skills as bundled,
+        # 1.2.2 ships eight PH scaffold skills (the four core skills, the
+        # three memory skills, and ph-human) and the ten spec-driven skills as bundled,
         # already-adapted scaffold content (upstream provenance stays pinned
         # in speckit.json / speckit-bundle.json).
         self.assertEqual(sorted(required), [
-            "ph-init", "ph-memory-archive", "ph-memory-ask",
+            "ph-human", "ph-init", "ph-memory-archive", "ph-memory-ask",
             "ph-memory-learning", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
         ])
         # the spec-kit list's single maintenance source is the top-level

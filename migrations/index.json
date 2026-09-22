@@ -158,6 +158,16 @@
         "intent-retirement",
         "bundled-speckit-acceptance"
       ]
+    },
+    {
+      "from_version": "1.2.1",
+      "to_version": "1.2.2",
+      "path": "migrations/1.2.1-to-1.2.2.md",
+      "items": [
+        "user-entry-refresh",
+        "human-readable-companion",
+        "speckit-next-step-hints"
+      ]
     }
   ]
 }

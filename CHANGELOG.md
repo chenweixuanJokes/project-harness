@@ -6,6 +6,12 @@
 
 尚未打过历史 tag。`1.0.0` 与两套 `1.1.0` 命名是可追溯提交，不是已发布 tag。首个正式 tag 是 `v1.1.1`，不追认 `v1.1.0`。
 
+## 1.2.2
+
+- 升级流程顺带刷新用户级引导入口：`ph_release.py` 新增 `user-entry` 子命令，prepare 成功后把 `~/.agents/skills/ph-init` 整树更新为本包，旧树先备份进 `~/trash`、失败自动还原；入口不存在、非普通目录、版本无法判定或不旧于本包时跳过，不新建、不降级。
+- 新增第八个必需技能 `ph-human` 与共享脚本 `.agents/scripts/ph_human.py`：十个规格技能在产出机器产物时附带生成同功能目录的人读伴读（快照解释，非权威规则或验收源；正文开头写来源与日期，文末机器元数据由脚本写入）。功能目录根部产物映射为 `<名字>-human.md`，`checklists/`、`contracts/` 清单与契约映射为根部 `checklists-<名>-human.md` / `contracts-<名>-human.md`，宪法伴读 `constitution-human.md` 在其旁；ph-analyze 保持严格只读、唯一写入例外是本次真实报告的 `analysis-human.md` 快照，ph-taskstoissues 仅记录本次已授权真实创建的 Issue 结果（`issues-human.md`），发布伴读不产生额外外部副作用。脚本只做映射、哈希、受管写入保护与陈旧检测（缺源不编产物、`-human.md` 永不作输入、嵌套同名与链接逃逸阻断、用户改动不覆盖），不生成文字；十技能直接读取 `ph-human/references/human-writing.md` 写作规范，不调用 ph-human、不自动串联技能，自动刷新仅限本次产物，其余陈旧伴读只提示；伴读失败单独报告，不撤销主流程。迁移项 `human-readable-companion`。
+- 十个规格技能增加固定收尾文案（迁移项 `speckit-next-step-hints`）：完成报告与 extension hook 处理结束后原样输出「下一步建议执行」——先建议压缩会话（`/compact`），再按场景列出后续可点名执行的技能（衔接与既有门禁一致，`ph-taskstoissues` 为终点）；只建议、不自动调用，不改变点名调用门禁。随包哈希清单 `assets/speckit-bundle.json` 同步更新。
+
 ## 1.2.1
 
 - Spec Kit 十技能和运行依赖改为 PH 随包适配版，安装不再拉官方或运行生成器；保留逐文件基准与定制冲突保护。

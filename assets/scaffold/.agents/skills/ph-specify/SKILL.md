@@ -20,6 +20,8 @@ x-ph-upstream:
 
 在 spec.md 中定义可观察的业务验收场景及必要异常边界，不让用户提供测试技术方案。区分自动可验证行为与明确需要人工判断的业务结果。需求质量清单勾选不表示实现通过。
 
+附带人读版：本次写出 spec.md 与 checklists/requirements.md 后，按 `.agents/skills/ph-human/references/human-writing.md` 的规范把它的当前内容写成同功能目录的人读伴读：正文先写仓外临时文件，再经 `python3 .agents/scripts/ph_human.py publish` 发布，文件映射与文末机器元数据由脚本处理，正文不自带元数据。伴读是快照解释，不是权威规则或验收源；缺产物不编伴读，本次未写机器产物时不生成。直接读取该写作规范执行，不调用 ph-human，也不触发任何其他技能。
+
 
 
 ## User Input
@@ -357,3 +359,15 @@ Success criteria must be:
 - [ ] Specification written to `SPEC_FILE` and validated against quality checklist
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
 - [ ] Completion reported to user with feature directory, spec file path, and checklist results
+
+## PH 下一步建议（固定输出）
+
+完成报告与 extension hook 处理结束后、结束本次回复前，向用户原样输出下面代码块内的固定文案作为收尾。这只是建议：本技能不自动调用任何技能，等用户明确点名后再执行。
+
+```text
+下一步建议执行:
+- 压缩会话（/compact）后再继续
+- 后续可执行的 skills（按场景选择）:
+  - $ph-clarify - 规格仍有关键歧义，需要逐题澄清
+  - $ph-plan - 需求已清晰，进入技术方案与计划
+```

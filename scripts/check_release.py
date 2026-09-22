@@ -200,8 +200,8 @@ def load_release(root: Path) -> dict:
         not isinstance(item, str) or not SKILL_NAME.match(item) for item in skills
     ):
         raise CheckError("illegal release.json: required_skills must be ph-* names")
-    if len(skills) != 7 or len(set(skills)) != 7:
-        raise CheckError("illegal release.json: required_skills must list 7 unique names")
+    if len(skills) != 8 or len(set(skills)) != 8:
+        raise CheckError("illegal release.json: required_skills must list 8 unique names")
     if skills[0] != "ph-init":
         raise CheckError("illegal release.json: required_skills[0] must be ph-init")
     # The pinned spec-kit contract travels as its own top-level release file:

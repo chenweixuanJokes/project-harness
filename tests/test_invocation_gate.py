@@ -35,11 +35,11 @@ ALL_SKILL_PATHS = {
     "ph-init": REPO_ROOT / "SKILL.md",
     **{p.parent.name: p for p in sorted(SKILLS.glob("*/SKILL.md"))},
 }
-# The seven PH scaffold skills; the ten spec-kit skills live in .agents/skills
+# The eight PH scaffold skills (1.2.2 adds ph-human); the ten spec-kit skills live in .agents/skills
 # only after an install runs the pinned upstream generator (no scaffold copy).
 REQUIRED = [
     "ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
-    "ph-memory-ask", "ph-memory-learning", "ph-memory-archive",
+    "ph-memory-ask", "ph-memory-learning", "ph-memory-archive", "ph-human",
 ]
 REQUIRED += ["ph-" + core for core in json.loads((REPO_ROOT / "speckit.json").read_text())["skills"]]
 

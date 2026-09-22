@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "repository": "https://github.com/chenweixuanJokes/ph-init.git",
   "required_skills": [
     "ph-init",
@@ -9,6 +9,7 @@
     "ph-worktree-exit",
     "ph-memory-ask",
     "ph-memory-learning",
-    "ph-memory-archive"
+    "ph-memory-archive",
+    "ph-human"
   ]
 }

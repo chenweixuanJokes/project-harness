@@ -20,6 +20,8 @@ x-ph-upstream:
 
 在 plan.md 中建立验收场景与验证方法的对应关系，说明已有用例、必要新增测试、影响范围与环境缺口。规则和长期命令仅引用其规范源，不抄写成第二套。测试尚未建立时计划补齐，不将其判为不适用。
 
+附带人读版：本次写出 plan.md、research.md、data-model.md、quickstart.md 或 contracts/ 下契约后，对本次实际生成的每份产物，按 `.agents/skills/ph-human/references/human-writing.md` 的规范把它的当前内容写成同功能目录的人读伴读：正文先写仓外临时文件，再经 `python3 .agents/scripts/ph_human.py publish` 发布，文件映射与文末机器元数据由脚本处理，正文不自带元数据。伴读是快照解释，不是权威规则或验收源；缺产物不编伴读，本次未写机器产物时不生成。直接读取该写作规范执行，不调用 ph-human，也不触发任何其他技能。
+
 
 
 ## User Input
@@ -178,3 +180,15 @@ Command ends after Phase 1 design. Report branch, IMPL_PLAN path, and generated 
 - [ ] Plan workflow executed and design artifacts generated
 - [ ] Extension hooks dispatched or skipped according to the rules in Mandatory Post-Execution Hooks above
 - [ ] Completion reported to user with branch, plan path, and generated artifacts
+
+## PH 下一步建议（固定输出）
+
+完成报告与 extension hook 处理结束后、结束本次回复前，向用户原样输出下面代码块内的固定文案作为收尾。这只是建议：本技能不自动调用任何技能，等用户明确点名后再执行。
+
+```text
+下一步建议执行:
+- 压缩会话（/compact）后再继续
+- 后续可执行的 skills（按场景选择）:
+  - $ph-checklist - 为需求质量单独生成检查清单
+  - $ph-tasks - 把计划拆解为可执行任务清单
+```

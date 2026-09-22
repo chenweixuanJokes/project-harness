@@ -54,7 +54,7 @@ def _speckit_core_names(contract: dict) -> tuple:
     """The ten upstream core names, derived from the bundled speckit.json.
 
     speckit.json is the single maintenance source for the pinned spec-kit
-    contract (release.json keeps `required_skills` for the seven PH scaffold
+    contract (release.json keeps `required_skills` for the PH scaffold
     skills; speckit.json lists the spec-kit cores that install-time generation
     converts to `ph-*`). No script may re-spell either list; the static pin
     guarding accidental edits lives in tests/test_ph_speckit.py, and a wrong
@@ -2131,6 +2131,11 @@ def check_common(report: Report, repo: Path, *, candidate: dict | None = None) -
         report.add("error", ".agents/scripts/ph_worktree.py", "shared worktree script missing")
     else:
         report.add("ok", ".agents/scripts/ph_worktree.py", "present")
+    human_script = repo / ".agents" / "scripts" / "ph_human.py"
+    if not human_script.is_file():
+        report.add("error", ".agents/scripts/ph_human.py", "shared human-companion script missing")
+    else:
+        report.add("ok", ".agents/scripts/ph_human.py", "present")
     gitignore = repo / ".gitignore"
     if not gitignore.is_file() or not gitignore_has_entry(gitignore.read_text(encoding="utf-8")):
         report.add("error", ".gitignore", "missing PH worktree marker")

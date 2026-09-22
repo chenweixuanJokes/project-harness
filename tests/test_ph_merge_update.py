@@ -78,12 +78,13 @@ CHAIN_110 = [
     "ph-home-restructure",
     "constitution-materialization",
     "intent-retirement", "bundled-speckit-acceptance",
+    "user-entry-refresh", "human-readable-companion", "speckit-next-step-hints",
 ]
 CHAIN_100 = ["intent-domain", *CHAIN_110]
 CHAIN_111 = CHAIN_110[6:]  # everything after the 1.1.0 -> 1.1.1 hop
-CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"]
-CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"]
-CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"]
+CHAIN_117 = ["single-ph-version", "worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance", "user-entry-refresh", "human-readable-companion", "speckit-next-step-hints"]
+CHAIN_118 = ["worktree-auto-branch", "tool-neutral-adapters", "repository-rename", "docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance", "user-entry-refresh", "human-readable-companion", "speckit-next-step-hints"]
+CHAIN_119 = ["docs-sync-skill", "current-branch-defaults", "adopt-mode-docs", "question-execution-contract", "explicit-invocation-rules", "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills", "speckit-core-integration", "constitution-governance-zone", "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance", "user-entry-refresh", "human-readable-companion", "speckit-next-step-hints"]
 CHAIN_112 = [
     "init-docs-workflow",
     "docs-guidance",
@@ -154,6 +155,12 @@ class MergeUpdateTests(unittest.TestCase):
         shutil.copy2(
             REPO_ROOT / "assets/scaffold/.agents/scripts/ph_worktree.py",
             scripts / "ph_worktree.py",
+        )
+        # 1.2.2: the shared human-companion script is part of the managed
+        # scaffold payload the candidate check requires on disk.
+        shutil.copy2(
+            REPO_ROOT / "assets/scaffold/.agents/scripts/ph_human.py",
+            scripts / "ph_human.py",
         )
         contract = ph_speckit.speckit_contract()
         staging = ph_speckit.resolve_staging(None, contract)
@@ -509,7 +516,7 @@ class MergeUpdateTests(unittest.TestCase):
                                "question-execution-contract", "explicit-invocation-rules",
                                "intent-verify-skill", "worktree-wip-confirm", "retire-legacy-skills",
                                "speckit-core-integration", "constitution-governance-zone",
-                               "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance"])
+                               "intent-to-spec", "speckit-integrity-gates", "memory-skills", "ph-home-restructure", "constitution-materialization", "intent-retirement", "bundled-speckit-acceptance", "user-entry-refresh", "human-readable-companion", "speckit-next-step-hints"])
         state = self.write_state(repo, from_version="1.1.2", items=ids)
         before_manifest = manifest_path.read_bytes()
         for status in ("pending", "blocked"):
@@ -711,7 +718,9 @@ class MergeUpdateTests(unittest.TestCase):
         self.assertEqual(inspected["to"], CURRENT)
         self.assertEqual(inspected["profile"], "speckit-current")
         self.assertTrue(
-            any("ph-memory-ask" in conflict and CURRENT in conflict for conflict in inspected["conflicts"]),
+            # 1.2.1 is the arrival version of the memory names, not CURRENT:
+            # the conflict window keeps its fixed floor across later releases.
+            any("ph-memory-ask" in conflict and "1.2.1" in conflict for conflict in inspected["conflicts"]),
             inspected["conflicts"],
         )
         self.assertFalse(inspected["can_finalize"])
@@ -1148,6 +1157,11 @@ class MergeUpdateTests(unittest.TestCase):
             if name == "ph-memory-learning":
                 # learning never existed in a 1.1.8 install: no historical
                 # codex mirror ever pointed at it, so there is no record
+                self.assertFalse((repo / ".codex" / "skills" / name).exists())
+                continue
+            if name == "ph-human":
+                # ph-human arrives in 1.2.2: a 1.1.8 install has no such
+                # skill, so no historical codex mirror or record exists
                 self.assertFalse((repo / ".codex" / "skills" / name).exists())
                 continue
             record = archived_dir / name

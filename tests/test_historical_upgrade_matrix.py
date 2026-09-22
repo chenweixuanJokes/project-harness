@@ -51,7 +51,10 @@ merges the recollection-intent query exception into the canonical AGENTS
 gate and the memory README (skill table, personal tier, rewrite boundary),
 and refreshes the governance wording - while every memory content file in
 the three tiers stays byte-for-byte identical, which the final assertions
-prove.
+prove. The 1.2.2 hop's ``user-entry-refresh`` only refreshes the project
+ph-init payload: the user-level ``~/.agents/skills/ph-init`` entry refresh
+runs beside prepare via ``ph_release.py user-entry`` and never touches
+project content, so the matrix asserts the payload refresh only.
 
 The semantic merge is performed by explicit per-migration-item handlers. A
 migration item that is not in the handler registry fails the test instead of
@@ -164,8 +167,10 @@ REINTRODUCED_MEMORY_SKILLS = {"ph-memory-ask", "ph-memory-archive"}
 # scripts/ph_merge_update.RETIRED_SKILLS minus the reintroduced memory names.
 RETIRED_TARGET_SKILLS = set(HISTORICAL_TWELVE_SKILLS) - set(TARGET_SCAFFOLD_SKILLS) | {"ph-sure"}
 SPECKIT_TARGET_SKILLS = tuple(f"ph-{core}" for core in _speckit_seed.contract()["skills"])
-TARGET_SKILLS = TARGET_SCAFFOLD_SKILLS  # retained name for scope-coverage reads
 LAYOUT_SKILLS = {
+    # 1.2.1 ships the ten spec-kit skills as bundled scaffold content (no
+    # install-time generation) next to the seven PH scaffold skills.
+    "bundled-speckit-skills": TARGET_SCAFFOLD_SKILLS + SPECKIT_TARGET_SKILLS,
     "speckit-skills": ("ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit"),
     "twelve-skills": HISTORICAL_TWELVE_SKILLS,
     "eleven-skills": HISTORICAL_ELEVEN_SKILLS,
@@ -175,6 +180,7 @@ LAYOUT_SKILLS = {
     "ten-skills": ("ph-init",) + CORE_NON_INIT + NEW_INTENT + ("ph-merge-update",),
 }
 LAYOUT_PROFILE = {
+    "bundled-speckit-skills": "speckit-current",
     "speckit-skills": "speckit-current",
     "twelve-skills": "1.1.0-current-names",
     "eleven-skills": "1.1.0-current-names",
@@ -341,7 +347,8 @@ def sources_for_version(version: str):
             "the upgrade matrix refuses to fabricate history - publish the tag or register a fixed source"
         )
     layout = (
-        "speckit-skills" if semver_tuple(version) >= (1, 1, 14)
+        "bundled-speckit-skills" if semver_tuple(version) >= (1, 2, 1)
+        else "speckit-skills" if semver_tuple(version) >= (1, 1, 14)
         else "twelve-skills" if semver_tuple(version) >= (1, 1, 13)
         else "eleven-skills" if semver_tuple(version) >= (1, 1, 10)
         else "ten-skills"
@@ -562,6 +569,12 @@ class HistoricalTree:
                 raise AssertionError(f"{self.ref} release.json does not match the historical version")
         elif release.exists():
             raise AssertionError(f"{self.ref} unexpectedly carries release.json")
+        if semver_tuple(self.version) >= (1, 2, 1):
+            # The intent tree retired with the 1.2.1 terminal layout; a later
+            # scaffold must not resurrect it.
+            if (self.scaffold_dir / "docs" / "意图").exists():
+                raise AssertionError(f"{self.ref} unexpectedly still carries docs/意图")
+            return
         roots = {p.name for p in (self.scaffold_dir / "docs" / "意图").iterdir() if p.is_dir()}
         if self.version == "1.0.0" or self.layout in ("legacy-names", "current-names"):
             expected_roots = {LEGACY_INPROGRESS, LEGACY_COMPLETED, "已废弃", "访谈纪要"}
@@ -1099,6 +1112,41 @@ ENGINE_ENSURE["bundled-speckit-acceptance"] = {
     "payload": True,
     "speckit": True,
     "docs": [f"{HOME}/constraints/测试规范/门禁规范.md"],
+}
+
+ENGINE_ENSURE["user-entry-refresh"] = {
+    # 1.2.2 release deltas this item owns: refreshing the user-level
+    # ~/.agents/skills/ph-init bootstrap entry is a machine-scope action that
+    # runs beside prepare via ``ph_release.py user-entry`` and never writes
+    # project content, so on the project itself this hop only refreshes the
+    # managed ph-init payload.
+    "payload": True,
+}
+
+ENGINE_ENSURE["human-readable-companion"] = {
+    # 1.2.2 release deltas this item owns: the ph-human skill (eighth
+    # required scaffold skill), the shared companion script
+    # .agents/scripts/ph_human.py, and the ten spec skills' attached
+    # human-readable-companion guidance (speckit-bundled content, refreshed
+    # through the same baseline-gated install path the 1.2.1 seed covers).
+    # The payload refresh carries the updated bundle manifest, release
+    # metadata, and migration materials. Existing companions on disk are
+    # user-scope runtime output, never touched by the upgrade itself.
+    "skills": ("ph-human",),
+    "docs": [".agents/scripts/ph_human.py"],
+    "speckit": True,
+    "payload": True,
+}
+
+ENGINE_ENSURE["speckit-next-step-hints"] = {
+    # 1.2.2 release deltas this item owns: the ten bundled spec-driven
+    # skills gain the fixed PH next-step epilogue (a closing suggestion
+    # block: compact the session first, then the per-skill next commands
+    # with their scenario conditions). The refreshed skill bodies ride the
+    # seed install with the manifest baseline as the ownership proof, and
+    # the bundle manifest hash update rides with the payload refresh.
+    "payload": True,
+    "speckit": True,
 }
 
 SPECIAL_SCAFFOLD_RELS = {".gitignore", ".agents/ph.json", ".agents/ph.schema.json", ".agents/AGENTS.md"}
@@ -2143,7 +2191,10 @@ def check_scope_coverage(case, prepared: PreparedTarget, hist: HistoricalTree, i
             break
     if payload_delta:
         assert payload, f"ph-init payload differs for {hist.ref} but no chain item owns the refresh"
-    for name in set(TARGET_SKILLS) - {"ph-init"}:
+    # The prepared target's own required skills (not the historical layout)
+    # drive this guard: a release-only skill the target adds (ph-human in
+    # 1.2.2) must be owned by some chain item just like the older ones.
+    for name in set(prepared.required_skills) - {"ph-init"}:
         target_dir = prepared.scaffold_dir / ".agents" / "skills" / name
         hist_dir = hist.scaffold_dir / ".agents" / "skills" / name
         target_files = {p.relative_to(target_dir).as_posix(): p.read_bytes()
@@ -2239,9 +2290,91 @@ related: []
 """
 
 
-def insert_project_customizations(repo: Path, case: dict) -> dict:
+def insert_terminal_customizations(repo: Path, case: dict, release: Path) -> dict:
+    """Project content on the 1.2.1+ terminal layout: nothing relocates.
+
+    The fixture models a properly adopted 1.2.1 project: the constraint docs
+    carry content evidence (via the shared documentation-completion fixture,
+    which preserves the matrix custom blocks) and init-report.json pins the
+    final bytes, so verify's content gate passes for a hop that owns no doc.
+    """
+
+    agents = repo / ".agents" / "AGENTS.md"
+    agents.write_bytes(agents.read_bytes() + AGENTS_TAIL.encode("utf-8"))
+    manifest_path = repo / ".agents" / "ph.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["project_note"] = "升级矩阵注入的项目备注：必须在 finalize 后逐字节保留。"
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    wiki = repo / f"{HOME}/documents/项目概述.md"
+    wiki.write_bytes(wiki.read_bytes() + WIKI_APPEND.encode("utf-8"))
+    backend = repo / f"{HOME}/constraints/后端规范/技术规范.md"
+    backend.write_bytes(backend.read_bytes() + BACKEND_APPEND.encode("utf-8"))
+    governance = repo / f"{HOME}/constraints/harness规范/文档治理规范.md"
+    governance.write_bytes(governance.read_bytes() + GOVERNANCE_APPEND.encode("utf-8"))
+    temp_memory = repo / f"{HOME}/memory/temporary/20260909-matrix-note.md"
+    temp_memory.write_text(
+        "---\n"
+        "kind: temporary\nstatus: active\n"
+        'created: "2026-09-09"\nupdated: "2026-09-09"\n'
+        "provenance: user-utterance\nconfidence: medium\n"
+        'review_after: ""\nsupersedes: ""\nsensitivity: internal\n'
+        "topics:\n  - matrix-demo\n"
+        "---\n\n"
+        "# 升级矩阵样例临时记忆\n\n"
+        "记忆正文保持原文：临时记忆必须在记忆技能升级后逐字节保留。\n",
+        encoding="utf-8",
+    )
+    struct_memory = repo / f"{HOME}/memory/structured/矩阵主题.md"
+    struct_memory.write_text(
+        "---\n"
+        "kind: structured\nstatus: active\n"
+        'created: "2026-09-09"\nupdated: "2026-09-09"\n'
+        "provenance: agent-summary\nconfidence: medium\n"
+        'review_after: ""\nsupersedes: ""\nsensitivity: internal\n'
+        "topics:\n  - matrix-demo\n"
+        "---\n\n"
+        "# 矩阵主题\n\n"
+        "结构化记忆正文保持原文：归档原件与结构化文档都必须逐字节保留。\n",
+        encoding="utf-8",
+    )
+    from content_fixture import complete_documentation_project
+
+    complete_documentation_project(repo, release)
+    preserved = {
+        f"{HOME}/documents/项目概述.md": wiki.read_bytes(),
+        f"{HOME}/constraints/后端规范/技术规范.md": backend.read_bytes(),
+        f"{HOME}/constraints/harness规范/文档治理规范.md": governance.read_bytes(),
+        f"{HOME}/memory/temporary/20260909-matrix-note.md": temp_memory.read_bytes(),
+        f"{HOME}/memory/structured/矩阵主题.md": struct_memory.read_bytes(),
+    }
+    case["preserved_digests"] = {
+        rel: hashlib.sha256(data).hexdigest() for rel, data in sorted(preserved.items())
+    }
+    customized_scaffold = {f"{HOME}/documents/项目概述.md"}
+    # the completion fixture rewrites every constraint doc to its documented
+    # project body, so the whole constraints tree drifts from the template
+    # by design and must be exempt from scaffold byte-equality
+    constraints_root = repo / HOME / "constraints"
+    customized_scaffold.update(
+        f"{HOME}/constraints/{path.relative_to(constraints_root).as_posix()}"
+        for path in sorted(constraints_root.rglob("*.md"))
+    )
+    return {
+        "preserved_bytes": preserved,
+        "moved_entries": [],
+        "agents_tail": AGENTS_TAIL.encode("utf-8"),
+        "customized_scaffold_paths": customized_scaffold,
+        "overwritten_bytes": {},
+    }
+
+
+def insert_project_customizations(repo: Path, case: dict, hist: "HistoricalTree") -> dict:
     """Add explicit project content to a freshly installed historical repo."""
     version, layout = case["version"], case["layout"]
+    case["old_layout"] = False
+    if semver_tuple(version) >= (1, 2, 1):
+        return insert_terminal_customizations(repo, case, hist.root)
     old_layout = version == "1.0.0" or layout in ("legacy-names", "current-names")
     active_feature = f"{LEGACY_INPROGRESS}/新特性" if old_layout else "待办/新特性"
     started_dir = f"{LEGACY_INPROGRESS}/问题记录" if old_layout else "实施/问题记录"
@@ -2482,7 +2615,7 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         self.assertEqual(live, sorted(expected_names))
 
         # 2) Project customizations.
-        custom = insert_project_customizations(repo, case)
+        custom = insert_project_customizations(repo, case, hist)
         if layout == "speckit-skills":
             must_run(sys.executable, str(hist.root / "scripts/ph_merge_update.py"),
                      "migrate-intents", "--repo", str(repo), "--apply")
@@ -2518,14 +2651,18 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             self.assertTrue(evidence and evidence.strip(), f"empty evidence for {item['id']}")
             item["status"] = status
             item["evidence"] = evidence
-        if "speckit-core-integration" in item_ids or "ph-home-restructure" in item_ids:
+        if ("speckit-core-integration" in item_ids or "ph-home-restructure" in item_ids
+                or "human-readable-companion" in item_ids):
             # The real ph_speckit install writes the per-file content baselines
             # into .agents/ph.json once everything (skills, runtime, and the
             # constitution override from the later item) is on disk; the
             # fixture mirrors that manifest write exactly once, after the
             # item loop, because verify pins the recorded baselines. A
             # 1.1.14/1.1.15-era project gets its relocated runtime (and the
-            # re-keyed baselines) from the ph-home-restructure item.
+            # re-keyed baselines) from the ph-home-restructure item; the
+            # 1.2.2 companion item re-runs the same install to refresh the
+            # ten skills' bytes (and their baselines) on the 1.2.1 chain,
+            # where neither earlier item is present.
             engine.record_speckit_baselines()
         if "tool-neutral-adapters" in item_ids:
             self.assertIsNotNone(
@@ -2816,102 +2953,105 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         # and survives verbatim as the recoverable archive original.
         self.assertFalse((repo / "docs" / "意图").exists(), "the intent tree must be retired")
         self.assertFalse((repo / "docs").exists(), "an emptied docs/ root must be retired")
-        archived_tree = repo / f"{HOME}/archive/legacy-backup/docs/意图"
-        self.assertTrue(archived_tree.is_dir(), "the intent tree must be archived, not deleted")
-        expected_extras = {
-            f"待办/新特性/{FEATURE_NAME}",
-            f"实施/问题记录/{STARTED_NAME}",
-            f"实施/新特性/{DELIVERED_NAME}",
-            f"已废弃/新特性/{DROPPED_NAME}",
-            "历史索引.md",
-        }
-        # the archived tree keeps the four canonical status roots and every
-        # fixture entry plus the migration's history index; legacy status
-        # roots the entry migration retired must be gone
-        archived_files = {
-            p.relative_to(archived_tree).as_posix() for p in iter_regular_files(archived_tree)
-        }
-        for extra in expected_extras:
-            self.assertIn(extra, archived_files, f"archived intent entry missing: {extra}")
-        archived_roots = {p.name for p in archived_tree.iterdir() if p.is_dir()}
-        self.assertEqual(archived_roots, {"待办", "实施", "已废弃", "访谈纪要"})
-        for legacy_root in (LEGACY_INPROGRESS, LEGACY_COMPLETED):
-            if (hist.scaffold_dir / "docs" / "意图" / legacy_root).is_dir():
-                self.assertNotIn(legacy_root, archived_roots,
-                                 f"retired legacy root survived the archive: {legacy_root}")
-        # 5b) intent-to-spec: the ledger maps exactly the three spec-eligible
-        # fixture entries to their deterministic specs; the dropped entry and
-        # every interview stay history-only; originals are byte-identical
-        # (proven by source_sha256 matching the on-disk bytes); the generated
-        # specs carry no fabricated plan/tasks artifacts; and the feature
-        # pointer was never created or rewritten by the migration.
-        ledger = json.loads(
-            (repo / f"{HOME}/specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8")
-        )
-        self.assertEqual(ledger["schema"], "ph.intent-ledger/1")
-        self.assertEqual(ledger["specs_root"], f"{HOME}/specs")
-        by_source = {e["source"]: e for e in ledger["entries"]}
-        self.assertEqual(set(by_source), {
-            f"docs/意图/待办/新特性/{FEATURE_NAME}",
-            f"docs/意图/实施/问题记录/{STARTED_NAME}",
-            f"docs/意图/实施/新特性/{DELIVERED_NAME}",
-        })
-        archived_docs_root = repo / f"{HOME}/archive/legacy-backup/docs"
-        for source, entry in by_source.items():
-            # the migrated original survives byte-for-byte inside the archive
-            source_path = archived_docs_root / source[len("docs/"):]
+        # The intent tree retired with the 1.2.1 terminal layout: only
+        # pre-1.2.1 histories carry (and archive) it.
+        if semver_tuple(version) < (1, 2, 1):
+            archived_tree = repo / f"{HOME}/archive/legacy-backup/docs/意图"
+            self.assertTrue(archived_tree.is_dir(), "the intent tree must be archived, not deleted")
+            expected_extras = {
+                f"待办/新特性/{FEATURE_NAME}",
+                f"实施/问题记录/{STARTED_NAME}",
+                f"实施/新特性/{DELIVERED_NAME}",
+                f"已废弃/新特性/{DROPPED_NAME}",
+                "历史索引.md",
+            }
+            # the archived tree keeps the four canonical status roots and every
+            # fixture entry plus the migration's history index; legacy status
+            # roots the entry migration retired must be gone
+            archived_files = {
+                p.relative_to(archived_tree).as_posix() for p in iter_regular_files(archived_tree)
+            }
+            for extra in expected_extras:
+                self.assertIn(extra, archived_files, f"archived intent entry missing: {extra}")
+            archived_roots = {p.name for p in archived_tree.iterdir() if p.is_dir()}
+            self.assertEqual(archived_roots, {"待办", "实施", "已废弃", "访谈纪要"})
+            for legacy_root in (LEGACY_INPROGRESS, LEGACY_COMPLETED):
+                if (hist.scaffold_dir / "docs" / "意图" / legacy_root).is_dir():
+                    self.assertNotIn(legacy_root, archived_roots,
+                                     f"retired legacy root survived the archive: {legacy_root}")
+            # 5b) intent-to-spec: the ledger maps exactly the three spec-eligible
+            # fixture entries to their deterministic specs; the dropped entry and
+            # every interview stay history-only; originals are byte-identical
+            # (proven by source_sha256 matching the on-disk bytes); the generated
+            # specs carry no fabricated plan/tasks artifacts; and the feature
+            # pointer was never created or rewritten by the migration.
+            ledger = json.loads(
+                (repo / f"{HOME}/specs" / ".ph-intent-ledger.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(ledger["schema"], "ph.intent-ledger/1")
+            self.assertEqual(ledger["specs_root"], f"{HOME}/specs")
+            by_source = {e["source"]: e for e in ledger["entries"]}
+            self.assertEqual(set(by_source), {
+                f"docs/意图/待办/新特性/{FEATURE_NAME}",
+                f"docs/意图/实施/问题记录/{STARTED_NAME}",
+                f"docs/意图/实施/新特性/{DELIVERED_NAME}",
+            })
+            archived_docs_root = repo / f"{HOME}/archive/legacy-backup/docs"
+            for source, entry in by_source.items():
+                # the migrated original survives byte-for-byte inside the archive
+                source_path = archived_docs_root / source[len("docs/"):]
+                self.assertEqual(
+                    hashlib.sha256(source_path.read_bytes()).hexdigest(), entry["source_sha256"],
+                    f"migrated intent original drifted: {source}",
+                )
+                spec_path = repo / entry["spec"]
+                self.assertTrue(spec_path.is_file(), f"ledger spec missing: {entry['spec']}")
+                self.assertEqual(hashlib.sha256(spec_path.read_bytes()).hexdigest(), entry["spec_sha256"])
+            self.assertEqual({e["source"] for e in ledger["history_only"]}, {
+                f"docs/意图/已废弃/新特性/{DROPPED_NAME}",
+            })
+            for entry in ledger["entries"]:
+                spec_text = (repo / entry["spec"]).read_text(encoding="utf-8")
+                self.assertIn(entry["intent_id"], spec_text)
+                # The fixture entries carry none of the four legacy sections, so
+                # every section must be an explicit NEEDS CLARIFICATION, never a
+                # fabricated requirement row.
+                self.assertEqual(spec_text.count("NEEDS CLARIFICATION: 原意图没有「"), 4, spec_text)
+                self.assertNotIn("FR-001", spec_text)
+                self.assertNotIn("SC-001", spec_text)
+                spec_dir = (repo / entry["spec"]).parent
+                self.assertEqual(
+                    {p.name for p in spec_dir.iterdir()}, {"spec.md"},
+                    f"no plan/tasks artifacts may be generated: {spec_dir}",
+                )
+            history_index = (archived_tree / "历史索引.md").read_text(encoding="utf-8")
+            for name in (FEATURE_NAME, STARTED_NAME, DELIVERED_NAME, DROPPED_NAME):
+                self.assertIn(name, history_index)
+            self.assertIn("唯一后续维护位置", history_index)
+            self.assertIn("select-intent-spec", history_index)
+            self.assertFalse((repo / f"{HOME}/runtime/feature.json").exists())
+            pending_index_path = archived_tree / "待办" / "新特性" / "README.md"
+            block = INDEX_CUSTOM_BLOCK.encode("utf-8")
+            final_index = pending_index_path.read_bytes()
             self.assertEqual(
-                hashlib.sha256(source_path.read_bytes()).hexdigest(), entry["source_sha256"],
-                f"migrated intent original drifted: {source}",
+                final_index.count(block), 1,
+                "the custom index block must survive the upgrade exactly once",
             )
-            spec_path = repo / entry["spec"]
-            self.assertTrue(spec_path.is_file(), f"ledger spec missing: {entry['spec']}")
-            self.assertEqual(hashlib.sha256(spec_path.read_bytes()).hexdigest(), entry["spec_sha256"])
-        self.assertEqual({e["source"] for e in ledger["history_only"]}, {
-            f"docs/意图/已废弃/新特性/{DROPPED_NAME}",
-        })
-        for entry in ledger["entries"]:
-            spec_text = (repo / entry["spec"]).read_text(encoding="utf-8")
-            self.assertIn(entry["intent_id"], spec_text)
-            # The fixture entries carry none of the four legacy sections, so
-            # every section must be an explicit NEEDS CLARIFICATION, never a
-            # fabricated requirement row.
-            self.assertEqual(spec_text.count("NEEDS CLARIFICATION: 原意图没有「"), 4, spec_text)
-            self.assertNotIn("FR-001", spec_text)
-            self.assertNotIn("SC-001", spec_text)
-            spec_dir = (repo / entry["spec"]).parent
-            self.assertEqual(
-                {p.name for p in spec_dir.iterdir()}, {"spec.md"},
-                f"no plan/tasks artifacts may be generated: {spec_dir}",
-            )
-        history_index = (archived_tree / "历史索引.md").read_text(encoding="utf-8")
-        for name in (FEATURE_NAME, STARTED_NAME, DELIVERED_NAME, DROPPED_NAME):
-            self.assertIn(name, history_index)
-        self.assertIn("唯一后续维护位置", history_index)
-        self.assertIn("select-intent-spec", history_index)
-        self.assertFalse((repo / f"{HOME}/runtime/feature.json").exists())
-        pending_index_path = archived_tree / "待办" / "新特性" / "README.md"
-        block = INDEX_CUSTOM_BLOCK.encode("utf-8")
-        final_index = pending_index_path.read_bytes()
-        self.assertEqual(
-            final_index.count(block), 1,
-            "the custom index block must survive the upgrade exactly once",
-        )
-        if case["old_layout"]:
-            # The entry migration appends the moved entry's row first and
-            # carries the user's custom section last, so the final file must
-            # end with the complete custom block bytes.
-            self.assertTrue(
-                final_index.endswith(block),
-                "migrated pending index must end with the carried custom index block",
-            )
-        else:
-            # Nothing moved into the pending index; the customized file must
-            # stay byte-identical to what the fixture wrote.
-            self.assertEqual(
-                final_index,
-                custom["preserved_bytes"][f"{HOME}/archive/legacy-backup/docs/意图/待办/新特性/README.md"],
-            )
+            if case["old_layout"]:
+                # The entry migration appends the moved entry's row first and
+                # carries the user's custom section last, so the final file must
+                # end with the complete custom block bytes.
+                self.assertTrue(
+                    final_index.endswith(block),
+                    "migrated pending index must end with the carried custom index block",
+                )
+            else:
+                # Nothing moved into the pending index; the customized file must
+                # stay byte-identical to what the fixture wrote.
+                self.assertEqual(
+                    final_index,
+                    custom["preserved_bytes"][f"{HOME}/archive/legacy-backup/docs/意图/待办/新特性/README.md"],
+                )
 
         # 9) Idempotency: repeat inspect / verify / finalize --apply.
         after_upgrade = digest_tree(repo)

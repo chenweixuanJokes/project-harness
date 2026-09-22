@@ -34,6 +34,7 @@ REQUIRED_SKILLS = [
     "ph-memory-ask",
     "ph-memory-learning",
     "ph-memory-archive",
+    "ph-human",
 ]
 # The pre-1.1.8 era shipped exactly these ten skills (ph-docs-sync arrived in
 # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14); the synthetic legacy
@@ -187,12 +188,13 @@ class CheckReleaseTests(unittest.TestCase):
         self.assertNotIn("schema_version", result)
 
     def test_skill_list_contract(self):
-        # 1.2.1 ships seventeen skills; the synthetic pre-1.1.8 legacy fixture
+        # 1.2.2 ships eighteen skills (the eighth PH scaffold skill ph-human
+        # arrives in 1.2.2); the synthetic pre-1.1.8 legacy fixture
         # must keep exactly the historical ten (ph-docs-sync arrived in
         # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14) instead of
         # slicing the current list, so new release skills never leak into
         # legacy fixtures.
-        self.assertEqual(len(REQUIRED_SKILLS), 7)
+        self.assertEqual(len(REQUIRED_SKILLS), 8)
         self.assertEqual(len(LEGACY_TEN_SKILLS), 10)
         self.assertNotIn("ph-docs-sync", LEGACY_TEN_SKILLS)
         self.assertNotIn("ph-intent-verify", LEGACY_TEN_SKILLS)
