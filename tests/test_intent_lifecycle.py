@@ -29,9 +29,9 @@ if str(REPO_ROOT / "scripts") not in sys.path:
 
 import ph_init  # noqa: E402
 MD_LINK = re.compile(r"(?<!!)\[.*?\]\(([^)]+)\)")
-# The scaffold skills plus the ten spec-kit skills that init installs from the
-# pinned upstream release; both sets must exist in every freshly installed repo.
-REQUIRED_SKILLS = ph_init.REQUIRED_SKILLS + ph_init.SPECKIT_SKILL_NAMES
+# The 1.2.3 scaffold ships every required skill as ordinary scaffold content
+# (the self-developed spec-driven set replaced the pinned upstream generation).
+REQUIRED_SKILLS = ph_init.REQUIRED_SKILLS
 # 1.2.1: the intent tree is retired; the fresh-install layout is the
 # project-harness home skeleton instead.
 HOME = ".agents/project-harness"
@@ -208,7 +208,7 @@ class IntentLifecycleTests(unittest.TestCase):
             self.assertTrue(description)
             self.assertLessEqual(len(description), 1024, name)
             names.append(name)
-        self.assertEqual(sorted(names), sorted(ph_init.ALL_REQUIRED_SKILL_NAMES))
+        self.assertEqual(sorted(names), sorted(ph_init.REQUIRED_SKILLS))
         seen = []
         for path in [REPO_ROOT / "evals/evals.json",
                      *sorted((SCAFFOLD / ".agents/skills").glob("*/evals/evals.json"))]:
@@ -218,7 +218,7 @@ class IntentLifecycleTests(unittest.TestCase):
             for item in data["evals"]:
                 self.assertTrue(str(item["prompt"]).strip() and str(item["expected_output"]).strip())
         self.assertEqual(len(seen), len(set(seen)))
-        self.assertTrue(set(seen).issubset(ph_init.ALL_REQUIRED_SKILL_NAMES))
+        self.assertTrue(set(seen).issubset(ph_init.REQUIRED_SKILLS))
 
     def test_real_ph_init_dry_run_apply_check_both_modes(self):
         empty = self.git_repo("ph-intent-dry-")

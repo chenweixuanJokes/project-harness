@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'tests'))
 import ph_layout
 
 
@@ -49,21 +50,26 @@ class ConstraintCompletionTests(unittest.TestCase):
             self.assertFalse(ph_layout.verify_constraints(repo, repo / 'missing-release')['ok'])
 
     def test_refresh_preserves_principles_and_rejects_drift(self):
-        import ph_speckit
+        import ph_governance
         from content_fixture import complete_documentation_project
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
             complete_documentation_project(repo, ROOT)
             path = repo / ph_layout.CONSTITUTION
-            original = '# 原则\n不可丢失。\n\n' + ph_speckit.PH_OVERRIDE_MARKER + ' test -->\n## 约束导航\n\n- [旧规则](constraints/旧规则.md)\n  使用时机：旧描述\n\n## 项目备注\n保留这段。\n'
+            original = (
+                '# 原则\n不可丢失。\n\n'
+                f'{ph_governance.GOVERNANCE_MARKER}\n## 约束导航\n\n'
+                '- [旧规则](constraints/旧规则.md)\n  使用时机：旧描述\n\n'
+                '## 项目备注\n保留这段。\n'
+            )
             path.write_text(original)
             sha = ph_layout.digest(path.read_bytes())
-            ph_speckit.refresh_live_navigation(repo, sha, True)
+            ph_governance.refresh_navigation(repo, sha, True)
             self.assertIn('不可丢失。', path.read_text())
             self.assertIn('保留这段。', path.read_text())
             self.assertNotIn('constraints/旧规则.md', path.read_text())
-            with self.assertRaises(ph_speckit.PHError):
-                ph_speckit.refresh_live_navigation(repo, sha, True)
+            with self.assertRaises(ph_governance.PHGovernanceError):
+                ph_governance.refresh_navigation(repo, sha, True)
 
     def test_navigation_groups_records_but_not_rules(self):
         with tempfile.TemporaryDirectory() as tmp:

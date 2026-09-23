@@ -25,7 +25,6 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import ph_release  # noqa: E402
-import ph_init  # noqa: E402
 
 
 FORMAT_VERSION = 1
@@ -53,6 +52,8 @@ NON_PAYLOAD_TOP = frozenset(
         "tests",
         ".gitignore",
         ".zcode",
+        ".idea",
+        ".pytest_cache",
         "docs",
         "AGENTS.md",
         "CLAUDE.md",
@@ -61,6 +62,7 @@ NON_PAYLOAD_TOP = frozenset(
 REQUIRED_ROOT_FILES = (
     "release.json",
     "SKILL.md",
+    "SKILL.zh.md",
     "evals/evals.json",
     "migrations/index.json",
     "assets/scaffold/.agents/ph.json",
@@ -69,7 +71,12 @@ REQUIRED_ROOT_FILES = (
     "scripts/ph_init.py",
     "scripts/ph_release.py",
     "scripts/ph_merge_update.py",
+    "scripts/ph_governance.py",
 )
+# The three memory skills keep their published Chinese-only bodies; every
+# other distributed skill ships an English SKILL.md entry plus a SKILL.zh.md
+# companion since 1.2.3.
+LEGACY_CHINESE_ONLY_SKILLS = frozenset({"ph-memory-ask", "ph-memory-learning", "ph-memory-archive"})
 MIGRATION_HEADINGS = ("why", "from", "to", "affected", "preserve", "conflict", "verify")
 SCHEMA_ID = "urn:ph:schema:project-harness"
 
@@ -200,42 +207,13 @@ def load_release(root: Path) -> dict:
         not isinstance(item, str) or not SKILL_NAME.match(item) for item in skills
     ):
         raise CheckError("illegal release.json: required_skills must be ph-* names")
-    if len(skills) != 8 or len(set(skills)) != 8:
-        raise CheckError("illegal release.json: required_skills must list 8 unique names")
+    if len(skills) != 18 or len(set(skills)) != 18:
+        raise CheckError("illegal release.json: required_skills must list 18 unique names")
     if skills[0] != "ph-init":
         raise CheckError("illegal release.json: required_skills[0] must be ph-init")
-    # The pinned spec-kit contract travels as its own top-level release file:
-    # the published pre-1.1.14 validators whitelist their release.json keys
-    # and must keep being able to prepare this release.
-    contract_path = root / "speckit.json"
-    if contract_path.is_symlink() or not contract_path.is_file():
-        raise CheckError("the release root is missing the speckit.json contract")
-    section = read_json_object(contract_path, "speckit.json")
-    if section.get("schema") != "ph.speckit-contract/1":
-        raise CheckError("illegal speckit.json: schema must be ph.speckit-contract/1")
-    extra = set(section) - {"schema", "repository", "tag", "commit", "version", "skills", "integration", "script"}
-    if extra:
-        raise CheckError(f"illegal speckit.json: unsupported keys {sorted(extra)}")
-    for key in ("repository", "tag", "commit", "version"):
-        value = section.get(key)
-        if not isinstance(value, str) or not value:
-            raise CheckError(f"illegal speckit.json: {key} must be a non-empty string")
-    if section.get("tag") != f"v{section.get('version')}" or not STABLE_TAG.match(str(section.get("tag"))):
-        raise CheckError("illegal speckit.json: tag must be v<version>")
-    if not re.fullmatch(r"[0-9a-f]{40}", str(section.get("commit"))):
-        raise CheckError("illegal speckit.json: commit must be a 40-hex commit id")
-    core = section.get("skills")
-    if (
-        not isinstance(core, list)
-        or sorted(str(c) for c in core) != sorted(ph_init.SPECKIT_CORE_SKILLS)
-    ):
-        raise CheckError("illegal speckit.json: skills must list exactly the ten core skills")
-    if section.get("integration") != "zcode" or section.get("script") != "sh":
-        raise CheckError("illegal speckit.json: the zcode integration with sh scripts must be pinned")
     return {
         "version": version,
         "required_skills": list(skills),
-        "speckit": dict(section),
         "repository": repository,
     }
 
@@ -438,6 +416,19 @@ def validate_evals(path: Path, expected_name: str) -> None:
             raise CheckError(f"illegal evals: {ctx} files must be a list")
 
 
+def validate_bilingual(path: Path) -> None:
+    """The SKILL.zh.md companion exists as a regular, non-empty document.
+
+    Content is the maintainer's domain; the gate only pins presence and a
+    readable document so a distributed skill never ships an empty companion.
+    """
+
+    if path.is_symlink() or is_regular_file(path) is False:
+        raise CheckError(f"illegal bilingual companion: {path} must be a regular file")
+    if not path.read_text(encoding="utf-8").strip():
+        raise CheckError(f"illegal bilingual companion: {path} is empty")
+
+
 def validate_json_file(path: Path, label: str) -> object:
     return read_json_any(path, label)
 
@@ -517,37 +508,22 @@ def validate_manifest(root: Path, release: Mapping[str, object]) -> None:
     if not isinstance(skills, dict):
         raise CheckError("illegal manifest: skills must be an object")
     names = skills.get("required_names")
-    expected_names = list(release["required_skills"]) + [
-        f"ph-{core}" for core in release["speckit"]["skills"]
-    ]
-    if names != expected_names:
+    if names != list(release["required_skills"]):
         raise CheckError("illegal manifest: skills.required_names mismatch")
     canonical = data.get("canonical")
     if not isinstance(canonical, dict) or canonical.get("scripts") != ".agents/scripts":
         raise CheckError("illegal manifest: canonical.scripts must be .agents/scripts")
-    speckit = data.get("speckit")
-    if not isinstance(speckit, dict):
-        raise CheckError("illegal manifest: speckit section is required")
-    expected_section = {
-        "repository": release["speckit"]["repository"],
-        "tag": release["speckit"]["tag"],
-        "commit": release["speckit"]["commit"],
-        "version": release["speckit"]["version"],
-        "skills": {
-            f"ph-{core}": f"speckit-{core}" for core in release["speckit"]["skills"]
-        },
-    }
-    if speckit != expected_section:
-        raise CheckError("illegal manifest: speckit section must match the release contract")
+    if "speckit" in data:
+        raise CheckError("illegal manifest: the speckit section was removed with the upstream integration")
 
 
 def validate_skills_and_docs(root: Path, skills: list[str]) -> None:
     validate_skill(require_regular_file(root, "SKILL.md", "root SKILL.md"), "ph-init")
+    validate_bilingual(require_regular_file(root, "SKILL.zh.md", "root SKILL.zh.md"))
     validate_evals(require_regular_file(root, "evals/evals.json", "root evals"), "ph-init")
     skill_root = root / "assets" / "scaffold" / ".agents" / "skills"
     if not skill_root.is_dir() or skill_root.is_symlink():
         raise CheckError("missing assets/scaffold/.agents/skills")
-    skills = tuple(skills) + tuple(ph_init.SPECKIT_SKILL_NAMES)
     found: list[str] = []
     for name in skills:
         if name == "ph-init":
@@ -556,6 +532,10 @@ def validate_skills_and_docs(root: Path, skills: list[str]) -> None:
         if dest.is_symlink() or not dest.is_dir():
             raise CheckError(f"missing required skill directory: {name}")
         validate_skill(require_regular_file(dest, "SKILL.md", f"{name}/SKILL.md"), name)
+        if name not in LEGACY_CHINESE_ONLY_SKILLS:
+            validate_bilingual(
+                require_regular_file(dest, "SKILL.zh.md", f"{name}/SKILL.zh.md")
+            )
         evals = dest / "evals" / "evals.json"
         if evals.exists():
             validate_evals(require_regular_file(dest, "evals/evals.json", f"{name} evals"), name)
@@ -575,11 +555,6 @@ def validate_skills_and_docs(root: Path, skills: list[str]) -> None:
     script = root / "assets" / "scaffold" / ".agents" / "scripts" / "ph_worktree.py"
     if script.is_symlink() or not script.is_file():
         raise CheckError("scaffold must ship the shared .agents/scripts/ph_worktree.py")
-    import ph_speckit
-    try:
-        ph_speckit.bundled_source(root)
-    except ph_init.PHError as exc:
-        raise CheckError(str(exc)) from exc
 
     for path in iter_files(root):
         if path.suffix == ".json":

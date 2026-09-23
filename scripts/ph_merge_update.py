@@ -13,7 +13,13 @@ import subprocess
 import sys
 import tempfile
 import time
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+# Script-entry guard, same regression class as ph_init.py: running this CLI
+# in an installed repository must not leave __pycache__ next to the kernel
+# scripts. Importing this module as a library keeps no side effect.
+if __name__ == "__main__":
+    sys.dont_write_bytecode = True
 
 import ph_init
 import ph_layout
@@ -21,7 +27,7 @@ from ph_init import (
     PHError, SPECIFY_DIR, cmd_check, cmd_sync, contained, ensure_canonical_root,
     expected_rel_link, find_repo, infer_mode, is_disallowed_reparse,
     is_git_symlink_mode, iter_files, load_repo_manifest, posix_rel,
-    read_json, reject_nested_links, sha256_file,
+    read_json, reject_nested_links, sha256_bytes, sha256_file,
 )
 
 FIXED_SOURCE = "https://github.com/chenweixuanJokes/ph-init.git"
@@ -61,6 +67,17 @@ RELEASE_ONLY_SKILLS = {
     "ph-memory-learning": ("memory-skills", "1.2.1"),
     "ph-memory-archive": ("memory-skills", "1.2.1"),
     "ph-human": ("human-readable-companion", "1.2.2"),
+    # 1.2.3 self-developed spec-driven skills. No earlier release shipped
+    # these names, so a live same-named directory on an older project is
+    # project content on a PH-reserved name and blocks the item instead of
+    # being overwritten.
+    "ph-require": ("sdd-skill-replacement", "1.2.3"),
+    "ph-design": ("sdd-skill-replacement", "1.2.3"),
+    "ph-design-review": ("sdd-skill-replacement", "1.2.3"),
+    "ph-verify-plan": ("sdd-skill-replacement", "1.2.3"),
+    "ph-small-change": ("sdd-skill-replacement", "1.2.3"),
+    "ph-verify": ("sdd-skill-replacement", "1.2.3"),
+    "ph-archive": ("sdd-skill-replacement", "1.2.3"),
 }
 # First release at or above which a same-named memory-skill directory is
 # unmanaged project content rather than the official pre-1.1.14 copy.
@@ -73,13 +90,72 @@ MEMORY_SKILL_ITEM = "memory-skills"
 # content on a PH-reserved retired name: block the memory-skills item and ask,
 # never delete silently.
 MEMORY_RETIRED_NOT_RESHIPPED = ("ph-memory-capture",)
-# The ten spec-kit skills are not scaffold content (they are generated from the
-# pinned official release at install time), so they use their own guard: a live
-# same-named directory below 1.1.14 is project content and must block the
-# speckit-core-integration item; the installed copy is verified against the
-# upstream provenance, never against a scaffold tree.
+# The ten spec-kit skills were generated from the pinned upstream release
+# between 1.1.14 and 1.2.2. 1.2.3 replaces them with self-developed skills:
+# seven names retire outright, and ph-clarify / ph-tasks / ph-implement are
+# replaced in place with new contracts. The historical names stay pinned here
+# so old layouts keep being recognized (never re-spelled from ph_init - the
+# current release has no speckit contract anymore) and so the skill-replacement
+# migration can classify and archive the managed copies.
 SPECKIT_INTRODUCED = "1.1.14"
 SPECKIT_RELEASE_ITEM = "speckit-core-integration"
+SPECKIT_MANAGED_SKILLS = (
+    "ph-analyze",
+    "ph-checklist",
+    "ph-clarify",
+    "ph-constitution",
+    "ph-converge",
+    "ph-implement",
+    "ph-plan",
+    "ph-specify",
+    "ph-tasks",
+    "ph-taskstoissues",
+)
+# The 1.2.3 skill-replacement migration item: identity recognition for the
+# same-name replacements, whole-directory archival for the rest.
+SDD_SKILL_ITEM = "sdd-skill-replacement"
+SDD_INTRODUCED = "1.2.3"
+# The 1.2.3 migration hop, in its index.json order. Single source for the
+# upgrade chains the tests and the matrix pin.
+SDD_CHAIN_ITEMS = (
+    "sdd-skill-replacement",
+    "sdd-runtime-takeover",
+    "bilingual-skills",
+    "docs-tests-consolidation",
+    "worktree-session-continuity",
+    "artifact-compat",
+)
+SDD_RETIRED_SKILLS = (
+    "ph-analyze",
+    "ph-checklist",
+    "ph-converge",
+    "ph-constitution",
+    "ph-plan",
+    "ph-specify",
+    "ph-taskstoissues",
+)
+SDD_REPLACED_SKILLS = ("ph-clarify", "ph-implement", "ph-tasks")
+# The seven PH skills a 1.1.14..1.2.2 install already carries under their own
+# migration items, with 1.2.2-generation text. The skill-replacement item
+# installs one of them only when it is missing from the managed install; a
+# live copy with old-generation text is neither this item's business nor
+# unknown content, so it is never touched and never blocked here. The names
+# no earlier release shipped are what this item actually manages.
+RETAINED_122_SKILLS = (
+    "ph-merge-update",
+    "ph-worktree-enter",
+    "ph-worktree-exit",
+    "ph-memory-ask",
+    "ph-memory-learning",
+    "ph-memory-archive",
+    "ph-human",
+)
+# The per-file content baselines a 1.1.14..1.2.2 project carries under
+# `.agents/ph.json` `speckit.files` (sha256 of every managed file as
+# installed). They are the identity proof for the same-name replacements and
+# the retirement of the managed copies; without them a live same-name
+# directory is unattributable content and blocks the item.
+SDD_SKILL_BASELINE_PREFIX = ".agents/skills/"
 # Skills retired with 1.1.14: they were scaffold skills in earlier releases, so
 # an upgrade must archive them out of the managed install (with a backup) while
 # preserving user-customized content that never belonged to PH. ph-memory-ask
@@ -107,20 +183,22 @@ TARGET_FILES = ("docs/意图/README.md", "docs/意图/_模板.md", "docs/意图/
 CORE_PREFIXES = (
     "release.json",
     "SKILL.md",
+    "SKILL.zh.md",
     "scripts/ph_init.py",
     "scripts/ph_release.py",
     "scripts/ph_merge_update.py",
+    "scripts/ph_governance.py",
     "migrations/",
     "assets/scaffold/",
 )
 PH_INIT_RUNTIME = (
     "SKILL.md",
+    "SKILL.zh.md",
     "release.json",
-    "speckit.json",
     "scripts/ph_init.py",
     "scripts/ph_release.py",
     "scripts/ph_merge_update.py",
-    "scripts/ph_speckit.py",
+    "scripts/ph_governance.py",
     "scripts/ph_layout.py",
     "migrations/index.json",
     "assets/scaffold/.agents/ph.json",
@@ -245,11 +323,10 @@ def live_skills(repo: Path) -> set[str]:
 
 def detect_profile(names: set[str]) -> tuple[str, list[str]]:
     base, old, new = set(BASE_SKILLS), set(OLD_ALIASES), set(NEW_INTENT)
-    speckit = set(ph_init.SPECKIT_SKILL_NAMES)
-    # The 1.1.14+ target layout carries the ten spec-kit skills next to the PH
-    # skills (1.2.1 adds the three memory skills back); the memory skills are
-    # release-only content again, so this check comes before the historical
-    # base-skill requirement.
+    speckit = set(SPECKIT_MANAGED_SKILLS)
+    # The 1.1.14..1.2.2 layouts carry the ten spec-kit skills next to the PH
+    # skills (1.2.1 adds the three memory skills back); 1.2.3 replaces them
+    # with the self-developed set, so this recognition stays historical.
     if speckit <= names:
         core = names - speckit
         # A half-applied upgrade may still carry retired leftovers; only a
@@ -258,6 +335,16 @@ def detect_profile(names: set[str]) -> tuple[str, list[str]]:
             both = ", ".join(sorted((old | new) & core))
             return "mixed-intent-names", [f"old and new intent skill names both live: {both}"]
         return "speckit-current", []
+    # 1.2.3 target layout: the self-developed set replaced the spec-kit
+    # generation, so the required skills alone identify the current profile
+    # (a half-applied state keeps retired leftovers; only the full set
+    # matches).
+    if set(ph_init.REQUIRED_SKILLS) <= names:
+        core = names - set(ph_init.REQUIRED_SKILLS)
+        if old & core and new & core:
+            both = ", ".join(sorted((old | new) & core))
+            return "mixed-intent-names", [f"old and new intent skill names both live: {both}"]
+        return "sdd-current", []
     if not base <= names:
         raise PHError("unknown PH skill layout; refuse to guess")
     # Release-only skills (ph-docs-sync from 1.1.10, ph-intent-verify from
@@ -323,7 +410,7 @@ def release_skill_name_conflicts(names: set[str], disk_version: str, existing: d
             f"block the {MEMORY_SKILL_ITEM} item, and ask the user to remove "
             "or rename it before retrying"
         )
-    for skill in sorted(ph_init.SPECKIT_SKILL_NAMES):
+    for skill in sorted(SPECKIT_MANAGED_SKILLS):
         if skill not in names or existing is not None:
             continue
         if semver_tuple(disk_version) >= semver_tuple(SPECKIT_INTRODUCED):
@@ -699,15 +786,23 @@ def leftover_aliases(repo: Path) -> list[str]:
 
 
 def check_target_layout(repo: Path, skills: tuple[str, ...]) -> None:
-    for name in tuple(skills) + ph_init.SPECKIT_SKILL_NAMES:
+    for name in skills:
         root = repo / ".agents" / "skills" / name
         assert_real_dir(repo, root, f"canonical skill {name}")
         assert_real_file(repo, root / "SKILL.md", f"canonical skill {name}/SKILL.md")
     script = repo / ".agents" / "scripts" / "ph_worktree.py"
     assert_real_file(repo, script, ".agents/scripts/ph_worktree.py")
-    # The spec-kit integration must be fully present and correctly renamed;
-    # ph_speckit verify pins names, upstream provenance, and .specify layout.
-    verify_speckit_layout(repo)
+    human = repo / ".agents" / "scripts" / "ph_human.py"
+    assert_real_file(repo, human, ".agents/scripts/ph_human.py")
+    protocol = repo / ".agents" / "scripts" / "ph_sdd.py"
+    if protocol.is_symlink() or not protocol.is_file():
+        raise PHError(".agents/scripts/ph_sdd.py (self-developed runtime protocol script) is missing")
+    # The retired spec-kit integration must be fully gone from the release
+    # root; the governance module owns the materialized-constitution and
+    # navigation checks now.
+    if (SOURCE_ROOT / "scripts" / "ph_speckit.py").is_file():
+        raise PHError("scripts/ph_speckit.py is retired; the release root must not ship it anymore")
+    verify_governance_layout(repo)
     dirs, files = target_paths()
     for rel in dirs:
         assert_real_dir(repo, repo / rel, rel)
@@ -1132,28 +1227,874 @@ def raise_if_blocked(report, label: str) -> None:
     raise PHError(f"{label}: " + ("; ".join(details) or "blocked"))
 
 
-def verify_speckit_layout(repo: Path) -> None:
-    """Verify the spec-kit integration layout through its own script."""
+# ---------------------------------------------------------------------------
+# 1.2.3 self-developed runtime takeover (item sdd-runtime-takeover): the
+# constitution materialization, navigation refresh and content evidence checks
+# moved from the retired spec-kit integration script into ph_governance.py.
+# ---------------------------------------------------------------------------
 
-    script = ph_init.speckit_script_path()
-    if not script.is_file():
-        raise PHError("ph_speckit.py is missing from the release root")
+
+def verify_governance_layout(repo: Path) -> None:
+    """Verify the materialized constitution and the self-developed runtime
+    anchors through the governance module."""
+
+    import ph_governance
+
+    result = ph_governance.check_governance(repo)
+    if not result["ok"]:
+        raise PHError("governance verification failed: " + "; ".join(result["problems"]))
+
+
+# ---------------------------------------------------------------------------
+# 1.2.3 skill replacement (item sdd-skill-replacement): deterministic
+# classification and archival for the retired spec-kit skill generation, plus
+# the install of the self-developed skills from the release scaffold.
+#
+# Identity recognition is per skill directory and keyed on the SKILL.md
+# content baseline the spec-kit installs recorded in `.agents/ph.json`
+# `speckit.files`:
+#   - disk SKILL.md == release scaffold bytes       -> already at target;
+#     remaining release-set files are healed in place (idempotent completion).
+#   - disk SKILL.md sha256 == recorded baseline     -> managed previous
+#     generation: the whole directory (including extra files such as evals,
+#     references or user additions) is first archived byte-preserving, then a
+#     replaced name is installed fresh from the release scaffold; a retired
+#     name is simply gone.
+#   - anything else                                 -> unattributable
+#     (user-customized or third-party) content: the item is blocked, nothing
+#     is touched.
+# `.claude/skills/<name>` mirrors are retired before their canonical tree
+# (portable: byte-identical mirrors move, differing mirrors block; symlink:
+# a deterministic record is persisted before the link is removed) so an
+# interrupted run always resumes with evidence. Re-runs skip already retired
+# entries and complete partially healed directories.
+# ---------------------------------------------------------------------------
+
+
+def _sdd_release_skill_dir(name: str) -> Path:
+    return SOURCE_ROOT / "assets" / "scaffold" / ".agents" / "skills" / name
+
+
+def _sdd_archive_base(repo: Path) -> Path:
+    """Archive root for retired skill trees, stable across interrupted runs.
+
+    Reuses an existing <date>-pre-update/retired-skills directory an earlier
+    interrupted run already created; otherwise today's UTC date starts a fresh
+    one. Other archived content is never considered or touched.
+    """
+
+    archived = repo / ".agents" / "project-harness" / "archive" / "legacy-backup"
+    if archived.is_dir() and not archived.is_symlink():
+        for child in sorted(archived.iterdir()):
+            if (
+                child.name.endswith(CODEX_ARCHIVE_SUFFIX)
+                and child.is_dir()
+                and not child.is_symlink()
+                and (child / "retired-skills").is_dir()
+            ):
+                return child / "retired-skills"
+    day = time.strftime("%Y-%m-%d", time.gmtime())
+    return archived / f"{day}{CODEX_ARCHIVE_SUFFIX}" / "retired-skills"
+
+
+def _sdd_dir_files(root: Path) -> dict[str, bytes]:
+    reject_nested_links(root, label=f"skill tree {root.name}")
+    return {
+        posix_rel(path.relative_to(root)): path.read_bytes()
+        for path in iter_files(root)
+    }
+
+
+def _sdd_baselines(data: dict) -> dict[str, str]:
+    """The well-formed `speckit.files` baseline entries of a disk manifest."""
+
+    section = data.get("speckit") if isinstance(data.get("speckit"), dict) else {}
+    files = section.get("files")
+    hex64 = re.compile(r"^[0-9a-f]{64}$")
+    if not isinstance(files, dict):
+        return {}
+    return {
+        key: value
+        for key, value in files.items()
+        if isinstance(key, str) and isinstance(value, str) and hex64.fullmatch(value)
+    }
+
+
+def _sdd_ensure_safe_write_dest(repo: Path, rel: str) -> Path:
+    """Resolve a managed write destination, refusing links and escapes.
+
+    Every component from the repository root down to the destination must be
+    a real repository-local directory, and an existing destination a regular
+    non-hardlinked file. Used by every migrate-skills write path.
+    """
+
+    dest = (repo / rel).absolute()
+    repo_a = repo.absolute()
+    if not repo_a.is_dir() or repo_a.is_symlink() or is_disallowed_reparse(repo_a):
+        raise PHError(f"{rel}: repository root is not a real directory")
+    cur = repo_a
+    parts = PurePosixPath(posix_rel(dest.relative_to(repo_a))).parts
+    for index, part in enumerate(parts):
+        cur = cur / part
+        if cur.is_symlink() or is_disallowed_reparse(cur):
+            raise PHError(f"{rel}: {posix_rel(cur.relative_to(repo_a))} is a symlink or junction; refusing to write")
+        last = index == len(parts) - 1
+        if last:
+            if cur.exists() and (not cur.is_file() or is_hardlink(cur)):
+                raise PHError(f"{rel}: destination is not a regular unshared file")
+        else:
+            if cur.exists() and (not cur.is_dir() or is_disallowed_reparse(cur)):
+                raise PHError(f"{rel}: {posix_rel(cur.relative_to(repo_a))} is not a real directory")
+        if not contained(repo_a, cur):
+            raise PHError(f"{rel}: destination escapes the repository")
+    return Path(dest)
+
+
+def _sdd_classify(repo: Path, name: str, baselines: dict[str, str]) -> str:
+    """current | managed-old | absent | blocked for one managed skill name.
+
+    current      the SKILL.md already carries the release generation bytes;
+    managed-old  the SKILL.md still matches the recorded install baseline;
+    absent       no live directory;
+    blocked      anything else (symlink shapes, missing SKILL.md, or bytes
+                 matching neither the release nor the baseline): user or
+                 third-party content that must never be touched.
+    """
+
+    skill = repo / ".agents" / "skills" / name
+    if not skill.exists() and not skill.is_symlink():
+        return "absent"
     try:
-        proc = subprocess.run(
-            [sys.executable, str(script), "verify", "--repo", str(repo)],
-            capture_output=True,
-            text=True,
-            timeout=300,
+        assert_real_dir(repo, skill.parent, ".agents/skills")
+        if skill.is_symlink() or is_disallowed_reparse(skill) or is_hardlink(skill) or not skill.is_dir():
+            return "blocked"
+        reject_nested_links(skill, label=f"canonical skill {name}")
+    except PHError:
+        return "blocked"
+    skill_md = skill / "SKILL.md"
+    if skill_md.is_symlink() or is_hardlink(skill_md) or not skill_md.is_file():
+        return "blocked"
+    release_skill_md = _sdd_release_skill_dir(name) / "SKILL.md"
+    disk_bytes = skill_md.read_bytes()
+    if release_skill_md.is_file() and disk_bytes == release_skill_md.read_bytes():
+        return "current"
+    baseline_rel = f"{SDD_SKILL_BASELINE_PREFIX}{name}/SKILL.md"
+    expected = baselines.get(baseline_rel)
+    if expected is not None and sha256_file(skill_md) == expected:
+        return "managed-old"
+    return "blocked"
+
+
+def _sdd_retire_tree(repo: Path, source: Path, dest: Path, label: str) -> dict:
+    """Move one directory tree into the archive, byte-preserving."""
+
+    ensure_real_archive_dir(repo, dest.parent)
+    if dest.exists() or dest.is_symlink():
+        raise PHError(
+            f"retired-skill archive collision: {posix_rel(dest.relative_to(repo))} already exists while "
+            f"{label} is still live; keep both and decide manually"
         )
-    except subprocess.TimeoutExpired as exc:
-        raise PHError("ph_speckit verify timed out") from exc
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "").strip().splitlines()
-        tail = detail[-5:] if detail else ["no output"]
-        raise PHError("ph_speckit verify failed: " + " | ".join(tail))
-    payload = json.loads(proc.stdout)
-    if not payload.get("ok"):
-        raise PHError("spec-kit integration verify failed: " + "; ".join(payload.get("problems") or []))
+    try:
+        source.rename(dest)
+    except OSError as exc:
+        raise PHError(f"cannot move {label} into the archive: {exc}") from exc
+    if source.exists() or source.is_symlink() or not dest.is_dir():
+        raise PHError(f"archiving {label} did not land in the archive")
+    return {"kind": "moved-tree", "dest": posix_rel(dest.relative_to(repo))}
+
+
+# Vendor mirror roots that may hold per-skill mirrors of the managed
+# canonical tree. `.claude` is the live adapter; `.codex` is the retired
+# 1.1.9 topology whose leftovers may still pend finalize - retiring the
+# canonical skill destroys their classification proof, so they retire with it.
+SDD_MIRROR_ROOTS = (".claude", ".codex")
+
+
+def _sdd_retire_mirror(repo: Path, name: str, mirror_rel: str, proof: dict | None, apply: bool) -> dict | None:
+    """Retire one `.claude|.codex /skills/<name>` mirror before the canonical tree.
+
+    Returns None when no mirror lives there. Portable mirrors are archived
+    only when proven managed: every mirror file's sha256 must equal the
+    recorded `speckit.files` baseline of that file where one exists (the
+    historical install pinned a subset of the managed files), and every
+    unpinned mirror file must be byte-identical to the canonical managed
+    tree being retired; mirror files outside that tree are user content.
+    Symlink mirrors persist a deterministic record before the link is
+    removed (the record is always on disk before the link disappears, so an
+    interrupted run resumes by reusing it). Anything else is user content and
+    raises instead of being touched. Without apply the mirror is only
+    classified and reported - plan mode never writes.
+    """
+
+    mirror = repo / mirror_rel / "skills" / name
+    if not mirror.exists() and not mirror.is_symlink():
+        return None
+    base = _sdd_archive_base(repo)
+    dest = base / f"{name}.{mirror_rel.lstrip('.')}-mirror"
+    if mirror.is_symlink():
+        target_text = os.readlink(mirror)
+        record = f"retired skill symlink mirror: {mirror_rel}/skills/{name} -> {posix_rel(target_text)}\n"
+        if (dest.exists() or dest.is_symlink()) and not is_reusable_symlink_record(dest, record):
+            raise PHError(
+                f"retired-skill archive collision: {posix_rel(dest.relative_to(repo))} already exists while "
+                f".claude/skills/{name} is still live; keep both and decide manually"
+            )
+        if not apply:
+            return {"kind": "symlink-record", "planned": True, "dest": posix_rel(dest.relative_to(repo))}
+        ensure_real_archive_dir(repo, dest.parent)
+        if not (dest.exists() or dest.is_symlink()):
+            dest.write_text(record, encoding="utf-8")
+        try:
+            mirror.unlink()
+        except OSError as exc:
+            raise PHError(f"cannot unlink {mirror_rel}/skills/{name} after writing its archive record: {exc}") from exc
+        return {"kind": "symlink-record", "dest": posix_rel(dest.relative_to(repo))}
+    if mirror.is_symlink() or is_disallowed_reparse(mirror) or not mirror.is_dir():
+        raise PHError(f"{mirror_rel}/skills/{name} is not a recognizable mirror; preserve it for review")
+    if proof is None:
+        raise PHError(
+            f"{mirror_rel}/skills/{name} cannot be proven a managed mirror (the canonical tree is already "
+            "retired); preserve it for review"
+        )
+    try:
+        mirror_files = _sdd_dir_files(mirror)
+    except PHError as exc:
+        raise PHError(f"{mirror_rel}/skills/{name} cannot be inspected: {exc}") from exc
+    canonical, pinned = proof["canonical"], proof["pinned"]
+    if set(mirror_files) - set(canonical):
+        raise PHError(
+            f"{mirror_rel}/skills/{name} carries files the managed canonical skill does not have; "
+            "treat it as user content, keep it in place, block the item, and ask the user"
+        )
+    missing = sorted(set(pinned) - set(mirror_files))
+    if missing:
+        raise PHError(
+            f"{mirror_rel}/skills/{name} is missing pinned managed files ({', '.join(missing)}); "
+            "treat it as user content, keep it in place, block the item, and ask the user"
+        )
+    unpinned = sorted(rel for rel in mirror_files if rel not in pinned and canonical.get(rel) != mirror_files[rel])
+    if unpinned:
+        raise PHError(
+            f"{mirror_rel}/skills/{name} differs from the managed canonical skill ({', '.join(unpinned)}); "
+            "treat it as user content, keep it in place, block the item, and ask the user"
+        )
+    mismatched = sorted(
+        rel for rel, data in mirror_files.items()
+        if rel in pinned and sha256_bytes(data) != pinned[rel]
+    )
+    if mismatched:
+        raise PHError(
+            f"{mirror_rel}/skills/{name} differs from the managed generation recorded in .agents/ph.json "
+            f"({', '.join(mismatched)}); treat it as user content, keep it in place, block the item, and "
+            "ask the user"
+        )
+    if dest.exists() or dest.is_symlink():
+        raise PHError(
+            f"retired-skill archive collision: {posix_rel(dest.relative_to(repo))} already exists while "
+            f"{mirror_rel}/skills/{name} is still live; keep both and decide manually"
+        )
+    if not apply:
+        return {"kind": "moved-tree", "planned": True, "dest": posix_rel(dest.relative_to(repo))}
+    ensure_real_archive_dir(repo, dest.parent)
+    try:
+        mirror.rename(dest)
+    except OSError as exc:
+        raise PHError(f"cannot move {mirror_rel}/skills/{name} into the archive: {exc}") from exc
+    if mirror.exists() or mirror.is_symlink() or not dest.is_dir():
+        raise PHError(f"archiving .claude/skills/{name} did not land in the archive")
+    return {"kind": "moved-tree", "dest": posix_rel(dest.relative_to(repo))}
+
+
+def _sdd_staging_base(repo: Path) -> tuple[Path, str]:
+    """The managed staging area for fresh skill installs, plus its version.
+
+    Staging lives inside the update flow's own state directory
+    (``.agents/updates/<to_version>/sdd-skill-staging``): no check, sync or
+    verify enumerates that directory exhaustively, and the atomic
+    ``os.rename`` from there into ``.agents/skills/<name>`` stays within the
+    repository's single filesystem.
+    """
+
+    to_version, _skills = release_contract()
+    base = updates_dir(repo, to_version) / "sdd-skill-staging"
+    return base, to_version
+
+
+def _sdd_dest_chain_conflicts(repo: Path, dest: Path, label: str) -> list[str]:
+    """Pure-read shape check of the whole ``dest`` chain before any mkdir.
+
+    Every node from the repository root down to ``dest`` - existing or not -
+    must be (or become) a real repository-local directory: a symlinked or
+    non-directory ancestor is reported as a conflict so the write path never
+    discovers it after other steps already moved, and never writes through
+    it while creating the missing levels.
+    """
+
+    out: list[str] = []
+    cur = repo
+    for part in dest.relative_to(repo).parts:
+        cur = cur / part
+        issue = ancestor_issue(repo, cur)
+        if issue:
+            out.append(f"{label} is unsafe: {issue}")
+            return out
+        if cur.exists() or cur.is_symlink():
+            if cur.is_symlink() or is_disallowed_reparse(cur) or not cur.is_dir():
+                out.append(
+                    f"{label} is unsafe: {posix_rel(cur.relative_to(repo))} is not a real directory"
+                )
+                return out
+    return out
+
+
+def _sdd_staging_chain_conflicts(repo: Path) -> list[str]:
+    """The pure-read conflicts of the skill install staging path."""
+
+    try:
+        base, _to_version = _sdd_staging_base(repo)
+    except PHError as exc:
+        return [str(exc)]
+    return _sdd_dest_chain_conflicts(repo, base, "skill install staging")
+
+
+def _sdd_prepare_staging(repo: Path, name: str) -> Path:
+    """A fresh uniquely named staging directory for one skill install.
+
+    Every install creates its own directory via ``tempfile.mkdtemp`` inside
+    the managed staging base and only ever writes into the path it just
+    created, so the staging base never becomes an ownership proof: existing
+    entries below it - an earlier interrupted run's leftover staging or
+    anything else - are never read, moved or taken over, and their presence
+    neither blocks a new install nor contributes evidence (an interrupted
+    install simply restages and succeeds, leaving the old scratch in place
+    as evidence). The whole chain is re-validated with pure reads BEFORE any
+    directory is created, so a link can never be written through.
+    """
+
+    base, _to_version = _sdd_staging_base(repo)
+    chain_conflicts = _sdd_staging_chain_conflicts(repo)
+    if chain_conflicts:
+        raise PHError(chain_conflicts[0])
+    base.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=f"{name}.", dir=base))
+
+
+def _sdd_install_release_skill(repo: Path, name: str) -> dict:
+    """Install one skill directory from the release scaffold, or heal an
+    already-current one: only release-set files are written, extra files stay
+    user-owned content in place and are reported.
+
+    A fresh install never writes into ``.agents/skills/<name>`` directly: the
+    skill is staged in a fresh uniquely named directory inside the managed
+    update state directory and moved into place with one atomic rename after
+    every staged byte is verified against the scaffold. An interruption
+    therefore leaves either no destination or a complete one - the
+    half-installed state (mkdir done, SKILL.md missing) that a retry could
+    only misread as third-party content and block forever can no longer be
+    produced, and a retry simply restages while earlier staging leftovers
+    stay in place untouched. An existing canonical directory is never taken
+    over: it keeps its third-party protection.
+    """
+
+    release = _sdd_release_skill_dir(name)
+    if release.is_symlink() or not release.is_dir():
+        raise PHError(f"release scaffold is missing the {name} skill")
+    dest = repo / ".agents" / "skills" / name
+    if dest.exists() or dest.is_symlink():
+        if dest.is_symlink() or is_disallowed_reparse(dest) or not dest.is_dir():
+            raise PHError(f".agents/skills/{name} exists and is not a real directory")
+        try:
+            current = _sdd_dir_files(dest)
+        except PHError as exc:
+            raise PHError(f".agents/skills/{name} cannot be inspected: {exc}") from exc
+    else:
+        current = {}
+    try:
+        target = _sdd_dir_files(release)
+    except PHError as exc:
+        raise PHError(f"release scaffold skill {name} cannot be read: {exc}") from exc
+    extra = sorted(set(current) - set(target))
+    if current:
+        # Healing a directory whose SKILL.md is proven current: missing
+        # release-set files are added; a present file that differs from the
+        # release generation has no baseline proof and is never overwritten
+        # (the caller pre-checked this as a conflict); extras stay in place.
+        for rel, data in sorted(target.items()):
+            if current.get(rel) == data:
+                continue
+            if rel in current:
+                raise PHError(
+                    f".agents/skills/{name}/{rel} differs from the release generation and no baseline "
+                    "proves it managed; keep it in place and ask the user before overwriting"
+                )
+            _sdd_ensure_safe_write_dest(repo, f".agents/skills/{name}/{rel}")
+            child = dest / rel
+            child.parent.mkdir(parents=True, exist_ok=True)
+            child.write_bytes(data)
+    else:
+        for rel in sorted(target):
+            _sdd_ensure_safe_write_dest(repo, f".agents/skills/{name}/{rel}")
+        stage = _sdd_prepare_staging(repo, name)
+        for rel in sorted(target):
+            child = stage / rel
+            child.parent.mkdir(parents=True, exist_ok=True)
+            child.write_bytes(target[rel])
+        staged = _sdd_dir_files(stage)
+        if staged != target:
+            raise PHError(f"the staged install of {name} does not match the release scaffold")
+        if dest.exists() or dest.is_symlink():
+            raise PHError(
+                f".agents/skills/{name} appeared while the install was staged; "
+                "keep both and decide manually"
+            )
+        try:
+            os.rename(stage, dest)
+        except OSError as exc:
+            raise PHError(f"cannot move the staged install of {name} into place: {exc}") from exc
+        try:
+            stage.parent.rmdir()  # best effort: retire the empty staging base
+        except OSError:
+            pass
+    return {"kind": "installed", "files": len(target), "extras_kept": extra}
+
+
+# Managed files of a spec-kit-era skill directory. Everything else found in a
+# managed-old directory is a potential user attachment whose effectiveness the
+# migration cannot judge, so it needs an explicit reviewed decision before the
+# directory is archived.
+SDD_KNOWN_MANAGED_FILES = frozenset({"SKILL.md", "evals/evals.json"})
+SDD_EXTRAS_DECISION = "archive"
+SDD_EXTRAS_RECORD_FORMAT = "ph.retired-skill-extras/1"
+
+
+def _sdd_extra_files(repo: Path, name: str) -> list[str]:
+    return sorted(set(_sdd_dir_files(repo / ".agents" / "skills" / name)) - SDD_KNOWN_MANAGED_FILES)
+
+
+def _sdd_load_extras_decisions(path: str | None, names_with_extras: dict[str, list[str]]) -> dict[str, dict]:
+    """Load and validate the reviewed extra-file decisions.
+
+    The decisions file maps each skill name that carries extra files to an
+    explicit reviewed disposition ({"decision": "archive", "note": "..."}).
+    Every name with extras must be covered and nothing beyond them may appear,
+    so a stale decisions file cannot silently authorize the wrong directory.
+    """
+
+    if not names_with_extras:
+        return {}
+    if path is None:
+        raise PHError(
+            "retired skill directories carry files the migration cannot attribute: "
+            + "; ".join(f"{name}: {', '.join(files)}" for name, files in sorted(names_with_extras.items()))
+            + " — record a reviewed decision for each (JSON: {\"<skill>\": {\"decision\": \"archive\", "
+            "\"note\": \"...\"}}) and pass it via --extras-decisions, or keep the directories"
+        )
+    decisions_path = Path(path)
+    if decisions_path.is_symlink() or is_hardlink(decisions_path) or not decisions_path.is_file():
+        raise PHError(f"--extras-decisions must be a regular file: {path}")
+    try:
+        raw = json.loads(decisions_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise PHError(f"--extras-decisions is not readable JSON: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise PHError("--extras-decisions must be a JSON object keyed by skill name")
+    unknown = sorted(set(raw) - set(names_with_extras))
+    if unknown:
+        raise PHError(f"--extras-decisions covers directories without extra files: {', '.join(unknown)}")
+    out: dict[str, dict] = {}
+    for name in sorted(names_with_extras):
+        entry = raw.get(name)
+        if not isinstance(entry, dict):
+            raise PHError(f"--extras-decisions[{name}] must be an object")
+        if entry.get("decision") != SDD_EXTRAS_DECISION:
+            raise PHError(
+                f"--extras-decisions[{name}].decision must be {SDD_EXTRAS_DECISION!r}; any other "
+                "outcome means the directory stays in place for manual review"
+            )
+        note = entry.get("note")
+        if not isinstance(note, str) or not note.strip():
+            raise PHError(f"--extras-decisions[{name}].note must record the review conclusion")
+        out[name] = {"decision": entry["decision"], "note": note.strip()}
+    return out
+
+
+def _sdd_extras_record_bytes(name: str, files: list[str], decision: dict) -> bytes:
+    """The deterministic bytes of one reviewed extra-file decision record."""
+
+    payload = {
+        "format": SDD_EXTRAS_RECORD_FORMAT,
+        "skill": name,
+        "decision": decision["decision"],
+        "note": decision["note"],
+        "files": list(files),
+    }
+    return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+
+
+def _sdd_record_extras(repo: Path, name: str, files: list[str], decision: dict, dest: Path) -> None:
+    """Persist the reviewed decision next to the archived tree, idempotently.
+
+    The record lives inside the archive as <name>.extras.json and carries the
+    exact file list, the disposition and the review note, so the migration
+    decision stays auditable where the files it disposes of are recoverable.
+    """
+
+    encoded = _sdd_extras_record_bytes(name, files, decision)
+    record = dest.parent / f"{name}.extras.json"
+    if record.is_symlink() or is_hardlink(record) or (record.exists() and not record.is_file()):
+        raise PHError(f"retired-skill extras record is not a regular file: {posix_rel(record.relative_to(repo))}")
+    if record.exists():
+        if record.read_bytes() != encoded:
+            raise PHError(
+                f"retired-skill extras record changed: {posix_rel(record.relative_to(repo))}; "
+                "keep both and decide manually"
+            )
+        return
+    record.write_bytes(encoded)
+
+
+def _sdd_install_conflicts(repo: Path, name: str) -> list[str]:
+    """Read-only conflicts an install or heal into ``.agents/skills/<name>``
+    would hit, collected before any write.
+
+    A live directory on a PH-reserved name is only healable when its
+    SKILL.md is the release generation (the proof that the directory is
+    managed): missing release-set files may then be added, extras stay in
+    place, and a present file that differs from the release is a conflict.
+    Anything else - a missing SKILL.md (an unknown half-install), differing
+    bytes, a non-directory shape - is unknown same-name content that stays
+    in place and blocks.
+    """
+
+    dest = repo / ".agents" / "skills" / name
+    if dest.is_symlink() or is_disallowed_reparse(dest) or is_hardlink(dest):
+        return [
+            f".agents/skills/{name} is a symlink, junction or hardlink; treat it as unattributable "
+            "content on a PH-reserved name, keep it in place, and ask the user"
+        ]
+    if not dest.exists():
+        try:
+            target = _sdd_dir_files(_sdd_release_skill_dir(name))
+            for rel in sorted(target):
+                _sdd_ensure_safe_write_dest(repo, f".agents/skills/{name}/{rel}")
+        except PHError as exc:
+            return [str(exc)]
+        return []
+    if not dest.is_dir():
+        return [
+            f".agents/skills/{name} exists and is not a real directory; treat it as unattributable "
+            "content on a PH-reserved name, keep it in place, and ask the user"
+        ]
+    try:
+        current = _sdd_dir_files(dest)
+        target = _sdd_dir_files(_sdd_release_skill_dir(name))
+    except PHError as exc:
+        return [f".agents/skills/{name} cannot be inspected: {exc}"]
+    if current.get("SKILL.md") != target.get("SKILL.md"):
+        return [
+            f".agents/skills/{name}: SKILL.md is missing or is not the release generation and no baseline "
+            "proves this directory managed; treat it as unknown same-name content on a PH-reserved name, "
+            "keep it in place, and ask the user"
+        ]
+    differing = sorted(
+        rel for rel, data in target.items() if rel != "SKILL.md" and rel in current and current[rel] != data
+    )
+    if differing:
+        return [
+            f".agents/skills/{name}: existing {', '.join(differing)} differ from the release generation "
+            "and no baseline proves them managed; keep them in place and ask the user before overwriting"
+        ]
+    return []
+
+
+def _sdd_dest_complete_current(dest: Path, name: str) -> bool:
+    """True when every release-set file of skill ``name`` is present in
+    ``dest`` with the release bytes (extras are allowed and stay)."""
+
+    target = _sdd_dir_files(_sdd_release_skill_dir(name))
+    current = _sdd_dir_files(dest)
+    return all(rel in current and current[rel] == data for rel, data in target.items())
+
+
+def migrate_skills_payload(repo: Path, apply: bool, decisions_path: str | None = None) -> dict:
+    """Plan (or apply) the 1.2.3 skill replacement for one repository.
+
+    Read-only without --apply. An apply runs a complete read-only pre-check
+    first: identity classification of every managed name, mirror retirement
+    evidence, extra-file decisions, archive-destination collisions and
+    install-target conflicts are ALL collected before the first write, so a
+    blocked run - plan or apply - writes nothing at all. Only a conflict-free
+    plan is executed, every step is idempotent, and an interrupted run can be
+    retried as-is (fresh installs stage and rename atomically). The seven
+    truly-new required names (no earlier release shipped them) missing on
+    disk are installed from the release scaffold; the seven 1.2.2 retained
+    basic skills (RETAINED_122_SKILLS) are installed only when missing - a
+    live copy with old-generation text belongs to its own migration item and
+    is neither touched nor blocked here.
+
+    A managed-old directory that carries files beyond the known managed set
+    (SKILL.md, evals/evals.json) is never archived on the baseline proof
+    alone: the migration cannot judge whether those attachments are still
+    effective customizations. It blocks until the caller passes
+    --extras-decisions with a reviewed per-directory decision, which is then
+    recorded next to the archived tree.
+
+    A live directory on a required new name (never shipped by any earlier
+    release) is healable only when its SKILL.md is the release generation:
+    missing release-set files are added, extras stay in place, and a present
+    file that differs from the release is never overwritten. Anything else -
+    an unknown half-install, differing bytes, a foreign mirror without a
+    canonical tree - is unknown same-name content that stays in place and
+    blocks.
+    """
+
+    to_version, skills = release_contract()
+    if semver_tuple(to_version) < (1, 2, 3):
+        raise PHError("migrate-skills requires the 1.2.3 skill contract")
+    data = read_disk_manifest(repo)
+    ensure_canonical_root(repo)
+    baselines = _sdd_baselines(data)
+    if not baselines and (semver_tuple(manifest_version(data)) < semver_tuple(to_version)):
+        # A pre-1.2.3 project without any baselines cannot prove ownership of
+        # a single managed file: every live same-name directory would be
+        # unattributable. Fail closed before touching anything.
+        live_managed = [
+            n for n in (*SDD_RETIRED_SKILLS, *SDD_REPLACED_SKILLS)
+            if _sdd_classify(repo, n, baselines) == "blocked"
+        ]
+        if live_managed:
+            return {
+                "action": "migrate-skills", "apply": False, "blocked": True,
+                "conflicts": [
+                    f".agents/ph.json records no speckit.files content baselines, so the managed "
+                    f"copies {', '.join(live_managed)} cannot be proven unmodified; resolve with the user "
+                    "before replacing them"
+                ],
+                "items": [],
+            }
+    results: list[dict] = []
+    conflicts: list[str] = []
+
+    def mirror_proof(name: str, verdict: str) -> dict | None:
+        """The managed-generation proof a live mirror must satisfy, per file.
+
+        The historical install recorded baselines for a subset of the managed
+        files (SKILL.md only in the 1.1.14-1.2.2 releases), so a mirror file
+        counts as managed when its sha256 equals the recorded baseline, or —
+        for files the manifest never pinned — when it is byte-identical to
+        the canonical managed tree being retired. Mirror files outside the
+        canonical managed set are user content."""
+        if verdict == "managed-old":
+            canonical = _sdd_dir_files(repo / ".agents" / "skills" / name)
+        elif verdict == "current":
+            canonical = _sdd_dir_files(_sdd_release_skill_dir(name))
+        else:
+            return None
+        prefix = f"{SDD_SKILL_BASELINE_PREFIX}{name}/"
+        pinned = {key[len(prefix):]: sha for key, sha in baselines.items() if key.startswith(prefix)}
+        return {"canonical": canonical, "pinned": pinned}
+
+    # Phase 1 - read-only detection of every managed disposition: identity,
+    # mirrors, extras decisions, archive destinations and install targets.
+    # Every conflict is collected here, so a blocked run - plan or apply -
+    # writes nothing at all; only a conflict-free plan is ever executed.
+    verdicts: dict[str, str] = {}
+    for name in (*SDD_RETIRED_SKILLS, *SDD_REPLACED_SKILLS):
+        verdict = _sdd_classify(repo, name, baselines)
+        verdicts[name] = verdict
+        if verdict == "blocked":
+            conflicts.append(
+                f".agents/skills/{name}: the bytes match neither the release generation nor the recorded "
+                "install baseline; treat it as user or third-party content, keep it in place, and ask "
+                "the user before any replacement"
+            )
+
+    # Mirror retirement is planned only for names whose canonical tree this
+    # migration will retire (managed-old): a current-generation canonical is
+    # never retired, so its live mirror keeps its adapter role (finalize's
+    # portable/symlink sync re-creates .claude/skills for every required
+    # skill at the target state) or is user content on the adapter path, and
+    # an absent canonical leaves a mirror without proof, which stays a
+    # review conflict.
+    mirror_plans: list[tuple[str, str, dict]] = []
+    for name in (*SDD_RETIRED_SKILLS, *SDD_REPLACED_SKILLS):
+        verdict = verdicts[name]
+        if verdict == "managed-old":
+            proof = mirror_proof(name, verdict)
+            for mirror_root in SDD_MIRROR_ROOTS:
+                mirror = repo / mirror_root / "skills" / name
+                if mirror.exists() or mirror.is_symlink():
+                    try:
+                        outcome = _sdd_retire_mirror(repo, name, mirror_root, proof, False)
+                    except PHError as exc:
+                        conflicts.append(str(exc))
+                        continue
+                    if outcome is not None:
+                        mirror_plans.append((name, mirror_root, outcome))
+        elif verdict == "absent":
+            for mirror_root in SDD_MIRROR_ROOTS:
+                mirror = repo / mirror_root / "skills" / name
+                if mirror.exists() or mirror.is_symlink():
+                    conflicts.append(
+                        f"{mirror_root}/skills/{name} cannot be proven a managed mirror (the canonical "
+                        "tree is already retired); preserve it for review"
+                    )
+
+    # Extra-file attribution needs a reviewed decision before any write, so
+    # it is part of the same pre-check as everything else.
+    names_with_extras: dict[str, list[str]] = {}
+    for name, verdict in verdicts.items():
+        if verdict != "managed-old":
+            continue
+        try:
+            extras = _sdd_extra_files(repo, name)
+        except PHError as exc:
+            conflicts.append(str(exc))
+            continue
+        if extras:
+            names_with_extras[name] = extras
+    try:
+        decisions = _sdd_load_extras_decisions(decisions_path, names_with_extras)
+    except PHError as exc:
+        conflicts.append(str(exc))
+        decisions = {}
+
+    # Install destinations: a live directory on a truly-new required name is
+    # healable only from a proven-current SKILL.md; unknown same-name content
+    # blocks. The retained 1.2.2 basic skills are pre-checked only when they
+    # are missing from the managed install (then the original-rule install
+    # applies); a live copy with old-generation text belongs to its own
+    # migration item and is neither touched nor blocked here.
+    for name in SDD_REPLACED_SKILLS:
+        if verdicts[name] in {"current", "absent"}:
+            conflicts.extend(_sdd_install_conflicts(repo, name))
+    new_names = sorted(set(skills) - set(SPECKIT_MANAGED_SKILLS) - {"ph-init"} - set(RETAINED_122_SKILLS))
+    retained_names = sorted(set(skills) & set(RETAINED_122_SKILLS))
+    for name in new_names:
+        conflicts.extend(_sdd_install_conflicts(repo, name))
+        dest = repo / ".agents" / "skills" / name
+        if not (dest.exists() or dest.is_symlink()):
+            mirror = repo / ".claude" / "skills" / name
+            if mirror.exists() or mirror.is_symlink():
+                conflicts.append(
+                    f".claude/skills/{name} exists without the canonical skill; no PH release ships this "
+                    "name, so treat it as unattributable content on a PH-reserved name, keep it in place, "
+                    "and ask the user"
+                )
+    retained_absent: list[str] = []
+    for name in retained_names:
+        dest = repo / ".agents" / "skills" / name
+        if not (dest.exists() or dest.is_symlink()):
+            retained_absent.append(name)
+            conflicts.extend(_sdd_install_conflicts(repo, name))
+
+    # The write paths create the staging base and the archive directories;
+    # their whole ancestor chains and the existing extras records are
+    # pre-checked with pure reads, so nothing is discovered - or written
+    # through a link - after other steps already moved.
+    if new_names or retained_absent or any(v == "managed-old" for v in verdicts.values()):
+        conflicts.extend(_sdd_staging_chain_conflicts(repo))
+    archive_base = _sdd_archive_base(repo)
+    retire_names = [n for n, v in verdicts.items() if v == "managed-old"]
+    if retire_names:
+        conflicts.extend(_sdd_dest_chain_conflicts(repo, archive_base, "retired-skill archive destination"))
+        for name in retire_names:
+            dest = archive_base / name
+            if dest.exists() or dest.is_symlink():
+                conflicts.append(
+                    f"retired-skill archive collision: {posix_rel(dest.relative_to(repo))} already exists while "
+                    f".agents/skills/{name} is still live; keep both and decide manually"
+                )
+        for name, extras in names_with_extras.items():
+            if not extras:
+                continue
+            record = archive_base / f"{name}.extras.json"
+            if record.is_symlink() or is_hardlink(record) or (record.exists() and not record.is_file()):
+                conflicts.append(
+                    f"retired-skill extras record is not a regular file: {posix_rel(record.relative_to(repo))}"
+                )
+                continue
+            if record.exists() and name in decisions:
+                if record.read_bytes() != _sdd_extras_record_bytes(name, extras, decisions[name]):
+                    conflicts.append(
+                        f"retired-skill extras record changed: {posix_rel(record.relative_to(repo))}; "
+                        "keep both and decide manually"
+                    )
+    if conflicts:
+        return {"action": "migrate-skills", "apply": False, "blocked": True, "conflicts": conflicts, "items": results}
+
+    # Phase 2 - report the approved plan (plan mode) or execute it (apply).
+    if not apply:
+        for name, mirror_root, outcome in mirror_plans:
+            results.append({"target": f"{mirror_root}/skills/{name}", "action": "retire-mirror", **outcome})
+        for name in SDD_RETIRED_SKILLS:
+            verdict = verdicts[name]
+            if verdict == "absent":
+                results.append({"target": f".agents/skills/{name}", "action": "already-retired"})
+                continue
+            dest = _sdd_archive_base(repo) / name
+            results.append({"target": f".agents/skills/{name}", "action": "retire", "dest": posix_rel(dest.relative_to(repo))})
+        for name in SDD_REPLACED_SKILLS:
+            if verdicts[name] == "current":
+                results.append({"target": f".agents/skills/{name}", "action": "already-current"})
+            else:
+                results.append({"target": f".agents/skills/{name}", "action": "replace", "mode": verdicts[name]})
+        for name in new_names:
+            dest = repo / ".agents" / "skills" / name
+            if (dest.exists() or dest.is_symlink()) and _sdd_dest_complete_current(dest, name):
+                results.append({"target": f".agents/skills/{name}", "action": "already-current"})
+            else:
+                results.append({"target": f".agents/skills/{name}", "action": "install"})
+        for name in retained_names:
+            dest = repo / ".agents" / "skills" / name
+            if not (dest.exists() or dest.is_symlink()):
+                results.append({"target": f".agents/skills/{name}", "action": "install"})
+        return {"action": "migrate-skills", "apply": False, "blocked": False, "conflicts": [], "items": results}
+
+    for name, mirror_root, _outcome in mirror_plans:
+        proof = mirror_proof(name, "managed-old")
+        outcome = _sdd_retire_mirror(repo, name, mirror_root, proof, True)
+        if outcome is not None:
+            results.append({"target": f"{mirror_root}/skills/{name}", "action": "mirror-retired", **outcome})
+    for name in SDD_RETIRED_SKILLS:
+        if verdicts[name] == "absent":
+            results.append({"target": f".agents/skills/{name}", "action": "already-retired"})
+            continue
+        dest = _sdd_archive_base(repo) / name
+        extras = names_with_extras.get(name, [])
+        if extras:
+            _sdd_record_extras(repo, name, extras, decisions[name], dest)
+        outcome = _sdd_retire_tree(repo, repo / ".agents" / "skills" / name, dest, f".agents/skills/{name}")
+        results.append({
+            "target": f".agents/skills/{name}", "action": "retired",
+            "extras": extras, "extras_disposition": decisions[name] if extras else None, **outcome,
+        })
+    for name in SDD_REPLACED_SKILLS:
+        if verdicts[name] == "current":
+            results.append({"target": f".agents/skills/{name}", "action": "installed", **_sdd_install_release_skill(repo, name)})
+            continue
+        if verdicts[name] == "managed-old":
+            dest = _sdd_archive_base(repo) / name
+            extras = names_with_extras.get(name, [])
+            if extras:
+                _sdd_record_extras(repo, name, extras, decisions[name], dest)
+            outcome = _sdd_retire_tree(repo, repo / ".agents" / "skills" / name, dest, f".agents/skills/{name}")
+            results.append({
+                "target": f".agents/skills/{name}", "action": "replaced",
+                "extras": extras, "extras_disposition": decisions[name] if extras else None, **outcome,
+            })
+        results.append({"target": f".agents/skills/{name}", "action": "installed", **_sdd_install_release_skill(repo, name)})
+    for name in new_names:
+        dest = repo / ".agents" / "skills" / name
+        if (dest.exists() or dest.is_symlink()) and _sdd_dest_complete_current(dest, name):
+            results.append({"target": f".agents/skills/{name}", "action": "already-current"})
+            continue
+        results.append({"target": f".agents/skills/{name}", "action": "installed", **_sdd_install_release_skill(repo, name)})
+    for name in retained_names:
+        dest = repo / ".agents" / "skills" / name
+        if not (dest.exists() or dest.is_symlink()):
+            results.append({"target": f".agents/skills/{name}", "action": "installed", **_sdd_install_release_skill(repo, name)})
+    return {"action": "migrate-skills", "apply": True, "blocked": False, "conflicts": [], "items": results}
 
 
 # ---------------------------------------------------------------------------
@@ -2051,16 +2992,11 @@ def build_candidate(data: dict, version: str, skills: tuple[str, ...]) -> dict:
     skills_obj = cand.get("skills")
     if not isinstance(skills_obj, dict):
         raise PHError("illegal manifest: skills must be an object")
-    skills_obj["required_names"] = list(skills) + list(ph_init.SPECKIT_SKILL_NAMES)
-    contract = ph_init.SPECKIT_CONTRACT
-    for key in ("repository", "tag", "commit", "version"):
-        if not isinstance(contract.get(key), str) or not contract[key]:
-            raise PHError(f"speckit.json {key} must be a non-empty string")
-    # The disk manifest's per-file content baselines are project state: keep
-    # them exactly as recorded (they are the only ownership proof the next
-    # speckit upgrade may compare a differing file against). A manifest
-    # without baselines stays without them.
-    cand["speckit"] = ph_init.speckit_section_with_baselines(data)
+    skills_obj["required_names"] = list(skills)
+    # The retired speckit section (upstream provenance and the per-file content
+    # baselines) leaves the manifest with the 1.2.3 takeover; the baselines are
+    # consumed by the sdd-skill-replacement migration before finalize.
+    cand.pop("speckit", None)
     return cand
 
 
@@ -2110,6 +3046,25 @@ def assert_release_skill_installs(repo: Path, disk_version: str, state: dict) ->
         if leftovers:
             raise PHError(
                 "retire-legacy-skills is applied but retired skills still live: "
+                + ", ".join(leftovers)
+            )
+    # 1.2.3: once the skill-replacement item is applied, the seven retired
+    # spec-kit names (and their .claude mirrors) must be gone from the managed
+    # install; the three replaced names are covered by the release pin below
+    # only while the disk is below 1.2.3, so a live old-generation copy fails
+    # there instead.
+    if statuses.get(SDD_SKILL_ITEM) in ITEM_DONE and semver_tuple(disk_version) < semver_tuple(
+        SDD_INTRODUCED
+    ):
+        leftovers = sorted(
+            skill
+            for skill in SDD_RETIRED_SKILLS
+            if (repo / ".agents" / "skills" / skill / "SKILL.md").is_file()
+            or (repo / ".claude" / "skills" / skill).exists()
+        )
+        if leftovers:
+            raise PHError(
+                f"{SDD_SKILL_ITEM} is applied but retired spec-kit skills still live: "
                 + ", ".join(leftovers)
             )
     for skill in sorted(shipped_release_only):
@@ -2247,14 +3202,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="ph_merge_update.py")
     parser.add_argument(
         "action",
-        choices=("inspect", "verify", "finalize", "migrate-intents", "select-intent-spec"),
+        choices=("inspect", "verify", "finalize", "migrate-intents", "select-intent-spec", "migrate-skills"),
     )
     parser.add_argument("--repo", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--intent", help="select-intent-spec: migrated intent_id to select")
     parser.add_argument("--spec", help="select-intent-spec: ledger-recorded spec path to select")
+    parser.add_argument(
+        "--extras-decisions",
+        help="migrate-skills: reviewed per-directory decision file for unattributed extra files "
+        "(JSON: {\"<skill>\": {\"decision\": \"archive\", \"note\": \"...\"}})",
+    )
     args = parser.parse_args(argv)
-    if args.action != "finalize" and args.action not in {"migrate-intents", "select-intent-spec"} and args.apply:
+    writable = {"finalize", "migrate-intents", "select-intent-spec", "migrate-skills"}
+    if args.action != "finalize" and args.action not in writable and args.apply:
         parser.error(f"{args.action} is read-only; do not pass --apply")
     dispatch = {
         "inspect": inspect_payload,
@@ -2262,6 +3223,7 @@ def main(argv: list[str] | None = None) -> int:
         "finalize": lambda r: finalize_payload(r, args.apply),
         "migrate-intents": lambda r: migrate_intents_payload(r, args.apply),
         "select-intent-spec": lambda r: select_intent_spec(r, args.intent, args.spec, args.apply),
+        "migrate-skills": lambda r: migrate_skills_payload(r, args.apply, args.extras_decisions),
     }
     try:
         repo = find_repo(args.repo)

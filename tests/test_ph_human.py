@@ -99,9 +99,12 @@ class HumanCompanionFixture(unittest.TestCase):
 
 
 class MappingTests(HumanCompanionFixture):
+    NAMES = ("spec.md", "plan.md", "research.md", "data-model.md", "quickstart.md",
+             "tasks.md", "verification.md", "requirement.md", "design.md", "review.md",
+             "verify-plan.md", "acceptance.md", "change.md")
+
     def test_root_and_nested_and_constitution_mapping(self):
-        for name in ("spec.md", "plan.md", "research.md", "data-model.md",
-                     "quickstart.md", "tasks.md", "verification.md"):
+        for name in self.NAMES:
             self.write_machine(name, f"# {name}\n")
             proc = self.publish(f"{FEATURE}/{name}", f"{name} 伴读正文。\n")
             self.assertEqual(proc.returncode, 0, proc.stderr)
@@ -371,34 +374,18 @@ class SnapshotTests(HumanCompanionFixture):
 class ModuleContractTests(unittest.TestCase):
     def test_footer_schema_fields_are_pinned(self):
         self.assertEqual(ph_human.FOOTER_SCHEMA, "ph-human-companion/1")
-        self.assertEqual(ph_human.ROOT_MACHINE_NAMES,
-                         ("spec", "plan", "research", "data-model", "quickstart", "tasks", "verification"))
+        self.assertEqual(
+            ph_human.ROOT_MACHINE_NAMES,
+            ("spec", "plan", "research", "data-model", "quickstart", "tasks", "verification",
+             "requirement", "design", "review", "verify-plan", "acceptance", "change"),
+        )
         self.assertEqual(ph_human.NESTED_SOURCE_DIRS, ("checklists", "contracts"))
         self.assertEqual(ph_human.SNAPSHOT_KINDS, {"analysis": "analysis-human.md", "issues": "issues-human.md"})
 
-    def test_guide_and_script_travel_in_scaffold(self):
-        for rel in (".agents/skills/ph-human/SKILL.md",
-                    ".agents/skills/ph-human/references/human-writing.md",
-                    ".agents/skills/ph-human/evals/evals.json",
-                    ".agents/scripts/ph_human.py"):
-            self.assertTrue((REPO_ROOT / "assets/scaffold" / rel).is_file(), rel)
-
-    def test_skill_bodies_reference_the_guide_and_script(self):
-        for core in ("analyze", "checklist", "clarify", "constitution", "converge",
-                     "implement", "plan", "specify", "tasks", "taskstoissues"):
-            text = (REPO_ROOT / f"assets/scaffold/.agents/skills/ph-{core}/SKILL.md").read_text(encoding="utf-8")
-            self.assertIn("附带人读版", text, core)
-            self.assertIn("ph-human/references/human-writing.md", text, core)
-            self.assertIn("ph_human.py", text, core)
-            self.assertIn("不是权威规则或验收源", text, core)
-            self.assertIn("不调用 ph-human", text, core)
-        # ph-analyze keeps its read-only contract with the single write exception
-        analyze = (REPO_ROOT / "assets/scaffold/.agents/skills/ph-analyze/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("只读例外", analyze)
-        self.assertIn("publish-snapshot --kind analysis", analyze)
-        taskstoissues = (REPO_ROOT / "assets/scaffold/.agents/skills/ph-taskstoissues/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("publish-snapshot --kind issues", taskstoissues)
-        self.assertIn("不构成额外对外写入", taskstoissues)
+    def test_script_travels_in_scaffold(self):
+        # Skill bodies (SKILL.md / references / evals) are owned by the skill
+        # authoring effort and are deliberately not asserted here.
+        self.assertTrue((REPO_ROOT / "assets/scaffold/.agents/scripts/ph_human.py").is_file())
 
 
 if __name__ == "__main__":

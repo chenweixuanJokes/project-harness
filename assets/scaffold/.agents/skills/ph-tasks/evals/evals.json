@@ -3,26 +3,56 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "请使用 ph-tasks 处理当前功能。",
-      "expected_output": "显式调用，按阶段读取项目规范，保持该技能职责与写入边界。",
+      "prompt": "用 ph-tasks 给 002-csv-export 排实现任务。",
+      "expected_output": "触发 ph-tasks。要求当前需求与设计评审就绪，过期评审或未解决阻塞不是批准；读取需求、设计、评审与适用测试/构建规则，核实计划依赖的文件、符号、调用方与既有测试；写 tasks.md：稳定 T 编号，每任务含需求/设计引用、目的、前置、拥有文件/符号、具体改动、必要单测、验证与完成标准；按可独立验收的成果与真实依赖分解；记录 draft 并报告任务组、测试义务与剩余阻塞，建议 ph-verify-plan 而非立即实现。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "讨论一下 ph-tasks 的职责，不执行。",
-      "expected_output": "不触发技能，不写文件。",
+      "prompt": "用 ph-tasks 排任务：设计评审还有个阻塞项没解决，先排着，回头再说。",
+      "expected_output": "触发 ph-tasks，但不基于未批准的设计推进：过期评审或未解决阻塞使任务规划停止；如实报告缺口与所需阶段（ph-design-review/ph-design），不绕过门禁出计划。",
       "files": []
     },
     {
       "id": 3,
-      "prompt": "使用 ph-tasks 处理一个只有后端的功能，现有测试失败且 verification.md 是旧代码结果。",
-      "expected_output": "按阶段识别后端测试要求；不虚构前端任务，不把旧证据或失败当作通过，不擅自修复无关问题。",
+      "prompt": "用 ph-tasks 给月末账单 bug 排修复任务。测试就别写了，改动很小。",
+      "expected_output": "触发 ph-tasks，但单元测试由项目规则强制，不由用户是否要求决定：bug 修复任务必须包含先复现缺陷、修复后转绿的回归测试；复用已有覆盖测试；拒绝无测试的修复计划并说明依据。",
       "files": []
     },
     {
       "id": 4,
-      "prompt": "讨论这个功能如何验证，先不要执行任何技能。",
-      "expected_output": "不触发技能，仅讨论。",
+      "prompt": "用 ph-tasks 排任务：日期工具项目里应该有现成的，别让我重新造轮子。",
+      "expected_output": "触发 ph-tasks。计划前核实现有实现与测试：有现成的写出复用与调用点；不提投机性新抽象；把「如果有就复用」这类条件表述查实为确定事实，真实运行时分支与未决外部约束才允许描述行为并标注阻塞。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-tasks 排任务：这个任务就是改 README，也要配单元测试吗？",
+      "expected_output": "触发 ph-tasks。纯文档/配置任务用诚实的适当检查（如链接、示例与事实核对）而不是硬造单测充数；完成标准必须可核；测试基建、文档与证据任务按需列入，不把单测缺口拖到 ph-verify-plan 才发现。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-tasks 排任务：能并行的标一下，顺便把 worktree 也开了。",
+      "expected_output": "触发 ph-tasks，但本阶段不建分支、不建隔离树：只标记安全并行组及文件所有权、接口依赖与外部资源约束；worktree 分配只是提议映射，创建需用户另行点名 ph-worktree-enter。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "用 ph-tasks 修订既有 tasks.md：T-002 已经完成了，再加一个新任务。",
+      "expected_output": "触发 ph-tasks。修订保留既有编号与已完成任务历史，新任务追加稳定编号，不重排、不重写已完成记录；保持与需求/设计的引用链接有效。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "把要改的东西列个任务清单给我看看。",
+      "expected_output": "不触发 ph-tasks：普通描述没有点名技能；不写 tasks.md，可说明需点名该技能才执行。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "ph-tasks 和 ph-verify-plan 怎么分工？先别执行。",
+      "expected_output": "不触发 ph-tasks：讨论技能名称与分工不要求执行；按普通问题说明即可。",
       "files": []
     }
   ]

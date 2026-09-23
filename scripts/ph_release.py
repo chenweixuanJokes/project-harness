@@ -3,9 +3,11 @@
 
 Git downloads use DOWNLOAD_SOURCE; release metadata, receipts and returned
 source fields retain FIXED_SOURCE as the 1.x compatibility identity.
-Callers cannot supply an arbitrary remote. After a successful download,
-an existing GitHub login may be used to star and fork the official repo.
-Those optional actions never change the source or fail the prepare.
+Callers cannot supply an arbitrary remote. Preparation never touches any
+GitHub account: starring and forking the official repo happen only through
+the explicit ``support`` subcommand, or when a caller passes
+``offer_support=True`` because the user has separately authorized those
+account changes. Those actions never change the source or fail the prepare.
 This script does not initialize projects, merge updates or invoke ph_init.
 ``user-entry`` refreshes an existing user-level ph-init bootstrap copy from
 the prepared root it runs in; it never creates or downgrades one.
@@ -43,33 +45,19 @@ OFFICIAL_PAGE = "https://github.com/chenweixuanJokes/project-harness"
 OFFICIAL_FULL_NAME = f"{OFFICIAL_OWNER}/{OFFICIAL_NAME}"
 GITHUB_API = "https://api.github.com"
 FORMAT_VERSION = 1
-# Core Spec Kit skills installed from the pinned upstream release; they are
-# generated at install time, never scaffold content. Derived from the bundled
-# speckit.json — the single maintenance source for the pinned spec-kit
-# contract (release.json keeps required_skills for the four PH scaffold
-# skills; speckit.json travels as its own top-level release file because the
-# published pre-1.1.14 validators whitelist their release.json keys and must
-# keep being able to prepare this release). No script may re-spell the list;
-# the static pin guarding accidental edits lives in tests/test_ph_speckit.py.
-_BUNDLED_SPECKIT_JSON = json.loads(
-    (Path(__file__).resolve().parents[1] / "speckit.json").read_text(encoding="utf-8")
-)
-SPECKIT_CORE_SKILLS = tuple(
-    _BUNDLED_SPECKIT_JSON.get("skills") or ()
-    if isinstance(_BUNDLED_SPECKIT_JSON, dict)
-    else ()
-)
-if not SPECKIT_CORE_SKILLS or len(set(SPECKIT_CORE_SKILLS)) != len(SPECKIT_CORE_SKILLS):
-    raise SystemExit("speckit.json skills must be a non-empty list of unique names")
 # Releases at or after this version publish no independent schema_version:
 # release.json and the manifest must not carry the field, and the schema $id
 # is fixed without a version suffix. Older tags keep the legacy shape.
 NO_SCHEMA_VERSION_AT = (1, 1, 8)
-# Releases at or after this version require the pinned spec-kit contract file
+# Releases from 1.1.14 up to 1.2.2 carried the pinned spec-kit contract file
 # speckit.json at the release root (and the speckit provenance in the
-# manifest). Earlier tags predate the GitHub Spec Kit integration and stay
-# valid as published.
+# manifest). 1.2.3 retired the upstream integration: from SDD_RELEASE_AT on
+# the release ships no speckit.json and the manifest carries no speckit
+# section, so a pre-1.2.3 user entry hard-fails preparing the new package
+# (its validator requires the missing contract file) - the documented
+# one-time transition is a fresh off-repo entry from the new tag.
 SPECKIT_REQUIRED_AT = (1, 1, 14)
+SDD_RELEASE_AT = (1, 2, 3)
 SCHEMA_ID = "urn:ph:schema:project-harness"
 SCHEMA_ID_PREFIX = f"{SCHEMA_ID}:"
 GIT_OBJECT_ID = re.compile(r"^[0-9a-f]{40}$")
@@ -103,11 +91,20 @@ SAFE_GIT_CONFIG = (
 )
 SOURCE_RECEIPT_NAME = ".ph-source.json"
 BASE_SKILLS = ("ph-init", "ph-merge-update")
+# The three memory skills keep their published Chinese-only bodies; 1.2.3
+# introduces English entry + SKILL.zh.md companions for the skills it modifies
+# (the ten self-developed spec-driven skills plus init, merge-update, the two
+# worktree skills and ph-human) and does not force a translation scope onto
+# the memory skills.
+LEGACY_CHINESE_ONLY_SKILLS = frozenset({"ph-memory-ask", "ph-memory-learning", "ph-memory-archive"})
 REQUIRED_SCRIPTS = (
     "scripts/ph_init.py",
     "scripts/ph_release.py",
     "scripts/ph_merge_update.py",
 )
+# The governance module exists from 1.2.3 on; historical trees are validated
+# exactly as published.
+SDD_REQUIRED_SCRIPTS = ("scripts/ph_governance.py",)
 REQUIRED_SCAFFOLD = (
     "assets/scaffold/.agents/ph.json",
     "assets/scaffold/.agents/ph.schema.json",
@@ -432,7 +429,10 @@ def offer_official_support(
 ) -> SupportResult:
     """Star and copy the official repo when already signed in.
 
-    Failures are swallowed: download and install continue either way.
+    This performs account-level changes (a star and a fork under the
+    signed-in account). Both CLI and API callers must already hold the
+    user's explicit authorization; choosing this command or a flag does
+    not establish consent. Failures do not block download or installation.
     """
 
     session = session or GithubSession()
@@ -745,19 +745,21 @@ def _validate_speckit_section(section: object) -> None:
     if not re.fullmatch(r"[0-9a-f]{40}", str(section.get("commit"))):
         raise PHReleaseError("illegal speckit.json: commit must be a 40-hex commit id")
     core = section.get("skills")
-    if not isinstance(core, list) or sorted(str(c) for c in core) != sorted(SPECKIT_CORE_SKILLS):
-        raise PHReleaseError("illegal speckit.json: skills must list the pinned core skills")
+    if not isinstance(core, list) or not core or len(set(map(str, core))) != len(core):
+        raise PHReleaseError("illegal speckit.json: skills must be unique non-empty names")
     if section.get("integration") != "zcode" or section.get("script") != "sh":
         raise PHReleaseError("illegal speckit.json: the zcode integration with sh scripts must be pinned")
 
 
 def validate_speckit_contract(root: Path) -> None:
-    """Validate the top-level speckit.json contract file of a prepared tree.
+    """Validate the top-level speckit.json contract of a prepared historical
+    tree (1.1.14 .. 1.2.2 only).
 
-    The contract travels as its own release file (not inside release.json) so
-    the published pre-1.1.14 validators - whose release.json key whitelist is
-    frozen - keep being able to prepare this release.
+    1.2.3 retired the upstream integration and no longer ships or consumes
+    speckit.json; this check only remains for preparing an already published
+    speckit-era tree, where the contract comes from that prepared root.
     """
+
     path = root / "speckit.json"
     if path.is_symlink() or not path.is_file():
         raise PHReleaseError("the prepared release is missing the speckit.json contract")
@@ -810,6 +812,7 @@ def _validate_manifest_versions(
     data: dict,
     expected_version: str,
     skills: list[str],
+    root: Path | None = None,
 ) -> None:
     template_version = data.get("template_version")
     if not isinstance(template_version, str) or not SEMVER.fullmatch(template_version):
@@ -822,21 +825,31 @@ def _validate_manifest_versions(
     if not isinstance(skill_block, dict):
         raise PHReleaseError("illegal manifest: skills must be an object")
     names = skill_block.get("required_names")
-    if _parse_semver(expected_version) >= SPECKIT_REQUIRED_AT:
-        if names != list(skills) + [f"ph-{core}" for core in SPECKIT_CORE_SKILLS]:
+    version_parts = _parse_semver(expected_version)
+    if version_parts >= SDD_RELEASE_AT:
+        # From 1.2.3 on the release no longer carries the upstream
+        # integration: the required skills are the whole contract and the
+        # speckit section must be gone.
+        if names != list(skills):
+            raise PHReleaseError("illegal manifest: skills.required_names mismatch")
+        if "speckit" in data:
+            raise PHReleaseError(
+                "illegal manifest: the speckit section was removed with the upstream integration"
+            )
+    elif version_parts >= SPECKIT_REQUIRED_AT:
+        core = _prepared_speckit_core(root, expected_version)
+        if names != list(skills) + [f"ph-{core_name}" for core_name in core]:
             raise PHReleaseError("illegal manifest: skills.required_names mismatch")
         section = data.get("speckit")
         if not isinstance(section, dict):
             raise PHReleaseError("illegal manifest: speckit section is required")
-        contract = read_json_object(
-            Path(__file__).resolve().parents[1] / "speckit.json", "speckit.json"
-        )
+        contract = read_json_object((root or Path(__file__).resolve().parents[1]) / "speckit.json", "speckit.json")
         expected_section = {
             "repository": contract.get("repository"),
             "tag": contract.get("tag"),
             "commit": contract.get("commit"),
             "version": contract.get("version"),
-            "skills": {f"ph-{core}": f"speckit-{core}" for core in SPECKIT_CORE_SKILLS},
+            "skills": {f"ph-{core_name}": f"speckit-{core_name}" for core_name in core},
         }
         if section != expected_section:
             raise PHReleaseError("illegal manifest: speckit section must match the release contract")
@@ -849,16 +862,30 @@ def _validate_manifest_versions(
             )
 
 
+def _prepared_speckit_core(root: Path | None, expected_version: str) -> list[str]:
+    """The speckit-era core skill names of a prepared historical tree."""
+
+    if root is not None and (root / "speckit.json").is_file():
+        contract = read_json_object(root / "speckit.json", "speckit.json")
+        core = contract.get("skills")
+        if isinstance(core, list) and core:
+            return [str(c) for c in core]
+    raise PHReleaseError(
+        f"the prepared release {expected_version} must ship the speckit.json contract"
+    )
+
+
 def validate_manifest(
     data: dict,
     expected_version: str,
     skills: list[str],
+    root: Path | None = None,
 ) -> None:
     if "schema_version" in data:
         raise PHReleaseError(
             "illegal manifest: schema_version was removed; delete the field"
         )
-    _validate_manifest_versions(data, expected_version, skills)
+    _validate_manifest_versions(data, expected_version, skills, root)
 
 
 def _validate_legacy_manifest(
@@ -866,6 +893,7 @@ def _validate_legacy_manifest(
     expected_version: str,
     skills: list[str],
     schema_version: str,
+    root: Path | None = None,
 ) -> None:
     found_schema = data.get("schema_version")
     if not isinstance(found_schema, str) or not SEMVER.fullmatch(found_schema):
@@ -874,7 +902,7 @@ def _validate_legacy_manifest(
         raise PHReleaseError(
             f"illegal manifest: schema_version must be {schema_version!r}, got {found_schema!r}"
         )
-    _validate_manifest_versions(data, expected_version, skills)
+    _validate_manifest_versions(data, expected_version, skills, root)
 
 
 def validate_schema(data: dict) -> None:
@@ -961,9 +989,9 @@ def validate_migrations_index(data: dict, root: Path) -> None:
             seen_items.add(entry)
 
 
-def _require_tree_files(root: Path, skills: list[str]) -> None:
+def _require_tree_files(root: Path, skills: list[str], *, sdd: bool = False) -> None:
     _require_file(root, "SKILL.md", "required skill file")
-    for rel in REQUIRED_SCRIPTS:
+    for rel in REQUIRED_SCRIPTS + (SDD_REQUIRED_SCRIPTS if sdd else ()):
         _require_file(root, rel, "required script")
     for rel in REQUIRED_SCAFFOLD:
         _require_file(root, rel, "required scaffold file")
@@ -971,25 +999,32 @@ def _require_tree_files(root: Path, skills: list[str]) -> None:
         if name == "ph-init":
             continue
         _require_file(root, f"assets/scaffold/.agents/skills/{name}/SKILL.md", "required skill file")
+        if sdd and name not in LEGACY_CHINESE_ONLY_SKILLS:
+            _require_file(
+                root,
+                f"assets/scaffold/.agents/skills/{name}/SKILL.zh.md",
+                "required bilingual skill companion",
+            )
 
 
 def validate_prepared_tree(root: Path, expected_version: str) -> None:
     legacy = _parse_semver(expected_version) < NO_SCHEMA_VERSION_AT
+    sdd = _parse_semver(expected_version) >= SDD_RELEASE_AT
     release = read_json_object(root / "release.json", "release.json")
     if legacy:
         skills, schema_version = _validate_legacy_release_meta(release, expected_version)
     else:
         skills = validate_release_meta(release, expected_version)
-    _require_tree_files(root, skills)
+    _require_tree_files(root, skills, sdd=sdd)
     manifest = read_json_object(root / "assets/scaffold/.agents/ph.json", "manifest")
     schema = read_json_object(root / "assets/scaffold/.agents/ph.schema.json", "schema")
     if legacy:
-        _validate_legacy_manifest(manifest, expected_version, skills, schema_version)
+        _validate_legacy_manifest(manifest, expected_version, skills, schema_version, root)
         _validate_legacy_schema(schema, schema_version)
     else:
-        validate_manifest(manifest, expected_version, skills)
+        validate_manifest(manifest, expected_version, skills, root)
         validate_schema(schema)
-    if _parse_semver(expected_version) >= SPECKIT_REQUIRED_AT:
+    if SPECKIT_REQUIRED_AT <= _parse_semver(expected_version) < SDD_RELEASE_AT:
         validate_speckit_contract(root)
     migrations = read_json_object(root / MIGRATIONS_INDEX, "migrations/index.json")
     validate_migrations_index(migrations, root)
@@ -1146,7 +1181,8 @@ def prepare_release(
     transport: GitTransport | None = None,
     parent: Path | None = None,
     support: GithubSession | None = None,
-    offer_support: bool = True,
+    # 加星和创建 fork 需要独立用户授权；此参数本身不是授权证明。
+    offer_support: bool = False,
 ) -> PreparedRelease:
     """Download and validate a tagged PH release.
 
@@ -1154,6 +1190,12 @@ def prepare_release(
     source URL argument: ls-remote and fetch always use
     ``DOWNLOAD_SOURCE``, while the ``source`` field of the result and
     the receipt record the constant identity ``FIXED_SOURCE``.
+
+    Preparation makes no account changes by default; ``support`` is only
+    consulted when ``offer_support=True``. That flag is reserved for
+    callers that already hold the user's separate authorization for the
+    star/fork actions. The explicit ``support`` subcommand requires the
+    same prior authorization.
     """
 
     transport = transport or GitTransport()
@@ -1204,7 +1246,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser(
         "support",
-        help="add a star and create an account-level copy when already signed in",
+        help="add a star and create an account-level copy when already signed in; "
+        "run only on the user's explicit authorization for these account actions",
     )
     sub.add_parser(
         "user-entry",
@@ -1217,6 +1260,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
     if args.command == "prepare":
+        # prepare 只下载和校验发行，不做任何账号动作；加星/建副本只经显式
+        # support 子命令，且需用户对相应账户操作的独立授权。
         prepared = prepare_release(args.version, repo=args.repo)
         sys.stdout.write(json.dumps(prepared.as_dict(), indent=2) + "\n")
         return 0

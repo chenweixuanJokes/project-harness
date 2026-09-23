@@ -7,14 +7,17 @@ the persistent cross-version mapping ledger, the read-only-history rule
 user-modified specs, same-name foreign specs, duplicate source ids,
 history-only registration for 已废弃/访谈纪要, the mandatory verify gate and
 the explicit select-intent-spec invocation (never overwriting a live feature
-pointer).
+pointer). Since 1.2.3 the retired upstream resolver is also covered
+negatively: migrated intent features must stay adoptable by the self-built
+ph_sdd.py runtime, and the legacy feature pointer keeps its path and
+feature_directory contract.
 """
 
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
-import os
 import subprocess
 import sys
 import tempfile
@@ -27,6 +30,12 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 import ph_merge_update as mu  # noqa: E402
+
+# The self-built SDD runtime that took over from the retired upstream scripts.
+SDD_SCRIPT = REPO_ROOT / "assets/scaffold/.agents/scripts/ph_sdd.py"
+_sdd_spec = importlib.util.spec_from_file_location("ph_sdd_layout_contract", SDD_SCRIPT)
+ph_sdd = importlib.util.module_from_spec(_sdd_spec)
+_sdd_spec.loader.exec_module(ph_sdd)
 
 
 FULL_ENTRY = """---
@@ -393,53 +402,45 @@ class IntentToSpecTestCase(unittest.TestCase):
         self.migrate(apply=True)
         self.assertFalse((self.repo / ".agents/project-harness/runtime/feature.json").exists())
 
-    def test_upstream_common_sh_resolves_the_selected_feature(self):
-        # The real upstream resolver (common.sh from the pinned staging cache)
-        # must read our pointer and derive FEATURE_SPEC=<dir>/spec.md - not
-        # spec.md/spec.md. This pins the directory contract against upstream.
-        speckit = json.loads((REPO_ROOT / "speckit.json").read_text(encoding="utf-8"))
-        staging = Path.home() / ".cache" / "ph" / "speckit" / (
-            f"{speckit['tag']}-{speckit['commit'][:12]}"
-        )
-        import ph_layout as _layout
-        import ph_speckit as _ps
-        contract = _ps.speckit_contract()
-        staging_root = _ps.cache_root(None) / f"{contract['tag']}-{contract['commit'][:12]}"
-        common = staging_root / "staging" / ".specify" / "scripts" / "bash" / "common.sh"
-        if not common.is_file():
-            self.skipTest("verified upstream staging not cached on this machine")
-        # The installed runtime adapts the upstream paths (project-harness
-        # relocation); test against the installed bytes, not raw upstream.
-        adapted = _layout.convert_runtime_text(common.read_text(encoding="utf-8"), ".specify/scripts/bash/common.sh")
-        common = self.repo / _layout.RUNTIME / "scripts" / "bash" / "common.sh"
-        common.parent.mkdir(parents=True, exist_ok=True)
-        common.write_text(adapted, encoding="utf-8")
+    def test_migrated_intent_feature_is_adoptable_by_the_self_runtime(self):
+        # The upstream bash resolver is retired; the self-built runtime takes
+        # over. A migrated intent feature directory (spec.md at its root) must
+        # stay adoptable via ph_sdd.py adopt: the original bytes are never
+        # edited, the metadata records the legacy mapping, and adopt itself
+        # never creates the legacy runtime pointer.
         self.migrate(apply=True)
-        mu.select_intent_spec(self.repo, "INT-20260901-login", None, apply=True)
-        script = (
-            "#!/bin/bash\n"
-            "unset SPECIFY_FEATURE SPECIFY_FEATURE_DIRECTORY\n"
-            f"cd {str(self.repo)!r}\n"
-            f"source {str(common)!r}\n"
-            "get_feature_paths --no-persist\n"
+        spec_rel = ".agents/project-harness/specs/intent-INT-20260901-login/spec.md"
+        before = self.spec_bytes(spec_rel)
+        result = subprocess.run(
+            [sys.executable, str(SDD_SCRIPT), "adopt",
+             "--feature", "intent-INT-20260901-login",
+             "--repo", str(self.repo), "--apply"],
+            capture_output=True, text=True, timeout=60,
         )
-        script_path = self.repo / "resolve.sh"
-        script_path.write_text(script, encoding="utf-8")
-        try:
-            proc = subprocess.run(
-                ["bash", str(script_path)], capture_output=True, text=True, timeout=60,
-                env={**os.environ, "SPECIFY_FEATURE": "", "SPECIFY_FEATURE_DIRECTORY": ""},
-            )
-        finally:
-            script_path.unlink()
-        output = proc.stdout
-        # printf %q only quotes when needed: assert on the plain resolved
-        # paths. FEATURE_SPEC must be <feature_dir>/spec.md, never
-        # <feature_dir>/spec.md/spec.md - the pointer holds the directory.
-        feature = f"{self.repo}/.agents/project-harness/specs/intent-INT-20260901-login"
-        self.assertIn(f"FEATURE_DIR={feature}\n", output, output + proc.stderr)
-        self.assertIn(f"FEATURE_SPEC={feature}/spec.md\n", output, output + proc.stderr)
-        self.assertNotIn("spec.md/spec.md", output)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        meta = json.loads(
+            (self.repo / ".agents/project-harness/specs/intent-INT-20260901-login/ph-feature.json")
+            .read_text(encoding="utf-8")
+        )
+        self.assertEqual(meta["schema"], ph_sdd.METADATA_SCHEMA)
+        self.assertEqual(meta["flow"], "full")
+        self.assertEqual(meta["adopted_from"], {"requirement": "spec.md"})
+        self.assertEqual(self.spec_bytes(spec_rel), before)
+        self.assertFalse((self.repo / ph_sdd.LEGACY_POINTER).exists())
+
+    def test_select_pointer_keeps_the_legacy_runtime_contract(self):
+        # The legacy pointer path and its feature_directory contract are
+        # unchanged, so the runtime's read-only compatibility and the explicit
+        # select command agree on the same file.
+        self.migrate(apply=True)
+        self.assertEqual(ph_sdd.LEGACY_POINTER,
+                         ".agents/project-harness/runtime/feature.json")
+        mu.select_intent_spec(self.repo, "INT-20260901-login", None, apply=True)
+        pointer = json.loads((self.repo / ph_sdd.LEGACY_POINTER).read_text(encoding="utf-8"))
+        self.assertEqual(
+            pointer,
+            {"feature_directory": ".agents/project-harness/specs/intent-INT-20260901-login"},
+        )
 
     # -- review fixes: aliases, status mapping, casefold, containment -------
 

@@ -13,8 +13,7 @@
     "adapters",
     "worktree",
     "memory",
-    "skills",
-    "speckit"
+    "skills"
   ],
   "$defs": {
     "semver": {
@@ -155,30 +154,6 @@
           "minItems": 1,
           "uniqueItems": true,
           "items": { "type": "string", "pattern": "^ph-[a-z0-9]+(?:-[a-z0-9]+)*$" }
-        }
-      }
-    },
-    "speckit": {
-      "type": "object",
-      "description": "Upstream GitHub Spec Kit integration provenance: the pinned official release the ten ph-* spec skills were generated from.",
-      "additionalProperties": false,
-      "required": ["repository", "tag", "commit", "version", "skills"],
-      "properties": {
-        "repository": { "type": "string", "minLength": 1 },
-        "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$" },
-        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-        "skills": {
-          "type": "object",
-          "description": "Installed skill name to upstream speckit-* name mapping, kept for future upgrades.",
-          "minProperties": 1,
-          "additionalProperties": { "type": "string", "pattern": "^speckit-[a-z0-9]+(?:-[a-z0-9]+)*$" }
-        },
-        "files": {
-          "type": "object",
-          "description": "Per-file content baselines recorded by the last ph_speckit install: managed repository-relative path to the sha256 of the installed bytes. A future upgrade may overwrite a differing file only while its current bytes still match this baseline; markers alone never prove the file was not edited.",
-          "minProperties": 1,
-          "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
         }
       }
     }

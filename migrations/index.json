@@ -168,6 +168,19 @@
         "human-readable-companion",
         "speckit-next-step-hints"
       ]
+    },
+    {
+      "from_version": "1.2.2",
+      "to_version": "1.2.3",
+      "path": "migrations/1.2.2-to-1.2.3.md",
+      "items": [
+        "sdd-skill-replacement",
+        "sdd-runtime-takeover",
+        "bilingual-skills",
+        "docs-tests-consolidation",
+        "worktree-session-continuity",
+        "artifact-compat"
+      ]
     }
   ]
 }

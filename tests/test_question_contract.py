@@ -181,14 +181,20 @@ class QuestionReferenceTests(unittest.TestCase):
 
     def test_contract_has_old_vs_new_and_recovery_evals(self):
         data = json.loads((ROOT / "evals/evals.json").read_text(encoding="utf-8"))
-        blob = "\n".join(item["prompt"] + item["expected_output"] for item in data["evals"])
-        # old-style failure modes are named as inputs, the contract as the fix
-        self.assertIn("没用任何问答工具", blob)
-        self.assertIn("把“问题已经提交给你了”当成“用户已同意”", blob)
-        self.assertIn("对用户提问执行契约", blob)
-        # degradation and recovery boundaries are covered as sample behavior
-        self.assertIn("降级为可见文字提问是明确例外", blob)
-        self.assertIn("实际调用工具提交同一决定", blob)
+        by_id = {item["id"]: item for item in data["evals"]}
+        misuse = by_id[26]
+        self.assertRegex(misuse["prompt"], r"没[有用]*调用工具|没用任何问答工具")
+        self.assertRegex(misuse["prompt"], r"已提交问题.*已批准|问题已经提交.*用户已同意")
+        self.assertIn("实际调用", misuse["expected_output"])
+        self.assertIn("问题提交、收到回答、取得授权三者不同", misuse["expected_output"])
+        self.assertIn("未得到真实回答前停止", misuse["expected_output"])
+
+        recovery = by_id[27]
+        self.assertIn("工具故障后恢复", recovery["prompt"])
+        self.assertIn("无法恢复", recovery["expected_output"])
+        self.assertIn("可见文字提问", recovery["expected_output"])
+        self.assertIn("实际提交未决问题", recovery["expected_output"])
+        self.assertIn("不换通道重问、不推定同意", recovery["expected_output"])
 
 
 if __name__ == "__main__":

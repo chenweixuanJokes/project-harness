@@ -3,26 +3,62 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "请使用 ph-implement 处理当前功能。",
-      "expected_output": "显式调用，按阶段读取项目规范，保持该技能职责与写入边界。",
+      "prompt": "用 ph-implement 执行 002-csv-export 的实现任务。",
+      "expected_output": "触发 ph-implement。先识别仓库、功能与可选注册 worktree/任务分配，读需求或 change、设计、评审、tasks、verify-plan、acceptance，运行运行时只读 status/check；读适用构建、自测、单测、冒烟、回归与稳定性规范；检查当前改动以保留用户编辑。按依赖顺序执行：查看真实源码后做最小合适改动并创建/更新任务要求的单测，跑任务检查与项目要求的单测门禁；把实际命令、代码/环境状态、结果与证据记入 verification.md 或分配的证据文件；完成后对账任务与证据、刷新伴读，分别报告实现/单测结果与整结果验证，建议 ph-verify。不自动提交、合并、推送、部署，不调用 ph-worktree-enter/exit、ph-verify 或 ph-archive。",
       "files": []
     },
     {
       "id": 2,
-      "prompt": "讨论一下 ph-implement 的职责，不执行。",
-      "expected_output": "不触发技能，不写文件。",
+      "prompt": "用 ph-implement 实现：tasks.md 还没写，你直接照需求做。",
+      "expected_output": "触发 ph-implement，但停止依赖实施：空/缺计划或未解决的设计阻塞使实施停止；如实报告缺口与所需阶段，不为推进而凭需求自由发挥整个功能。",
       "files": []
     },
     {
       "id": 3,
-      "prompt": "使用 ph-implement 处理一个只有后端的功能，现有测试失败且 verification.md 是旧代码结果。",
-      "expected_output": "按阶段识别后端测试要求；不虚构前端任务，不把旧证据或失败当作通过，不擅自修复无关问题。",
+      "prompt": "用 ph-implement 修月末账单 bug，改完直接告诉用户修好了。",
+      "expected_output": "触发 ph-implement，但先取证再宣称：修复前取得复现证据（回归先红），修复后转绿并留实际命令与结果；无复现证据不得声称修复；只修任务范围内缺陷。",
       "files": []
     },
     {
       "id": 4,
-      "prompt": "讨论这个功能如何验证，先不要执行任何技能。",
-      "expected_output": "不触发技能，仅讨论。",
+      "prompt": "用 ph-implement 执行：全量测试里权限模块有个旧用例挂了，你顺手修掉再跑。",
+      "expected_output": "触发 ph-implement，但无关失败如实报告：不静默修复、不排除、不注释掉来转绿；只有被授权任务内的局部实现缺陷才修复并重跑相关检查；无关失败保持可见并按项目门禁处理。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-implement 执行：实现时发现接口和设计对不上，你按代码现状来就行。",
+      "expected_output": "触发 ph-implement，但现实推翻设计时停止受影响工作：如实描述差异，不悄悄改验收、不虚构产品决定、不在猜测的接口上继续；被授权实现内的局部缺陷可修复并重跑任务检查。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-implement 执行完把 tasks 全勾上，证据回头再补。",
+      "expected_output": "触发 ph-implement，但任务进度只在完成标准实际成立后更新：勾选不代替运行证据；记录实际命令、代码/环境状态与结果位置，未完成或受阻的诚实标注；保留既有编号与先前证据，新结果取代旧结果时保留历史。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "用 ph-implement 执行：这三个任务独立，并行派发，共享文件谁先抢到谁改。",
+      "expected_output": "触发 ph-implement，但委派只限可独立验收的任务并显式指派文件所有权、依赖输入、任务 ID 与测试责任；共享文件、锁文件、生成产物与外部资源单写者或串行访问；不为图方便新建 worktree，只使用已授权注册的 worktree；执行者返回有界结果，协调者核验整合——执行者自报不等于功能完成，任务分支不是集成成品。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "用 ph-implement 执行：工作区里有我改到一半的文件，别动它们。",
+      "expected_output": "触发 ph-implement。先检查当前未提交改动并保留用户编辑，只在任务拥有文件/符号内动手；范围外内容不碰，发现的无关废弃代码只指出不顺手删。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "用 ph-implement 执行完直接接着跑 ph-verify，然后归档。",
+      "expected_output": "触发 ph-implement 但止于本技能：整结果验证与归档需用户另行点名；报告实现与单测结果时与整结果验证、用户验收、合并状态分开；并行件未整合时描述待授权的 worktree-exit 操作；任务勾完不等于需求已交付。",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "把登录功能实现了。",
+      "expected_output": "不触发 ph-implement：普通描述没有点名技能，且当前没有准备好的任务计划；可说明需先点名准备阶段、实现再点名 ph-implement。",
       "files": []
     }
   ]

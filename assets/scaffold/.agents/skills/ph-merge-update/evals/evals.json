@@ -1,95 +1,18 @@
 {
   "skill_name": "ph-merge-update",
   "evals": [
-    {
-      "id": 1,
-      "prompt": "用 ph-init 升级这个仓库：它已按 PH 1.0.0 装过，只有六个 Skill，意图还在 docs/意图/进行中。请升到官方最新正式版，先预检，我确认后再写。",
-      "expected_output": "由 ph-init 会话执行本文件步骤，而不是 init --apply 或目标仓 git pull，也不另开技能。prepare 固定 latest 稳定 tag/commit；inspect 识别六 Skill + 进行中；按 1.0.0→1.1.0→1.1.1 建 state（含 intent-domain 与 1.1.1 六项）。dry-run 不写盘。确认后合并框架与导航，保留进行中业务条目，不批量改派；candidate check 通过前不改 ph.json 版本。报告写差异与保护内容。准备成功后转告加星/建副本提示，不从账号副本拉正式包。本 eval 是行为定义，不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 2,
-      "prompt": "用 ph-merge-update 的步骤继续升到 1.1.1。.agents/updates/1.1.1/state.json 里 intent-skill-names 已 applied，intent-lifecycle 还 pending；待办/实施目录已经建了，进行中还留着两条业务意图。template_version 仍是 1.1.0。",
-      "expected_output": "对照 state 与文件实态恢复，不重做已改名的意图 Skill，不重复插入导航章节；补完未完成项。不因部分目录已在就跳过验收，也不把进行中两条批量搬走。未宣称升级完成。本 eval 不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 3,
-      "prompt": "用 ph-init 升到 1.1.1。我们项目 AGENTS.md 写明禁止再增加任何 ph-* Skill，也禁止改意图目录名。现有的是 ph-intent-capture/plan/abandon。请直接覆盖成官方模板。",
-      "expected_output": "识别显式规则冲突，相关项 blocked 并停止受影响写入，不覆盖 AGENTS 定制、不退役冲突 Skill、不改目录名。向用户说明这一项为什么停住，并用日常用语列出怎么处理，不把内部状态名当问句。不 finalize、不写版本、不 git commit/push。本 eval 不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 4,
-      "prompt": "Windows 同事说根 AGENTS.md 和 .agents/AGENTS.md 对不上，检查一下适配层并同步。",
-      "expected_output": "不触发 ph-merge-update；这是已装 ph-init 的 check/sync，不准备发行版、不为加星上网、不改 template_version。",
-      "files": []
-    },
-    {
-      "id": 5,
-      "prompt": "这个刚 git init 的空仓库还没有 .agents，按 PH 标准初始化。",
-      "expected_output": "不走本文件的升级步骤；交给 ph-init 的在线 prepare + 该发行根 init / adopt。",
-      "files": []
-    },
-    {
-      "id": 6,
-      "prompt": "把导出需求录成意图，不要升级框架。",
-      "expected_output": "不触发 ph-merge-update；属于 ph-intent-new。",
-      "files": []
-    },
-    {
-      "id": 7,
-      "prompt": "用 ph-merge-update 从 PH 1.1.2 升到 1.1.3。Wiki 是之前 subagent 生成并由我们改过的，后端规范已拆文；只升级，不要重建文档。",
-      "expected_output": "prepare固定正式tag/commit，inspect后按三项init-docs-workflow/docs-guidance/docs-project-preserve建或恢复清单。只更新工作流、指导与缺失索引/章节，已拆规范采用等价落点，保留项目与subagent正文并记录证据。不全网调研/重选栈/重建Wiki，不init --apply。verify/finalize不代替语义审阅。本eval不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 8,
-      "prompt": "用 ph-merge-update 继续 1.1.3 合并升级，新工程文已加过，原安全规范跟模板冲突，Wiki 还有占位。可以直接把版本标完成吗？",
-      "expected_output": "先对照磁盘和state，不重复插入工程文。安全规范冲突项blocked，不能finalize；Wiki占位本身不阻止指导升级，但不得宣称文档补全完成。冲突解决与全量补全分开授权，保留原文件。本eval不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 9,
-      "prompt": "用 ph-init 升级已装项目到 1.1.9，但用户级 ph-init 入口还是 1.1.7，prepare 报 illegal release.json: missing schema_version。帮忙继续升级。",
-      "expected_output": "识别为旧入口必然拒绝 1.1.8 及以后包的预期现象，不当作网络故障重试，不回退，不假称自动恢复。按一次性入口切换：把已发布 v1.1.8 clone 到新的仓外安全目录，不覆盖用户级入口与目标项目，不用 main 或本地开发树冒充；先用新目录 prepare --version 1.1.8 并读取返回根的 Skill，再由这份新工具准备并固定 1.1.9。之后 inspect → 语义合并 → verify → finalize 都用 1.1.9 发行根。不对已装项目 init --apply。finalize 通过后项目清单不再含 schema_version，template_version 写 1.1.9，schema $id 为无版本标识；业务正文与未完成记录保留。本 eval 不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 10,
-      "prompt": "升级完成后我检查 .agents/ph.json，里面没有 schema_version 字段了，这是不是升级出了问题？",
-      "expected_output": "不是问题：1.1.8 起彻底取消独立 Schema 版本，项目清单只有 template_version 一个版本字段，schema 标识固定为无版本的 urn:ph:schema:project-harness。用日常用语向用户解释，不动文件、不重跑升级；若项目内其他工具依赖旧字段才按冲突流程记录处理。本 eval 不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 11,
-      "prompt": "用 ph-merge-update 把 portable 模式的 PH 1.1.8 升到 1.1.9。我们同时使用 Claude Code、Codex 和 OpenCode，.codex/skills/ph-memory-ask 有本地改动，旁边还有 my-tool。",
-      "expected_output": "保留 portable，不把升级当作模式转换。登记 worktree-auto-branch、tool-neutral-adapters 与 repository-rename；Codex/OpenCode 使用 canonical，Claude 保留适配入口。先保存迁移前摘要，对 ph-memory-ask 定制标冲突并保持原位，不能仅凭 ph-* 名称退役；my-tool 不动。官方源说明合并到新仓库 project-harness，state 与 receipt 里的旧地址来源值保留兼容含义、不改写。未经审阅合并和归档不能 finalize。可证明受管的其他入口只在 finalize --apply 中自动归档，最终版本只在验收后写入。本 eval 不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 12,
-      "prompt": "升级到 1.1.9 完成后，我翻 .agents/updates/1.1.9/state.json 和安装回执，source 还写着旧地址 chenweixuanJokes/ph-init.git。是不是升级没做干净，要不要手动改成新地址？",
-      "expected_output": "不改：仓库更名后，state.source.repository、receipt.source、release.json.repository 在 1.x 保留旧地址的兼容含义，旧地址经 GitHub 重定向仍指向同一仓库，不代表升级未完成，也不要求手改。用日常用语解释两个地址等价、下载已由新工具走新地址；不动文件、不重跑升级。本 eval 不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 13,
-      "prompt": "用 ph-merge-update 把 PH 1.1.9 升到 1.1.10。升级前我们自己写过一个 .agents/skills/ph-docs-sync/，里面是团队定制的同步流程。顺便把我们过期的 README 也一起修了。",
-      "expected_output": "识别同名自定义 Skill：1.1.9 及更早不携带 ph-docs-sync，该目录是项目内容，inspect 会列出冲突；docs-sync-skill 项 blocked，保留原件并请用户决定改名保留或替换为官方版，不覆盖、不凭前缀放行，blocked 未解决不能 finalize、不写 template_version。升级只装 Skill 与规则索引，不自动同步业务文档：修 README 需用户在升级之外另行发起 ph-docs-sync。业务正文、项目定制与 adapter mode 保留。本 eval 不表示已实测。",
-      "files": []
-    },
-    {
-      "id": 14,
-      "prompt": "升级 PH，保留项目规则，先给我看差异。",
-      "expected_output": "不单独触发 ph-merge-update：用户只说“升级 PH”，没有点名技能；普通描述不触发。升级由用户点名 ph-init 并请求后，由该会话按本文件步骤执行。",
-      "files": []
-    },
-    {
-      "id": 15,
-      "prompt": "ph-merge-update 里的 finalize 是干什么用的？先别执行。",
-      "expected_output": "不触发 ph-merge-update：这是讨论技能名称与内部步骤，不要求执行。",
-      "files": []
-    }
+    {"id": 1, "prompt": "用 ph-init 把已经安装 1.2.2 的项目升到正式自研 SDD 版，先检查差异，不写入。", "expected_output": "同一 ph-init 会话读取准备发行根的 merge-update 内部步骤，固定稳定 tag/commit。若旧入口拒绝新契约，说明一次性固定目标标签仓外新入口过渡；未发布不冒充可下载。inspect 和 migrate-skills 干跑零写入，不 init --apply，不提交或外部账户操作。", "files": []},
+    {"id": 2, "prompt": "用 ph-merge-update 继续 1.2.3 升级，已经有部分新技能，state 仍 in_progress。", "expected_output": "对照实际文件与同批记录，检查已保全原件和归属证明；恢复未完成操作而不重建原件基准、不重复归档、不重新插入正文。全部迁移义务和内容验收完成前不标 complete。", "files": []},
+    {"id": 3, "prompt": "用 ph-merge-update 升级，ph-implement 我改过，团队还加了 references/local.md，别丢。", "expected_output": "盘点整个技能目录，保护修改正文和附属文件。与旧内容基准不符时阻断，审阅仍有效定制的活动落点。extras 决定仅用于确属历史或已承接的附属内容，不伪造基准覆盖正文，不把有备份当迁移完成。", "files": []},
+    {"id": 4, "prompt": "用 ph-merge-update 升级 1.1.9 项目，我们自己写了 ph-design，和新版本同名。", "expected_output": "识别同名第三方技能，保留原件并阻断冲突安装，不因 ph 前缀接管。通过真实问答处理改名保留或其他明确决定；未取得决定不覆盖、不 finalize。", "files": []},
+    {"id": 5, "prompt": "用 ph-merge-update 升到自研 SDD，我们有旧 spec.md、plan.md、勾完的 tasks 和未退出的 worktree。", "expected_output": "保留旧文件、编号、问答、证据、伴读和会话。新运行时用映射接续，旧勾选不推定新审查或用户验收通过；不退出 worktree、不修改会话、不自动提交。", "files": []},
+    {"id": 6, "prompt": "用 ph-merge-update 从 1.0.0 升到当前正式版，只有六个技能，旧需求在进行中目录。", "expected_output": "以实态识别历史布局，读取完整迁移链并登记所有义务，包括意图到规格的有效内容承接。可由最终自研状态替代中间过时技能安装，不把目标停在旧 1.1.1 流程，不复活退役技能；保全原话、状态与来源，不凭目录推定批准。", "files": []},
+    {"id": 7, "prompt": "用 ph-merge-update 升级，我的约束明确禁止替换现有技能，直接覆盖吧。", "expected_output": "说明当前规则冲突，使用实际问答能力取得明确决定，未解决前保留原件并阻断。不能只因为一句直接覆盖就默默抹除仍有效项目规则，不能改门禁以求升级通过。", "files": []},
+    {"id": 8, "prompt": "用 ph-merge-update 升级 portable 项目，.claude 里有旧镜像，还有 unrelated-tool。", "expected_output": "保留 portable，先证明旧镜像归属并保全，再退役与安装新集合。无 --apply 的预检和有冲突计划零写入；不处理 unrelated-tool，不留下旧受管孤儿入口，完成后重跑幂等不摘掉新镜像。", "files": []},
+    {"id": 9, "prompt": "用 ph-merge-update 升级，项目文档是以前 AI 帮写后我们改的，不要重建。", "expected_output": "逐篇按需语义合并并保留项目与代理生成后定制的有效内容；更新自研需求、用例沉淀、并行规则和导航，不顺便全网调研或重建文档。未核实内容不写通过，脚本结构通过不代替语义验收。", "files": []},
+    {"id": 10, "prompt": "升级 PH，保留项目规则，先给我看差异。", "expected_output": "不单独触发 ph-merge-update：没有明确点名。只有用户点名 ph-init 请求升级或明确点名本技能后，才执行对应流程。", "files": []},
+    {"id": 11, "prompt": "ph-merge-update 的 finalize 是什么意思？先别执行。", "expected_output": "这是讨论名称和内部步骤，不触发执行，不写文件、不准备发行或运行 finalize。", "files": []},
+    {"id": 12, "prompt": "用 ph-merge-update 收尾，verify-content 报 stale，但版本字段已经是目标版了。", "expected_output": "版本字段不代替内容验收。保持 in_progress，核实 stale 的真实来源，重新审阅受影响文件和证据；不能直接改哈希假装审阅，不忽略非零退出，不 finalize。", "files": []},
+    {"id": 13, "prompt": "用 ph-merge-update 升级完成后，顺便退出所有 worktree 并推送。", "expected_output": "升级与退出/推送授权范围分开：不把升级能力当 worktree 清理器，不扫描清理所有会话。按独立技能及外部操作要求处理，保留未知会话；本技能完成升级检查后明确尚未执行的其他请求。", "files": []}
   ]
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contract tests for the PH 1.1.14 unified WIP confirmation.
+"""Contract tests for the PH unified WIP confirmation.
 
 The unified confirmation applies wherever uncommitted changes actually block
 a worktree operation: ph-worktree-enter's source tree, ph-worktree-exit's
@@ -12,17 +12,21 @@ result) and then actually invoke the question tool with the fixed template
 offering exactly the literal options 是 / 否; refusal, cancellation or no
 answer keeps every change and stops.
 
-Answering 是 authorizes ONE combined invocation: enter's confirmed WIP commit
-and the worktree creation, and exit's task-tree WIP commit and the delivery,
-each happen inside a single ``enter --apply`` / ``exit --apply`` carrying the
-reviewed dry-run snapshot bindings (--wip-message plus the --expect-* flags);
-the skill flow is never split into a wip call followed by the enter/exit call
-(the independent wip subcommand stays available for the user's direct use).
-The agent never hand-assembles the commit, and the script cannot prove that a
-real user confirmed anything. Ordinary content drift before the commit runs
-does not re-ask - the authorization is not bound to a byte snapshot - but it
-is not long-term either: once the commit runs the authorization is consumed,
-and every new blocking instance is confirmed against the situation at hand.
+Since the shipped skills were rewritten they delegate the fixed question and
+conflict wording to the Git rules doc (Git规范.md) and pin the flow in
+English; the spec text still carries the verbatim templates and the contract
+tests anchor both layers. Answering 是 authorizes ONE combined invocation:
+enter's confirmed WIP commit and the worktree creation, and exit's task-tree
+WIP commit and the delivery, each happen inside a single ``enter --apply`` /
+``exit --apply`` carrying the reviewed dry-run snapshot bindings
+(--wip-message plus the --expect-* flags); the skill flow is never split into
+a wip call followed by the enter/exit call (the independent wip subcommand
+stays available for the user's direct use). The agent never hand-assembles
+the commit, and the script cannot prove that a real user confirmed anything.
+Ordinary content drift before the commit runs does not re-ask - the
+authorization is not bound to a byte snapshot - but it is not long-term
+either: once the commit runs the authorization is consumed, and every new
+blocking instance is confirmed against the situation at hand.
 
 The same item also covers merge-conflict recovery: once a real merge conflict
 exists (``MERGE_HEAD`` plus unmerged entries), the exit skill asks the shared
@@ -56,7 +60,6 @@ EXIT_SCRIPT = ENTER_SCRIPT
 
 CONFIRM_OPTION = "是"
 STOP_OPTION = "否"
-OPTION_SENTENCE = "两个选项字面为“是”“否”"
 SPEC_OPTION_SENTENCE = "两个选项文案固定为字面“是”“否”"
 OLD_CONFIRM_OPTION = "确认 WIP 并继续"
 OLD_STOP_OPTION = "停止，保留现场"
@@ -76,34 +79,39 @@ class UnifiedConfirmationContractTests(unittest.TestCase):
     def test_enter_stops_creation_and_runs_the_unified_confirmation(self):
         # creation is stopped first, then the unified confirmation runs; the
         # read-only dry-run reports the dirty sets and the screening result
-        self.assertIn("停止创建", self.enter)
-        self.assertIn("统一 WIP 确认", self.enter)
-        for term in ("`sourceDirty`", "安全筛查结果", "只读"):
+        self.assertIn("stops creation", self.enter)
+        self.assertIn("unified WIP question", self.enter)
+        for term in ("sourceDirty, wipRisks", "dry-run and apply"):
             self.assertIn(term, self.enter)
 
     def test_exit_uses_the_same_confirmation_for_all_three_sites(self):
-        self.assertIn("统一 WIP 确认（enter 源树、本任务树、合并目标源树同一套）", self.exit)
-        for term in ("只读 dry-run", "当前分支", "完整清单", "拟用的 `wip: <说明>` 提交信息"):
+        self.assertIn("the Git rules' unified WIP question", self.exit)
+        for term in (
+            "read-only dry-run",
+            "show branch, HEAD, all staged/unstaged/untracked paths",
+            "the proposed `wip: <description>`",
+        ):
             self.assertIn(term, self.exit)
 
     def test_question_asks_whether_to_adopt_wip_not_content_approval(self):
-        # the listing explains the situation and the safety screening; the
-        # decision is about adopting the WIP way out of this blocker
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("是否采用 `wip:` 提交解决当前这次阻断", text)
-                self.assertIn("不是对文件内容的逐项审批", text)
-        # the situation/screening explanation is spelled out in exit and the spec
-        self.assertIn("说明现场", self.exit)
-        self.assertIn("说明现场", self.spec)
-
-    def test_fixed_question_template_and_two_fixed_options(self):
-        # since 1.2.1 the gate wording lives in the skills and the parallel
-        # spec doc; the minimal AGENTS.md no longer duplicates it
+        # the skills delegate the fixed question wording to the Git rules; the
+        # adoption-vs-content-approval boundary stays pinned by the spec while
+        # both skills anchor the delegation
         for text, label in ((self.enter, "enter"), (self.exit, "exit")):
             with self.subTest(file=label):
-                self.assertIn(OPTION_SENTENCE, text)
-        # the spec doc words the same rule in its own sentence
+                self.assertIn("the exact unified WIP question in the Git rules", text)
+        self.assertIn("是否采用 `wip:` 提交解决当前这次阻断", self.spec)
+        self.assertIn("不是对文件内容的逐项审批", self.spec)
+        self.assertIn("用于说明现场与安全筛查结果", self.spec)
+
+    def test_fixed_question_template_and_two_fixed_options(self):
+        # the skills fix the yes/no choices and keep the host free-input
+        # option; the spec doc words the same rule in its own sentence
+        self.assertIn(
+            "The fixed choices are the project's yes/no labels, with the host's free-input option retained",
+            self.enter,
+        )
+        self.assertIn("Preserve its yes/no labels and host free input", self.exit)
         self.assertIn(SPEC_OPTION_SENTENCE, self.spec)
         # the literal options are 是 / 否 - the retired old option texts must
         # not survive anywhere
@@ -111,26 +119,26 @@ class UnifiedConfirmationContractTests(unittest.TestCase):
             with self.subTest(file=label):
                 self.assertNotIn(OLD_CONFIRM_OPTION, text, label)
                 self.assertNotIn(OLD_STOP_OPTION, text, label)
-        # no extra preset options; host free-input stays available (exit and
-        # spec state it; enter states it for its question via the spec
-        # template reference)
-        self.assertIn("不添加其他预设选项", self.exit)
-        self.assertIn("自由输入", self.exit)
+        # no extra preset options; host free input stays available in the spec
         self.assertIn("不添加其他预设选项", self.spec)
         self.assertIn("自由输入", self.spec)
 
     def test_actual_question_tool_call_with_degradation_only_when_unavailable(self):
+        # the skills actually call the host question tool; the degradation
+        # rule lives in the question-rules doc both skills reference, and the
+        # spec carries it verbatim
+        self.assertIn("through the host's question tool", self.enter)
+        self.assertIn("using the host tool", self.exit)
+        for text, label in ((self.enter, "enter"), (self.exit, "exit")):
+            with self.subTest(file=label):
+                self.assertIn("harness规范/对用户提问规范.md", text)
+        self.assertIn("实际调用问答工具", self.spec)
+        self.assertIn("没有可用问答工具或工具故障时", self.spec)
+        self.assertIn("降级规则", self.spec)
+        # the old open-ended ask is banned as the default question
         for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
             with self.subTest(file=label):
-                self.assertIn("实际调用问答工具", text)
-                self.assertIn("没有可用问答工具或工具故障时", text)
-                self.assertIn("降级规则", text)
-                # the old open-ended ask is banned as the default question
                 self.assertNotIn("这次提交要包括哪些", text)
-        # the no-open-ended ban is spelled out in enter and the spec; the exit
-        # skill states it as "no extra preset options" plus the free-input rule
-        self.assertIn("不开放式问", self.enter)
-        self.assertIn("不开放式问", self.spec)
 
     def test_ordinary_content_drift_before_the_commit_does_not_re_ask(self):
         # the authorization targets adopting WIP for this blocker, not a
@@ -138,47 +146,43 @@ class UnifiedConfirmationContractTests(unittest.TestCase):
         # already-shown path is not re-asked (no per-file hashing), while a
         # branch/HEAD/change-set change blocks and re-prechecks instead of
         # reusing the consumed confirmation
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("同一已展示路径的普通内容修改不需要重新确认", text)
-                self.assertIn("不逐字节比对文件内容", text)
-        self.assertIn("不沿用", self.enter)
+        self.assertIn("同一已展示路径的普通内容修改不需要重新确认", self.spec)
+        self.assertIn("不逐字节比对文件内容", self.spec)
+        self.assertIn("Ordinary edits within the same displayed path set do not require byte-by-byte reapproval", self.enter)
+        self.assertIn("invalidate the snapshot and require fresh preflight and consent", self.enter)
+        self.assertIn("same-path ordinary content edits do not trigger byte-by-byte reconfirmation", self.exit)
+        self.assertIn("Branch/HEAD/path-status changes require new preflight and consent", self.exit)
         self.assertIn("不沿用", self.spec)
-        self.assertIn("阻断并重新预检、重新确认", self.enter)
         self.assertIn("阻断并重新预检、重新确认", self.spec)
-        # the exit skill states the same rule as the whole-order refusal
-        self.assertIn("整单拒绝并要求重新预检", self.exit)
-        self.assertIn("沿用旧确认提交新的改动范围", self.exit)
+        self.assertIn("整单拒绝并要求重新预检", self.spec)
+        self.assertIn("沿用旧确认提交新的改动范围", self.spec)
 
     def test_authorization_is_not_long_term(self):
         # the commit consumes the authorization; every new blocking instance
         # (later steps, the next delivery, the tree going dirty again) is
         # confirmed against the situation at hand
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("授权不是长期授权", text)
-                self.assertIn("该提交一经执行授权即消费", text)
-        self.assertIn("该阻断场景结束后再次被未提交改动阻断", self.enter)
-        self.assertIn("按当时的现场重新确认", self.enter)
+        self.assertIn("Consent is consumed by that one commit", self.enter)
+        self.assertIn("later dirty-state blockers need their own consent", self.enter)
+        self.assertIn("Consent is consumed by that commit", self.exit)
+        self.assertIn("授权不是长期授权", self.spec)
+        self.assertIn("该提交一经执行授权即消费", self.spec)
         self.assertIn("该阻断场景结束后再次被未提交改动阻断", self.spec)
         self.assertIn("按当时的现场重新确认", self.spec)
 
     def test_refusal_cancel_or_no_answer_keeps_every_change_and_stops(self):
         # the two skills spell out the full stop semantics; the spec keeps the
         # compact rule plus the fixed-template degradation sentence
-        for text, label in ((self.enter, "enter"), (self.exit, "exit")):
-            with self.subTest(file=label):
-                self.assertIn("答“否”、取消或未回答时保留全部改动并停止", text)
-                self.assertIn("不 stash", text)
-                self.assertIn("不换问法重问", text)
+        self.assertIn("Rejection, cancellation or no answer preserves changes and stops", self.enter)
+        self.assertIn("do not reword the question to obtain agreement", self.enter)
+        self.assertIn("Never stash", self.enter)
+        self.assertIn("Rejection/cancellation/no answer preserves all content and stops without rewording the question", self.exit)
+        self.assertIn("No automatic push, stash, reset --hard", self.exit)
         self.assertIn("拒绝、取消或未回答", self.spec)
         self.assertIn("同意才提交，拒绝、取消或未回答停止", self.spec)
 
     def test_authorization_covers_only_this_wip_commit(self):
-        for text, label in ((self.enter, "enter"), (self.exit, "exit")):
-            with self.subTest(file=label):
-                self.assertIn("WIP 确认只覆盖这次 `wip:` 提交", text)
-                self.assertIn("不授权普通提交、清理或任何安全检查豁免", text)
+        self.assertIn("a single enter apply combines the approved WIP and creation", self.enter)
+        self.assertIn("Consent covers one WIP, not arbitrary submission", self.exit)
         self.assertIn("确认只覆盖这次 `wip:` 提交", self.spec)
         self.assertIn("不授权普通提交、清理或安全检查豁免", self.spec)
         # per-instance authorization: doing a worktree is not a WIP grant
@@ -186,25 +190,28 @@ class UnifiedConfirmationContractTests(unittest.TestCase):
         self.assertIn("用户同意“做 worktree”不等于同意把未跟踪文件或密钥收进提交", self.spec)
 
     def test_safety_screening_and_no_blind_staging(self):
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("不盲目 `git add -A`", text)
-                self.assertIn("疑似密钥", text)
-                self.assertIn("异常大文件", text)
-                self.assertIn("ignored", text)
-                self.assertIn("未解决的冲突", text)
+        self.assertIn("Suspected secrets", self.enter)
+        self.assertIn("oversized files", self.enter)
+        self.assertIn("unresolved conflicts", self.enter)
+        self.assertIn("Ignored files are excluded", self.enter)
+        self.assertIn("do not blindly git add -A", self.enter)
+        self.assertIn("Secrets", self.exit)
+        self.assertIn("oversized changes", self.exit)
+        self.assertIn("no partial submission or blind git add -A", self.exit)
+        self.assertIn("Ignored files stay excluded", self.exit)
+        for term in ("不盲目 `git add -A`", "疑似密钥", "异常大文件", "ignored", "未解决的冲突"):
+            self.assertIn(term, self.spec)
 
     def test_blockers_refuse_the_whole_wip_no_partial_commit(self):
         # the unified wip execution takes staged, unstaged and untracked
         # together, excludes ignored, and refuses the whole order instead of
         # partially committing around sensitive / oversized / conflicting files
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("staged、unstaged、untracked 一起收进", text)
-                self.assertIn("ignored 排除", text)
-                self.assertIn("不部分提交", text)
-                self.assertIn("不得把", text)
-                self.assertIn("当作干净继续", text)
+        self.assertIn("block the whole operation, not a partial commit", self.enter)
+        self.assertIn("all three path sets", self.enter)
+        self.assertIn("block before committing; no partial submission", self.exit)
+        self.assertIn("all staged/unstaged/untracked paths", self.exit)
+        for term in ("staged、unstaged、untracked 一起收进", "ignored 排除", "不部分提交", "不得把", "当作干净继续"):
+            self.assertIn(term, self.spec)
 
     def test_parallel_spec_carries_the_gate(self):
         # the rule index moved out of AGENTS.md: the constraint doc and the
@@ -227,8 +234,8 @@ class UnifiedWipCommandContractTests(unittest.TestCase):
         for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
             with self.subTest(file=label):
                 self.assertIn("--wip-message", text)
-        self.assertIn("先运行只读计划", self.enter)
-        self.assertIn("先只读 dry-run", self.exit)
+        self.assertIn("Dry-run and source protection", self.enter)
+        self.assertIn("Run the read-only dry-run", self.exit)
         self.assertIn("先只读检查", self.spec)
         # the single apply carries the reviewed dry-run snapshot forward
         for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
@@ -238,73 +245,74 @@ class UnifiedWipCommandContractTests(unittest.TestCase):
                 self.assertIn("--expect-untracked", text)
         # the combined-call contract: the confirmed WIP and the follow-up
         # action run inside one apply, never as wip-then-enter/exit
-        self.assertIn("单次 `enter --apply --wip-message", self.enter)
-        self.assertIn("单次 `exit --apply`", self.exit)
+        self.assertIn("a single enter apply combines the approved WIP and creation", self.enter)
+        self.assertIn("use a single exit apply with `--wip-message`", self.exit)
         self.assertIn("在同一个 `enter --apply` / `exit --apply` 调用内", self.spec)
-        self.assertIn("不拆成两次脚本调用", self.enter)
+        self.assertIn("Do not split into independent add/commit/enter operations", self.enter)
+        self.assertIn("Do not split task WIP and exit into two invocations", self.exit)
         self.assertIn("技能流程不拆成两次调用", self.spec)
-        self.assertIn("独立 `wip` 子命令仅供用户直接使用", self.enter)
-        self.assertIn("独立 `wip` 子命令保留给用户直接使用", self.exit)
+        self.assertIn("The standalone wip command is not this workflow's substitute", self.enter)
+        self.assertIn("standalone wip command", self.exit)
         self.assertIn("独立 `wip` 子命令保留给用户直接使用", self.spec)
         # binding drift refuses the whole order
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("整单拒绝", text)
+        self.assertIn("block the whole operation", self.enter)
+        self.assertIn("no partial submission", self.exit)
+        self.assertIn("整单拒绝", self.spec)
 
     def test_agent_never_hand_assembles_the_wip_commit(self):
-        for text, label in ((self.enter, "enter"), (self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("不由 Agent 手写", text)
-        self.assertIn("受确认提交完成后脚本只见 clean 工作区", self.exit)
+        self.assertIn("not hand-written Git orchestration", self.enter)
+        self.assertIn("manually git add/commit", self.exit)
+        self.assertIn("不由 Agent 手写", self.spec)
         self.assertIn("受确认提交完成后脚本只见 clean 工作区", self.spec)
         # the single-apply wording per site
-        self.assertIn("单次 `enter --apply --wip-message", self.enter)
-        self.assertIn("单次 `exit --apply`", self.exit)
+        self.assertIn("a single enter apply combines the approved WIP and creation", self.enter)
+        self.assertIn("use a single exit apply with `--wip-message`", self.exit)
 
     def test_script_cannot_prove_user_confirmation(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("脚本无能力证明真实用户确认", text)
-                self.assertIn("人类确认由", text)
-                self.assertIn("调用 `--apply` 前完成", text)
+        self.assertIn("The script does not itself prove human authorization", self.exit)
+        self.assertIn("脚本无能力证明真实用户确认", self.spec)
+        self.assertIn("人类确认由", self.spec)
+        self.assertIn("调用 `--apply` 前完成", self.spec)
 
     def test_exit_never_commits_from_the_old_message_param(self):
         # exit no longer takes a commit message; legacy callers are accepted
         # but never committed from
-        self.assertIn("绝不据此提交", self.exit)
         self.assertIn("绝不据此提交", self.spec)
+        self.assertIn("do not silently substitute one for refused WIP", self.exit)
 
     def test_exit_opening_authorization_sentence_revised(self):
-        self.assertIn("调用本技能表示用户授权完成必要的验证与合并", self.exit)
-        self.assertIn("调用本技能本身不构成任何提交确认", self.exit)
-        self.assertIn("清理 linked worktree 必须在合并完成后另行确认", self.exit)
-        self.assertIn("其中任务树 WIP 与交付在单次 `exit --apply` 内一次完成", self.exit)
+        self.assertIn(
+            "Invocation authorizes the scoped merge, not a commit, push, branch deletion or worktree cleanup",
+            self.exit,
+        )
+        self.assertIn("Invocation of this skill alone never confirms a commit", self.exit)
+        self.assertIn("separately ask whether to remove this session's isolated directory", self.exit)
+        self.assertIn("use a single exit apply with `--wip-message`", self.exit)
 
     def test_no_default_normal_commit_by_classification(self):
-        self.assertIn("不再按分级默认普通提交", self.exit)
         self.assertIn("不再按分级默认普通提交", self.spec)
         # any dirty state (including the formerly auto-committed single classes)
         # goes through the unified confirmation before the script sees clean
         self.assertIn("只有 staged、只有 tracked unstaged、两者并存、含 untracked", self.spec)
+        self.assertIn("Consent covers one WIP, not arbitrary submission", self.exit)
 
     def test_merge_target_source_dirty_wip_is_committed_in_the_source_tree(self):
-        self.assertIn("源工作区不干净时", self.exit)
-        self.assertIn("单独确认并在源工作区执行一次", self.exit)
+        self.assertIn("handle a dirty source in that source worktree", self.exit)
+        self.assertIn("It is a separate blocker, not part of the task-tree WIP", self.exit)
         self.assertIn("WIP 提交做在源工作区", self.spec)
 
     def test_exit_call_itself_is_not_a_commit_authorization(self):
-        self.assertIn("仅调用本技能不构成 WIP 或任何提交确认", self.exit)
+        self.assertIn("Invocation of this skill alone never confirms a commit", self.exit)
         self.assertIn("调用退出技能不构成 WIP 或提交确认", self.spec)
 
     def test_explicitly_specified_formal_commits_are_still_honored(self):
-        self.assertIn("用户已在本次会话单独明确指定任务树改动的正式提交", self.exit)
-        self.assertIn("可按指定执行", self.exit)
+        self.assertIn("A separately and explicitly specified formal commit may be performed as authorized", self.exit)
         self.assertIn("用户已在本次会话单独明确指定正式提交", self.spec)
+        self.assertIn("可按指定执行", self.spec)
 
     def test_existing_protections_are_kept(self):
-        self.assertIn("ignored 排除", self.exit)
-        self.assertIn("禁止 `git stash`、`reset --hard`、`--no-verify`", self.exit)
-        self.assertIn("保留项目 hooks、签名和 Git author 配置", self.exit)
+        self.assertIn("Ignored files stay excluded", self.exit)
+        self.assertIn("No automatic push, stash, reset --hard, --no-verify, force removal or branch -D", self.exit)
         self.assertIn("ignored 文件一律阻断清理", self.spec)
         # cleanup consent stays a separate question from the WIP confirmation
         self.assertIn("“能不能删这个目录”仍单独问", self.spec)
@@ -319,27 +327,31 @@ class RuntimeRecoveryContractTests(unittest.TestCase):
         self.spec = PARALLEL_SPEC.read_text(encoding="utf-8")
 
     def test_doctor_is_read_only_diagnosis(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("doctor", text)
-                self.assertIn("只读诊断", text)
+        self.assertIn("doctor", self.exit)
+        self.assertIn("read-only diagnosis", self.exit)
+        self.assertIn("doctor", self.spec)
+        self.assertIn("只读诊断", self.spec)
 
     def test_recover_needs_explicit_target_and_operations(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("recover", text)
-                self.assertIn("显式指定", text)
-                self.assertIn("不猜测", text)
+        self.assertIn("recover", self.exit)
+        self.assertIn(
+            "explicit `recover --repo <primary-worktree> --session <path> --action archive|adopt --apply`",
+            self.exit,
+        )
+        self.assertIn("only for states the tool can prove recoverable", self.exit)
+        self.assertIn("recover", self.spec)
+        self.assertIn("显式指定", self.spec)
+        self.assertIn("不猜测", self.spec)
         # the two confirmed recover actions and their preconditions
         self.assertIn("archive", self.exit)
         self.assertIn("adopt", self.exit)
-        self.assertIn("initialTaskHead", self.exit)
+        self.assertIn("initialTaskHead", self.spec)
 
     def test_redeliver_verifies_before_delivering_again(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("redeliver", text)
-                self.assertIn("先核验再交付", text)
+        self.assertIn("inspect redeliver dry-run before", self.exit)
+        self.assertIn("Do not reuse failed verification as current proof", self.exit)
+        self.assertIn("redeliver", self.spec)
+        self.assertIn("先核验再交付", self.spec)
         # redeliver only applies to those interrupted delivery states
         self.assertIn("merge_verify_failed", self.exit)
 
@@ -348,27 +360,27 @@ class RuntimeRecoveryContractTests(unittest.TestCase):
         self.assertIn("--expect-source-branch", self.enter)
         # --apply is bound to the reviewed snapshot: both values are mandatory
         # and a drift stops the run instead of silently accepting it.
-        self.assertIn("两者缺一脚本直接拒绝", self.enter)
-        self.assertIn("漂移阻断并重新 dry-run", self.enter)
+        self.assertIn("Apply with both source snapshot bindings", self.enter)
+        self.assertIn("invalidate the snapshot and require fresh preflight and consent", self.enter)
 
     def test_merge_identity_verified_before_continue_and_abort(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("核对 merge 身份", text)
-                self.assertIn("abort-merge", text)
+        self.assertIn("the recorded mergeSourceBranch/mergeSourceHead/mergeTaskHead identity", self.exit)
+        self.assertIn("abort-merge", self.exit)
+        self.assertIn("核对 merge 身份", self.spec)
+        self.assertIn("abort-merge", self.spec)
         # the merge snapshot fields the identity check is based on
         self.assertIn("mergeSourceBranch", self.exit)
         self.assertIn("mergeSourceHead", self.exit)
         self.assertIn("mergeTaskHead", self.exit)
 
     def test_old_sessions_without_new_evidence_block_conservatively(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("缺少新增证据", text)
-                self.assertIn("保守阻断", text)
-                self.assertIn("不猜测补齐", text)
+        self.assertIn("Old sessions lacking needed merge evidence remain blocked", self.exit)
+        self.assertIn("never invent fields", self.exit)
+        self.assertIn("缺少新增证据", self.spec)
+        self.assertIn("保守阻断", self.spec)
+        self.assertIn("不猜测补齐", self.spec)
         # no invented recovery promise for old merges
-        self.assertIn("recover 不能恢复所有旧 merge", self.exit)
+        self.assertIn("recover 不能恢复所有旧 merge", self.spec)
 
     def test_sessions_are_backward_compatible_and_migration_keeps_them(self):
         self.assertIn("新增字段非必填", self.spec)
@@ -408,78 +420,85 @@ class ConflictRecoveryContractTests(unittest.TestCase):
 
     def test_fixed_conflict_template_with_two_fixed_options(self):
         # the template text lives verbatim in the shared spec; the exit skill
-        # references it and fixes the same two option wordings
+        # references it through the host tool and fixes equivalent choices
         self.assertIn("任务分支<任务分支>合入源分支<源分支>时发生冲突", self.spec)
         self.assertIn("保留现场由你解决后继续，还是撤销这次合并", self.spec)
         self.assertIn("撤销会取消本次合并中的冲突处理，任务分支提交和隔离目录仍保留", self.spec)
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn(KEEP_CONFLICT_OPTION, text)
-                self.assertIn(ABORT_CONFLICT_OPTION, text)
-                # no preset stash / discard / ours / theirs / agent auto-resolve
-                self.assertIn("其他预设选项", text)
-                self.assertIn("自由输入", text)
-                for banned in ("stash", "ours/theirs", "Agent 代解决"):
-                    self.assertIn(banned, text)
+        self.assertIn(KEEP_CONFLICT_OPTION, self.spec)
+        self.assertIn(ABORT_CONFLICT_OPTION, self.spec)
+        self.assertIn(
+            "choices equivalent to “keep the scene; I will resolve and continue” and “abort this merge.”",
+            self.exit,
+        )
+        # no preset stash / discard / ours / theirs / agent auto-resolve
+        self.assertIn("No automatic ours/theirs, force or agent resolution option", self.exit)
+        self.assertIn("through the host tool", self.exit)
+        self.assertIn("stash", self.exit)
+        self.assertIn("ours/theirs", self.exit)
+        self.assertIn("Agent conflict resolution needs separate explicit authorization", self.exit)
 
     def test_real_conflict_verified_before_asking(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("MERGE_HEAD", text)
-                self.assertIn("未合并条目", text)
-                self.assertIn("冲突清单", text)
-                self.assertIn("实际调用问答工具", text)
-                self.assertIn("没有可用问答工具或工具故障时", text)
+        self.assertIn("MERGE_HEAD", self.exit)
+        self.assertIn("unmerged paths", self.exit)
+        self.assertIn("Ask the exact project conflict question through the host tool", self.exit)
+        self.assertIn("MERGE_HEAD", self.spec)
+        self.assertIn("未合并条目", self.spec)
+        self.assertIn("冲突清单", self.spec)
+        self.assertIn("实际调用问答工具", self.spec)
+        self.assertIn("没有可用问答工具或工具故障时", self.spec)
 
     def test_keep_option_stops_and_waits_without_polling(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("停止等待", text)
-                self.assertIn("不立即 continue", text)
-                self.assertIn("不轮询", text)
+        self.assertIn("stop and wait, not poll", self.exit)
+        self.assertIn("Only after the user explicitly asks to continue following resolution/staging", self.exit)
+        self.assertIn("停止等待", self.spec)
+        self.assertIn("不立即 continue", self.spec)
+        self.assertIn("不轮询", self.spec)
 
     def test_continue_needs_explicit_resolved_and_staged_continue(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("已解决并暂存，请继续", text)
-                self.assertIn("只读核验", text)
-                self.assertIn("无未合并条目", text)
-                self.assertIn("merge 状态吻合", text)
-                self.assertIn("不重问", text)
-                self.assertIn("不是继续授权", text)
+        self.assertIn("verify no unmerged paths and the same merge identity", self.exit)
+        self.assertIn("This creates a merge commit, not a WIP", self.exit)
+        self.assertIn("No answer/cancellation means no abort, WIP or new question channel", self.exit)
+        self.assertIn("已解决并暂存，请继续", self.spec)
+        self.assertIn("只读核验", self.spec)
+        self.assertIn("无未合并条目", self.spec)
+        self.assertIn("merge 状态吻合", self.spec)
+        self.assertIn("不重问", self.spec)
+        self.assertIn("不是继续授权", self.spec)
 
     def test_abort_is_a_single_use_authorization_with_prior_warning(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("撤销", text)
-                self.assertIn("编辑会被撤销", text)
-                self.assertIn("仅本次", text)
-        self.assertIn("不自动重试 exit", self.exit)
-        self.assertIn("不删除任务分支或隔离目录", self.exit)
+        self.assertIn("authorizes only that merge's `abort-merge --repo <linked-worktree> --apply`", self.exit)
+        self.assertIn("conflict-resolution edits are discarded", self.exit)
+        self.assertIn("Do not retry the merge automatically", self.exit)
+        self.assertIn("撤销", self.spec)
+        self.assertIn("编辑会被撤销", self.spec)
+        self.assertIn("仅本次", self.spec)
 
     def test_cancel_skip_or_unanswered_neither_aborts_nor_wips(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("取消、跳过或未回答", text)
-                self.assertIn("不 abort", text)
-                self.assertIn("不做 WIP", text)
-                self.assertIn("不换问法重问", text)
+        self.assertIn("No answer/cancellation means no abort, WIP or new question channel", self.exit)
+        self.assertIn("取消、跳过或未回答", self.spec)
+        self.assertIn("不 abort", self.spec)
+        self.assertIn("不做 WIP", self.spec)
+        self.assertIn("不换问法重问", self.spec)
 
     def test_agent_delegation_is_separate_authorization(self):
-        self.assertIn("委托 Agent 解决冲突", self.exit)
-        self.assertIn("单独授权", self.exit)
-        self.assertIn("业务取舍", self.exit)
+        self.assertIn("Agent conflict resolution needs separate explicit authorization", self.exit)
+        self.assertIn("business trade-offs still require the user", self.exit)
+        self.assertIn("委托 Agent 解决冲突", self.spec)
+        self.assertIn("单独授权", self.spec)
+        self.assertIn("业务取舍", self.spec)
 
     def test_new_conflict_never_reuses_old_authorization(self):
-        self.assertIn("新一次 merge 冲突", self.exit)
-        self.assertIn("不复用旧授权", self.exit)
+        self.assertIn("Consent is consumed by that commit", self.exit)
+        self.assertIn("新一次 merge 冲突", self.spec)
+        self.assertIn("不复用旧授权", self.spec)
 
     def test_conflict_state_takes_priority_over_wip_flow(self):
-        for text, label in ((self.exit, "exit"), (self.spec, "spec")):
-            with self.subTest(file=label):
-                self.assertIn("优先于", text)
-                self.assertIn("不是 WIP", text)
-                self.assertIn("另行确认", text)
+        self.assertIn("takes precedence over WIP", self.exit)
+        self.assertIn("never stage unresolved entries into a WIP", self.exit)
+        self.assertIn("This creates a merge commit, not a WIP", self.exit)
+        self.assertIn("优先于", self.spec)
+        self.assertIn("不是 WIP", self.spec)
+        self.assertIn("另行确认", self.spec)
 
     def test_parallel_spec_carries_the_conflict_gate(self):
         self.assertIn("冲突固定问句", self.spec)

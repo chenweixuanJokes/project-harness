@@ -6,6 +6,18 @@
 
 尚未打过历史 tag。`1.0.0` 与两套 `1.1.0` 命名是可追溯提交，不是已发布 tag。首个正式 tag 是 `v1.1.1`，不追认 `v1.1.0`。
 
+## 1.2.3
+
+- 发行准备不再附带 GitHub 账户操作：`ph_release.py prepare` 默认仅获取并验证固定发行包；点星和创建 fork 保留为独立 `support` 操作，只能在用户明确授权后执行。历史版本测试隔离旧 support hook，不以升级或测试请求代替账户操作授权。
+- 彻底取消当前运行发行对上游 GitHub Spec Kit 的依赖：发行树退役 `speckit.json`、`assets/speckit-bundle.json` 与 `scripts/ph_speckit.py`，必需 Skill 唯一来源固定为 18 个自研技能（ph-init、ph-merge-update、ph-worktree-enter、ph-worktree-exit、ph-memory-ask、ph-memory-learning、ph-memory-archive、ph-human + 新规格技能 ph-require、ph-clarify、ph-design、ph-design-review、ph-tasks、ph-verify-plan、ph-small-change、ph-implement、ph-verify、ph-archive）；`.agents/ph.json` 的 `speckit` 节随升级删除。1.1.14 至 1.2.2 入口对本包 `prepare` 因上游技能契约校验失败，需要一次性过渡（更早入口按真实校验行为分别处理）：从官方稳定标签 v1.2.3 clone 到仓外新目录，从该新目录 prepare 并继续升级。
+- 技能替换（迁移项 `sdd-skill-replacement`）：新增发行根 `ph_merge_update.py migrate-skills` 确定性执行——7 个旧规格技能（ph-analyze、ph-checklist、ph-converge、ph-constitution、ph-plan、ph-specify、ph-taskstoissues）整目录（含 evals、references 与用户附加文件）逐字节归档到 `archive/legacy-backup/<日期>-pre-update/retired-skills/`；ph-clarify、ph-tasks、ph-implement 同名原位替换；ph-require、ph-design、ph-design-review、ph-verify-plan、ph-small-change、ph-verify、ph-archive 全新安装。同名身份识别以 SKILL.md 内容基准为准（与发行根新代一致=已就绪补件；与 `speckit.files` 安装基准一致=受管旧代整目录归档后换新；都不符=用户定制或第三方内容阻断不覆盖）；`.claude` 厂商镜像先于本体归档（符号链接先写记录再摘链），中断幂等可续做。
+- 自研运行时接管（迁移项 `sdd-runtime-takeover`）：项目内 Spec Kit bash 运行时与旧模板归档后被自研运行时替换，旧 `runtime/.gitignore` 随上游资产退役，`feature.json` 仅兼容读取，specs 稳定路径保留；宪法物化、导航刷新（`refresh-navigation`，来源哈希保护、只动标记区条目）、内容证据校验与宪法导航校验从安装器提取为随包 `scripts/ph_governance.py`，init 在缺失时物化宪法、升级会话按审阅哈希刷新导航；运行时新增协议脚本 `.agents/scripts/ph_sdd.py` 承接功能流程。
+- 双语技能（迁移项 `bilingual-skills`）：本次修改的 15 个技能（新 10 个规格技能 + ph-init、ph-merge-update、ph-worktree-enter、ph-worktree-exit、ph-human）统一英文 SKILL.md 入口 + SKILL.zh.md 中文对照；memory 三技能保持已发布中文正文不扩范围翻译。
+- 文档与测试沉淀（迁移项 `docs-tests-consolidation`）：下游文档治理、Git 并行、测试门禁/用例沉淀与 specs/runtime 导航文档逐文件语义合并，项目定制保留；本仓维护者规范与历史升级矩阵同步沉淀。
+- worktree 联动（迁移项 `worktree-session-continuity`）：`.worktrees/` 任务树、session JSON 与恢复证据升级前后逐字节不动，session 字段向后兼容；增加需求/任务/独占资源绑定，同源交付串行并做合并后复验。证据缺失、漂移或未保全时阻断清理，不强制先归档再合并，旧无功能绑定会话保持兼容。
+- 产物兼容（迁移项 `artifact-compat`）：新产物 requirement.md/design.md/review.md/tasks.md/verify-plan.md/acceptance.md/verification.md（small 流程 change.md）；既有 spec.md/plan.md/tasks/verification 与证据逐字节保留，新技能兼容读取旧命名产物，不要求改名搬迁。
+- 内核 CLI 只读纪律：`ph_init.py`、`ph_governance.py`、`ph_merge_update.py` 脚本入口统一设置不写字节码守卫（治理与升级脚本在模块级导入其他内核模块，守卫置于这些导入之前），check、governance verify 等只读命令在已安装项目内不再留下 `__pycache__`；库导入保持无副作用。回归测试用真实子进程在干净载荷副本上复现并覆盖 portable/symlink 两种模式。
+
 ## 1.2.2
 
 - 升级流程顺带刷新用户级引导入口：`ph_release.py` 新增 `user-entry` 子命令，prepare 成功后把 `~/.agents/skills/ph-init` 整树更新为本包，旧树先备份进 `~/trash`、失败自动还原；入口不存在、非普通目录、版本无法判定或不旧于本包时跳过，不新建、不降级。

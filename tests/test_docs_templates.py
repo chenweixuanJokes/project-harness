@@ -64,25 +64,20 @@ class DocsTemplateTests(unittest.TestCase):
 
     def test_docs_migration_keeps_single_version_contract(self):
         release = json.loads((ROOT / "release.json").read_text())
-        self.assertEqual(release["version"], "1.2.2")
+        self.assertEqual(release["version"], "1.2.3")
         self.assertNotIn("schema_version", release)  # single PH version since 1.1.8
-        self.assertEqual(len(release["required_skills"]), 8)
+        self.assertEqual(len(release["required_skills"]), 18)
         self.assertIn("ph-merge-update", release["required_skills"])
         self.assertIn("ph-worktree-exit", release["required_skills"])
-        speckit = json.loads((REPO_ROOT / "speckit.json").read_text(encoding="utf-8"))
-        self.assertEqual(speckit["tag"], "v1.0.8")
-        self.assertEqual(len(speckit["skills"]), 10)
+        # the bundled upstream Spec Kit contract is retired since 1.2.3
+        self.assertFalse((REPO_ROOT / "speckit.json").exists())
+        self.assertFalse((REPO_ROOT / "assets/speckit-bundle.json").exists())
+        self.assertNotIn("speckit", release)
         manifest = json.loads((SCAFFOLD / ".agents/ph.json").read_text())
         self.assertNotIn("schema_version", manifest)
         self.assertEqual(manifest["template_version"], release["version"])
-        self.assertEqual(
-            manifest["skills"]["required_names"],
-            release["required_skills"] + [f"ph-{core}" for core in speckit["skills"]],
-        )
-        self.assertEqual(
-            manifest["speckit"]["skills"],
-            {f"ph-{core}": f"speckit-{core}" for core in speckit["skills"]},
-        )
+        self.assertEqual(manifest["skills"]["required_names"], release["required_skills"])
+        self.assertNotIn("speckit", manifest)
         schema = json.loads((SCAFFOLD / ".agents/ph.schema.json").read_text())
         self.assertEqual(schema["$id"], "urn:ph:schema:project-harness")  # fixed, versionless
         self.assertNotIn("schema_version", schema.get("required", []))
@@ -116,6 +111,34 @@ class DocsTemplateTests(unittest.TestCase):
                          ["worktree-wip-confirm", "retire-legacy-skills",
                           "speckit-core-integration", "constitution-governance-zone",
                           "intent-to-spec"])
+        hop_123 = next(h for h in hops if h["from_version"] == "1.2.2")
+        self.assertEqual(hop_123["to_version"], "1.2.3")
+        self.assertEqual(hop_123["items"],
+                         ["sdd-skill-replacement", "sdd-runtime-takeover",
+                          "bilingual-skills", "docs-tests-consolidation",
+                          "worktree-session-continuity", "artifact-compat"])
+
+    def test_sdd_takeover_migration_documented(self):
+        doc = (ROOT / "migrations/1.2.2-to-1.2.3.md").read_text(encoding="utf-8")
+        for heading in ("## why", "## from", "## to", "## affected",
+                        "## preserve", "## conflict", "## verify"):
+            self.assertIn(heading, doc)
+        for term in ("sdd-skill-replacement", "sdd-runtime-takeover", "bilingual-skills",
+                     "docs-tests-consolidation", "worktree-session-continuity",
+                     "artifact-compat",
+                     # the retired bundled Spec Kit contract
+                     "ph_speckit.py", "speckit.json", "18 个自研技能",
+                     # the one-time old-entry transition
+                     "硬校验失败", "仓外安全目录", "v1.2.3",
+                     # the deterministic skill migration and governance split
+                     "migrate-skills", "ph_governance.py",
+                     # the minimal self-built runtime and bilingual skills
+                     "templates/sdd/", "SKILL.zh.md",
+                     # artifact compatibility: new names, legacy bytes untouched
+                     "requirement.md", "change.md", "spec.md", "plan.md",
+                     "feature.json", ".ph-intent-ledger.json",
+                     "template_version", "1.2.3"):
+            self.assertIn(term, doc)
 
     def test_single_ph_version_migration_documented(self):
         doc = (ROOT / "migrations/1.1.7-to-1.1.8.md").read_text(encoding="utf-8")

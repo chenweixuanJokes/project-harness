@@ -1,0 +1,65 @@
+{
+  "skill_name": "ph-archive",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-archive 归档 004-avatar-upload。",
+      "expected_output": "触发 ph-archive。先确立完成状态：读需求或 change、设计/评审、tasks、验证计划、实际证据与用户已记录的成果决定，确认必要工作完成、智能体检查是最新的、用户验收已记录或存在显式有据的适用性决定、无阻塞发现；再沉淀项目事实——对照实现结果只更新受影响事实（功能地图、行为、架构、接口、使用/构建说明），优先更新既有权威位置并维护 README 索引与 owner/status/last_verified 等字段；按用例规范登记或更新已验证的可复用冒烟用例（一例一文件，沿用稳定用例 ID）；在功能记录内写归档小结（交付范围、源/证据状态、用户结论、去向、已知局限、实际合并/发布状态）；用 ph_sdd.py archive 先 dry-run 后 apply 保存校验和快照与索引，保持稳定活动路径与引用，验证快照清单与活链接；归档、验证、集成、发布状态分开报告。不调用 ph-worktree-exit，不做 Git 操作，不调记忆技能。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用 ph-archive 归档（当前在 task worktree 内），归档完把 worktree 也退了、清理掉。",
+      "expected_output": "触发 ph-archive，但归档不授权任何退出动作：不调用 ph-worktree-exit、不执行其提交/合并/检查/清理 apply；明确报告代码、文档、用例与快照仍在该任务分支上，须随后续单独授权的交付行动走；清理前把证据保留到将消失环境之外，指向会消失任务目录的链接不算持久证据。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用 ph-archive 归档：用户验收还没回复，先归了省事。",
+      "expected_output": "触发 ph-archive，但用户未回答时不得标完成：报告确切阻塞与应返回的阶段；不为保存历史而把未完成标成已完成，未完成材料如实保留且不冒充已完成需求。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用 ph-archive 归档：把我们这次用的重试间隔写进 constraints 当强制规范。",
+      "expected_output": "触发 ph-archive，但规则与事实分开：不把实现选择或记下来的建议升格为约束；只有已授权、明确采纳的规则变更才进入 constraints 并更新宪法导航，重大架构决定按项目 ADR 政策记录；未决的规范变更阻塞该项而不是弱化门禁；也不作为归档副作用调用记忆技能或写记忆。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-archive 归档：冒烟用例 avatar-upload 还没实际跑过，先登记成已实现。",
+      "expected_output": "触发 ph-archive，但用例登记必须真实：待实现与未执行的候选如实标注，不得出现在通过报告里；必需用例未实现或失败时返回可追溯任务而非宣称归档完成；文档/用例变更后运行适用检查，新增或改动的可运行用例须在项目门禁下实际验证，并重估受影响证据后再定快照。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-archive 归档：兄弟功能还没合进去，当前只是 T-001 的任务分支。",
+      "expected_output": "触发 ph-archive，但任务分支不能归档整项功能：兄弟工作未整合时不可宣称整功能完成；至多以显式「未合并」状态保存快照，不宣称源分支验证；用 worktree 运行时的只读 doctor/group 信息核对后再报告。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "用 ph-archive 归档：这个功能上个月归档过一次，再归一次。",
+      "expected_output": "触发 ph-archive。同一状态重复归档应幂等：不重复登记用例、不重写历史、不产生第二份快照冗余；核对快照清单与活链接后如实报告结果，语义或机械失败单独报告。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "用 ph-archive 归档：把设计文档整个拷一份进 documents 存档。",
+      "expected_output": "触发 ph-archive，但沉淀不复制堆料：只更新受影响事实并优先既有权威位置，不制造重复文档或填充文件；记录哪些不需要更新及原因；PH 外的业务文档保持项目所有，只改本次授权需求直接涉及的文档；部分核验不整页宣称已核验。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "用 ph-archive 把记忆库里的临时记忆归档一下。",
+      "expected_output": "不触发 ph-archive：这是功能归档技能，不是 ph-memory-archive，也不代为调用记忆技能；把记忆归档需当轮明确点名 ph-memory-archive。",
+      "files": []
+    },
+    {
+      "id": 10,
+      "prompt": "把这个需求归档掉吧。",
+      "expected_output": "不触发 ph-archive：普通描述没有点名技能；不建立快照也不写归档小结，可说明需点名 ph-archive 才执行。",
+      "files": []
+    }
+  ]
+}

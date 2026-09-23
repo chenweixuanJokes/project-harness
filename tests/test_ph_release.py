@@ -229,6 +229,11 @@ class PhReleaseTests(unittest.TestCase):
         return DictTransport(tags=tags, trees={commit: tree}, blobs=blobs), commit
 
     def prepare(self, transport, version="latest", repo=None, support=None, offer_support=False):
+        """Run prepare_release inside a temp workspace.
+
+        默认 offer_support=False 与 prepare 的新默认一致，不做任何账号动作；
+        显式传 True 仅用于以假会话复现已获用户独立授权的支持行为。
+        """
         parent = self.temp_dir("ph-release-work-")
         return ph_release.prepare_release(
             version,
@@ -623,6 +628,7 @@ class PhReleaseTests(unittest.TestCase):
         original_ctor = ph_release.GitTransport
         original_alloc = ph_release.allocate_temp_root
         original_support = ph_release.offer_official_support
+        support_calls = []
 
         class Patched(DictTransport):
             def __init__(self):
@@ -634,7 +640,8 @@ class PhReleaseTests(unittest.TestCase):
 
         ph_release.GitTransport = Patched
         ph_release.allocate_temp_root = lambda target: parent
-        ph_release.offer_official_support = lambda *a, **k: None
+        # CLI prepare 只下载和校验发行：即使默认被改回自动支持，这里也必须失败。
+        ph_release.offer_official_support = lambda *a, **k: support_calls.append((a, k))
         buf = io.StringIO()
         try:
             with redirect_stdout(buf):
@@ -644,6 +651,7 @@ class PhReleaseTests(unittest.TestCase):
             ph_release.allocate_temp_root = original_alloc
             ph_release.offer_official_support = original_support
         self.assertEqual(code, 0)
+        self.assertEqual(support_calls, [])
         data = json.loads(buf.getvalue())
         self.assertEqual(data["version"], CURRENT_VERSION)
         self.assertEqual(data["tag"], f"v{CURRENT_VERSION}")
@@ -889,7 +897,29 @@ class PhReleaseTests(unittest.TestCase):
             self.assertNotIn("github_token", lowered)
             self.assertNotIn("courtesy", lowered)
 
+    def test_prepare_default_makes_no_account_actions(self):
+        # 未传 offer_support（新默认 False）时，prepare 绝不调用支持会话，
+        # 也不输出任何支持消息；加星/建副本需要独立授权。
+        files = self.release_files()
+        transport, commit = self.transport_for(files)
+        session = RecordingSupport(login="eve")
+        stderr = io.StringIO()
+        with redirect_stderr(stderr):
+            prepared = ph_release.prepare_release(
+                "latest",
+                transport=transport,
+                parent=self.temp_dir("ph-release-work-"),
+                support=session,
+            )
+        self.assertEqual(prepared.commit, commit)
+        self.assertEqual(session.calls, [])
+        self.assertEqual(stderr.getvalue(), "")
+        receipt = json.loads((prepared.root / ".ph-source.json").read_text(encoding="utf-8"))
+        self.assertEqual(receipt["source"], FIXED_SOURCE)
+
     def test_prepare_skips_support_when_not_signed_in(self):
+        # 以下 offer_support=True 的用例只走显式授权缝：会话是假实现，
+        # 不产生任何真实外部动作。
         files = self.release_files()
         transport, commit = self.transport_for(files)
         session = RecordingSupport()

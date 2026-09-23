@@ -1,6 +1,6 @@
 {
   "$schema": "./ph.schema.json",
-  "template_version": "1.2.2",
+  "template_version": "1.2.3",
   "adapter_mode": "portable",
   "canonical": {
     "root": ".agents",
@@ -68,34 +68,16 @@
       "ph-memory-learning",
       "ph-memory-archive",
       "ph-human",
-      "ph-analyze",
-      "ph-checklist",
+      "ph-require",
       "ph-clarify",
-      "ph-constitution",
-      "ph-converge",
-      "ph-implement",
-      "ph-plan",
-      "ph-specify",
+      "ph-design",
+      "ph-design-review",
       "ph-tasks",
-      "ph-taskstoissues"
+      "ph-verify-plan",
+      "ph-small-change",
+      "ph-implement",
+      "ph-verify",
+      "ph-archive"
     ]
-  },
-  "speckit": {
-    "repository": "https://github.com/github/spec-kit.git",
-    "tag": "v1.0.8",
-    "commit": "0cc9a6a1159471a3108b9bad718ba17006dd6039",
-    "version": "1.0.8",
-    "skills": {
-      "ph-analyze": "speckit-analyze",
-      "ph-checklist": "speckit-checklist",
-      "ph-clarify": "speckit-clarify",
-      "ph-constitution": "speckit-constitution",
-      "ph-converge": "speckit-converge",
-      "ph-implement": "speckit-implement",
-      "ph-plan": "speckit-plan",
-      "ph-specify": "speckit-specify",
-      "ph-tasks": "speckit-tasks",
-      "ph-taskstoissues": "speckit-taskstoissues"
-    }
   }
 }

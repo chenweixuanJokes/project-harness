@@ -1,0 +1,59 @@
+{
+  "skill_name": "ph-design-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-design-review 评审 002-csv-export 的设计。",
+      "expected_output": "触发 ph-design-review。通读完整需求与设计及其当前源码状态，读取适用约束与足够实现证据核实关键主张；建立每条需求与用户成果到设计落点的覆盖映射，检查遗漏、矛盾、无依据增补、模糊交互、失败状态、数据/权限边界、兼容与可测试性；写 review.md 记录受检源身份、覆盖、稳定发现编号、严重度、证据与受影响引用；只写评审与评审状态，不改需求、设计或应用代码。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用 ph-design-review 评审，发现设计漏了换行转义的话你顺手把设计改了吧。",
+      "expected_output": "触发 ph-design-review 但不代修：存在阻塞发现时保持设计未通过并建议 ph-design 或 ph-clarify；评审期间不修改设计、不为通过而弱化需求；发现如实记录后交回对应阶段。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用 ph-design-review 复核：review.md 已经有了，但设计上个月改过。",
+      "expected_output": "触发 ph-design-review。早先的评审不因文件存在而有效：对照当前源重新评估，记录本次受检的源身份；源变化使旧评审失效的部分如实重查，不在未复核处维持旧结论。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用 ph-design-review 评审，我觉得命名风格不好看，也写进去当阻塞项吧。",
+      "expected_output": "触发 ph-design-review，但发现必须描述实际后果：个人风格偏好不得记为阻塞发现；可单独列为可选改进并明确区分阻塞与非阻塞。空模板式的发现清单不算真评审。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-design-review 评审。本次运行环境没有子代理可用。",
+      "expected_output": "触发 ph-design-review。无子代理时在本地执行同样的核查并如实声明独立评审未发生，不假装发生过；宿主支持时才以限定文件与明确问题请求独立只读评审并整合证据，不数评审人头。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-design-review 评审通过了，用户那边就算批准了吧。",
+      "expected_output": "触发 ph-design-review，但代理评审不是用户批准：无阻塞时记录设计已评审并以报告为证据；需要宿主/用户批准的门禁另行单独保留，两种状态不得混淆或互相替代。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "用 ph-design-review 评审：验收成果 A-1 在设计里找不到落点。",
+      "expected_output": "触发 ph-design-review。覆盖缺口如实记为发现（缺漏类），并给出后果与建议补救；原始已确认意图是验收权威，设计不能静默收窄；不因整体尚可而放过单项缺口。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "用 ph-design-review 评审通过且无阻塞，接下来该干嘛？",
+      "expected_output": "触发 ph-design-review。无阻塞时记录设计 reviewed、报告结论与证据；仅当设计评审与适用批准门禁都满足时才建议 ph-tasks，不调用；任务规划需用户点名。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "你帮我看看这个设计有没有问题。",
+      "expected_output": "不触发 ph-design-review：普通描述没有点名技能；不写 review.md，不给出替代评审结论，可说明需点名该技能才执行。",
+      "files": []
+    }
+  ]
+}

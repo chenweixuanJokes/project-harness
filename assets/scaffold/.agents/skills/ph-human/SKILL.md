@@ -1,59 +1,32 @@
 ---
-name: "ph-human"
-description: "盘点并按需刷新规格产物的人读伴读：检查各功能目录伴读的新鲜、陈旧、孤儿、用户改动与缺失状态，对机器产物重新生成快照式解释伴读。仅在用户当轮明确点名调用本技能时执行；普通任务描述、名称提及或上下文关联不触发，执行结束后不自动串联其他技能。已显式启动后不要求每轮重复点名，不触发其他技能。伴读是解释快照，不是权威规则或验收源；缺机器源不编伴读。"
+name: ph-human
+description: "Inspect and refresh explanatory companions for existing PH feature artifacts. Invoke only when the user explicitly names ph-human and requests it; ordinary descriptions, mentions and suggested next steps do not trigger it. Continue an explicitly started stage without repeated naming. Do not automatically invoke other skills. Companions are snapshots, not authoritative requirements or acceptance evidence."
 ---
 
-## ph-human
+# Maintain human-readable companions
 
-把规格流程的机器产物翻译成给人读的伴读文档，并维护这些伴读的新鲜度。写作规范、文件映射与发布规则的唯一完整来源是本技能目录下的 [人读伴读写作规范](references/human-writing.md)；十个规格技能（ph-specify 等）生成伴读时直接读取该文件，不调用本技能，本技能也不自动调用任何其他技能。
+Use [the human-writing rules](references/human-writing.md) as the writing authority. Development skills may read those rules directly when publishing their own changed artifacts; that does not invoke this skill.
 
-## 何时用 / 何时不用
+## Procedure
 
-**调用门禁**：仅当用户当轮明确点名本技能（如「用 ph-human 刷新这个功能的伴读」）并要求使用时才执行。用户只说「写个给人看的版本」「检查文档新鲜度」、上下文提及、或讨论技能名称本身，都不触发。
-
-使用：
-
-- 盘点一个或全部功能目录的伴读状态（fresh / stale / orphan / user_modified / snapshot / missing）
-- 对已存在的机器产物补齐或刷新伴读
-- 需要时重新生成本会话外的陈旧伴读
-
-不用：
-
-- 代替产出伴读的规格技能：ph-analyze 的 analysis-human、ph-taskstoissues 的 issues-human 是**本次调用的快照**，只有再次运行对应技能才会真实产生新内容；本技能缺真实来源时不编造（缺源不编产物）。
-- 修改任何机器产物（spec/plan/tasks/verification/constitution/清单/契约）或把伴读内容当作机器输入。
-- 自动串联：伴读生成失败不触发其他技能来补救。
-
-## 工作流
-
-1. **确定范围**。用户指定了功能目录就只处理它；说「全部」或未指定时用 `--all` 扫描 `.agents/project-harness/specs/` 下全部功能目录与项目宪法伴读。当前活动功能可从 `.agents/project-harness/runtime/feature.json` 的 `feature_directory` 读取。
-2. **只读盘点**。运行：
+1. Determine the requested feature or all-feature scope. Prefer an explicit path. When the user requests all or gives no narrower scope, use `--all`; do not silently choose a global active-feature pointer in a parallel workspace.
+2. Run the read-only inventory:
 
    ```text
-   python3 .agents/scripts/ph_human.py status --repo <仓库根> (--feature <功能目录> | --all)
+   python3 .agents/scripts/ph_human.py status --repo <root> (--feature <feature-directory> | --all)
    ```
 
-   输出 JSON：每个功能目录下列出各伴读的 `state`（`fresh` 与机器产物哈希一致 / `stale` 机器产物已变化 / `orphan` 机器源缺失 / `user_modified` 正文被用户改动 / `snapshot` 调用快照无磁盘机器源 / `unreadable` 无有效页脚按用户内容处理）与 `missing`（存在机器产物但还没有伴读的根级文件）。扫描只读功能目录根部，不进入 `checklists/`、`contracts/` 子目录。
-3. **向用户报告并确认刷新范围**。陈旧、缺失、孤儿项逐条列出；`user_modified` 与 `unreadable` 项只报告，不覆盖（脚本也会拒绝），由用户决定。快照型伴读（analysis/issues）不在本技能刷新范围内，如实说明只能由对应技能重新运行产生。
-4. **逐篇重新生成**。对每个待刷新项：读机器产物全文，按 [人读伴读写作规范](references/human-writing.md) 写成正文（写到仓外临时文件），然后发布：
+   Interpret fresh, stale, orphan, user_modified, snapshot, unreadable and missing according to the returned source hashes and metadata. A fresh hash proves source alignment, not the accuracy of the prose.
+3. Refresh items within the user's requested scope. An inspection-only request remains read-only. Report user_modified/unreadable targets without overwriting; ask only when a genuine unresolved choice changes the write scope. Legacy analysis/issues snapshots without a current source are historical: do not invent a new report or resurrect a retired skill.
+4. Read each source in full, compose the companion in a temporary file outside the repository, then publish:
 
    ```text
-   python3 .agents/scripts/ph_human.py publish --repo <仓库根> --source <机器产物相对路径> --candidate <临时正文文件> --skill ph-human
+   python3 .agents/scripts/ph_human.py publish --repo <root> --source <source-relative-path> --candidate <temporary-body> --skill ph-human
    ```
 
-   映射、来源哈希、文末机器元数据与安全写入全部由脚本完成；正文由本会话撰写，脚本不生成文字。同一伴读重复生成以最后一次为准；发布失败按原因处理，不重试写入被阻断的路径。
-5. **复查与报告**。刷新后再跑一次 `status`，报告最终状态。失败项（含用户改动阻断）单独列出，不宣称全部完成。
+   The script owns mapping, source/body hashes, footer and safe writes. Do not put machine metadata in the candidate, bypass a conflict, or use a companion as another companion's source.
+5. Run status again and report refreshed items, still-stale sources, protected user edits and missing-source items separately.
 
-## 边界
+## Boundaries
 
-- 伴读是**快照解释**：帮助人快速理解机器产物当前说了什么，不是权威规则、验收依据或操作指南；任何争议以机器产物原文为准。伴读正文开头必须写来源与日期，并声明这一点。
-- 缺源不编产物：机器产物不存在就不生成伴读；孤儿伴读只报告。
-- 不覆盖用户改动：`user_modified`、`unreadable`、无有效页脚的目标一律阻断，交用户决定。
-- 不递归：任何 `-human.md` 都不是机器源，不生成伴读的伴读。
-- 本技能只写伴读文件本身，不改机器产物、不动 git、不调用其他技能、不访问外部服务。
-
-## 完成标准
-
-- [ ] 范围内每个功能目录的伴读状态已用 `status` 核对并向用户报告
-- [ ] 需刷新项按写作规范成文并经 `publish` 发布，发布结果与机器哈希一致（state 为 fresh）
-- [ ] 用户改动、无页脚、快照型、缺源项如实报告且未被覆盖
-- [ ] 未修改任何机器产物；未调用其他技能；失败未掩饰为完成
+Write only companion artifacts. Do not edit requirements, design, tasks, verification, constitution or acceptance state; do not invoke other skills or perform Git/external operations. A companion explains what a source says and cannot replace user acceptance, test evidence or a current project rule. Missing or stale companions do not invalidate the authoritative source itself.

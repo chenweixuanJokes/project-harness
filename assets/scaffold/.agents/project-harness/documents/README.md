@@ -1,6 +1,6 @@
 # 项目资料
 
-现行叙述，不是强制规范。引用前检查各页 `refresh_trigger` 与 `last_verified`。规则见 [文档治理](../constraints/harness规范/文档治理规范.md)。五元数据保留 draft 与空核验值，不猜 owner。
+现行叙述，不是强制规范。引用前检查各页 `refresh_trigger` 与 `last_verified`。规则见 [文档治理](../constraints/harness规范/文档治理规范.md)。五元数据保留 draft 与空核验值，不猜 owner。需求归档（ph-archive）时只更新与已实现成果直接相关的本目录页面，并同步所在目录与各级 README 索引及五字段。
 
 | 文档 | 定位 |
 | --- | --- |

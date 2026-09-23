@@ -120,10 +120,13 @@ class WorktreeEnterTests(unittest.TestCase):
 
     def test_shipped_skill_binds_apply_to_reviewed_snapshot(self):
         skill = (REPO_ROOT / "assets/scaffold/.agents/skills/ph-worktree-enter/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("--expect-source-branch <计划的 sourceBranch>", skill)
-        self.assertIn("--expect-source-head <计划的 sourceHead>", skill)
-        self.assertIn("两者缺一脚本直接拒绝", skill)
-        self.assertIn("--expect-staged <计划的 sourceDirty.staged>", skill)
+        self.assertIn("--expect-source-branch <sourceBranch>", skill)
+        self.assertIn("--expect-source-head <sourceHead>", skill)
+        # both bindings are mandatory for the apply; a drift stops the run
+        # instead of silently accepting it
+        self.assertIn("Apply with both source snapshot bindings", skill)
+        self.assertIn("--expect-staged", skill)
+        self.assertIn("Changed branch, HEAD or path/status sets invalidate the snapshot", skill)
 
     def test_shipped_skill_reports_merge_state_without_redirect_or_questions(self):
         """A merge state is notified and awaited, never auto-routed.
@@ -134,10 +137,11 @@ class WorktreeEnterTests(unittest.TestCase):
         delivery/recovery), and must not ask the WIP question either.
         """
         skill = (REPO_ROOT / "assets/scaffold/.agents/skills/ph-worktree-enter/SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("直接告诉用户当前处于合并状态", skill)
-        self.assertIn("由用户自行完成合并后重新调用本技能", skill)
-        self.assertIn("不代为转交其他技能、不自动弹冲突处理问句", skill)
-        self.assertIn("不问 WIP、不创建隔离工作区", skill)
+        self.assertIn("A merge in progress or unmerged entries stops creation before any WIP question", skill)
+        self.assertIn(
+            "Do not treat this as an invitation to resolve conflicts, invoke exit or retry creation",
+            skill,
+        )
         self.assertNotIn("先按 `ph-worktree-exit`", skill)
         doc = (REPO_ROOT / "assets/scaffold/.agents/project-harness/constraints/工程规范/Git规范.md").read_text(encoding="utf-8")
         self.assertIn("另起的 `ph-worktree-enter` 调用遇冲突态只提示用户处于合并状态", doc)
@@ -225,13 +229,13 @@ class WorktreeEnterTests(unittest.TestCase):
         skill = (REPO_ROOT / "assets/scaffold/.agents/skills/ph-worktree-enter/SKILL.md").read_text(encoding="utf-8")
         questions = (REPO_ROOT / "assets/scaffold/.agents/project-harness/constraints/harness规范/对用户提问规范.md").read_text(encoding="utf-8")
         # authorization premise and source-branch semantics in the skill
-        self.assertIn("用户明确要求", skill)
-        self.assertIn("当前所在分支", skill)
+        self.assertIn("the user's explicit creation request authorizes the reviewed normal plan", skill)
+        self.assertIn("the primary worktree's current attached branch", skill)
         # no re-asking of source branch, task branch, or actual creation
-        self.assertIn("不为这两个分支或实际创建再次询问", skill)
+        self.assertIn("Do not ask again for a normal generated name or creation already requested", skill)
         self.assertNotIn("确认后我才会真正创建", skill)
         # safety gates still stop abnormal runs instead of re-asking everything
-        self.assertIn("仍须停止", skill)
+        self.assertIn("stop instead of substituting another existing branch", skill)
         # the question contract's boundary example states the same behavior
         self.assertIn("用户明确要求创建隔离工作区", questions)
         self.assertIn("主工作区当前分支", questions)

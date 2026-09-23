@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -9,6 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import ph_layout
+
+SCAFFOLD = Path(__file__).resolve().parents[1] / "assets/scaffold"
 
 
 class RuntimePathTests(unittest.TestCase):
@@ -21,26 +22,48 @@ class RuntimePathTests(unittest.TestCase):
         self.assertIn(ph_layout.SPECS + "/001-example/spec.md", result)
         self.assertIn('$script_dir/../../../../..', result)
 
-    def test_real_pinned_scripts_work_without_old_directories(self):
-        sys.path.insert(0, str(Path(__file__).resolve().parent))
-        import _speckit_seed
-        import ph_speckit
-        _speckit_seed.ensure_seed()
-        staging = ph_speckit.resolve_staging(None, ph_speckit.speckit_contract())
-        repo = Path(tempfile.mkdtemp(prefix="ph-layout-runtime-"))
-        result = ph_speckit.cmd_install(repo, True, None)
-        self.assertFalse(result["blocked"], result)
-        scripts = repo / ph_layout.RUNTIME / "scripts/bash"
-        for script in scripts.glob("*.sh"):
-            subprocess.run(["bash", "-n", str(script)], check=True, capture_output=True)
-        proc = subprocess.run(["bash", str(scripts / "create-new-feature.sh"), "--json", "--short-name", "sample", "Example feature"], cwd=repo, text=True, capture_output=True)
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertFalse((repo / ".specify").exists())
-        self.assertFalse((repo / "specs").exists())
-        self.assertTrue(list((repo / ph_layout.SPECS).glob("*/spec.md")))
-        for script in ("setup-plan.sh", "setup-tasks.sh"):
-            proc = subprocess.run(["bash", str(scripts / script), "--json"], cwd=repo, text=True, capture_output=True)
-            self.assertEqual(proc.returncode, 0, proc.stderr)
+    def test_shipped_runtime_is_minimal_and_without_old_speckit_files(self):
+        # 1.2.3 retires the bundled upstream Spec Kit runtime: the shipped
+        # runtime keeps only its README and the eight SDD templates, and no
+        # shipped runtime file references the old .specify tree.
+        runtime = SCAFFOLD / ".agents" / "project-harness" / "runtime"
+        shipped = sorted(
+            path.relative_to(runtime).as_posix()
+            for path in runtime.rglob("*")
+            if path.is_file()
+        )
+        self.assertEqual(shipped, [
+            "README.md",
+            "templates/sdd/acceptance-template.md",
+            "templates/sdd/change-template.md",
+            "templates/sdd/design-template.md",
+            "templates/sdd/requirement-template.md",
+            "templates/sdd/review-template.md",
+            "templates/sdd/tasks-template.md",
+            "templates/sdd/verification-template.md",
+            "templates/sdd/verify-plan-template.md",
+        ])
+        for path in runtime.rglob("*"):
+            if path.is_file():
+                self.assertNotIn(".specify", path.read_text(encoding="utf-8"),
+                                 f"{path.name} still references the retired runtime")
+
+    def test_historical_upstream_paths_still_map_into_the_runtime(self):
+        # The relocation helpers survive for historical upgrade chains that
+        # still carry an installed upstream tree; their target paths stay
+        # stable even though nothing ships there anymore.
+        self.assertEqual(
+            ph_layout.installed_path(".specify/memory/constitution.md"),
+            ph_layout.CONSTITUTION,
+        )
+        self.assertEqual(
+            ph_layout.installed_path(".specify/scripts/bash/common.sh"),
+            ph_layout.RUNTIME + "/scripts/bash/common.sh",
+        )
+        self.assertEqual(
+            ph_layout.source_path(ph_layout.RUNTIME + "/templates/plan-template.md"),
+            ".specify/templates/plan-template.md",
+        )
 
     def test_unexpected_upstream_root_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "review required"):

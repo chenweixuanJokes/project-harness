@@ -7,16 +7,17 @@
 ## 1. 原则与纪律
 
 - **只在临时副本操作**：真实业务仓复制到 `/tmp` 工作区并 `git init` + 基线提交后再动手；真实仓绝不修改。真实仓的未提交改动随副本基线提交一起保全。
-- **证据导向**：每步用产品自带命令验收（`inspect`、`verify-content`、`verify`、`finalize`、已装内核 `check`）；驱动脚本自写的断言只作补充。脚本通过不代替语义复核。
+- **证据导向**：每步用产品自带 CLI 验收（`inspect`、`migrate-skills`、`verify-content`、`verify`、`finalize`、已装内核 `check`）；驱动脚本自写的断言只作补充。不得通过补运行时符号、替换校验函数或直接调用写入函数绕过 CLI 缺陷后报告通过。离线候选只允许替换下载 transport，不替换迁移和验收行为。
 - **诚实门禁**：内容未补全时必须先演示 `verify-content` 拦截（保存失败输出），补全后再复跑通过；不编造测试实现、不把未执行命令标成通过、无该端如实写「不适用」。
 - 禁用 `rm`：退役与清理一律 `mv` 到 `~/.Trash/` 或 `.agents/updates/<ver>/backup/`；禁用 `git stash`。提交遵循当次授权。
-- **随包安装**：spec-kit 十技能与运行时由 PH 发行包自带（`assets/scaffold` + `assets/speckit-bundle.json` 哈希清单），安装与升级不访问官方 GitHub、不读 `~/.cache/ph/speckit/`、不运行 pip 或官方生成器。维护者按需引入上游的流程见 `references/Spec-Kit维护.md`。
+- **随包安装**：自研十技能与运行时来自固定 PH 发行候选，安装和升级不依赖 Spec Kit、pip 或官方生成器。旧版本构造使用其自身工具及当时的真实契约，不用新模板改版本号模拟历史。技能名单以 release.json 为准，维护说明见 `references/SDD维护.md`。
 - 失败必须修复后复跑到绿才算收敛；如实记录驱动侧修复与产品侧观察，不混淆两者。
+- **账户隔离**：本地测试不授权点星、创建 fork、刷新真实用户级入口或任何发布操作。新版 prepare 不附带 support；旧版 prepare 测试使用关闭 support 的测试接口或隔离的登录环境，不能调用真实账户重现旧默认行为。
 
 ## 2. 环境准备
 
-1. **发行根**：测未发布的工作树时，在仓外目录 rsync 复制本仓（排除 `.git`、`.zcode`、`__pycache__`、`.DS_Store` 与根维护软链 `AGENTS.md`/`CLAUDE.md`），`git init` + commit + `tag v<版本>`，再对该副本运行 `python3 scripts/ph_release.py prepare --version latest --repo <目标仓>`；测已发布版本则直接对正式 tag prepare。记下返回的 `root/version/tag/commit`，全流程复用同一 root。
-2. **发行包完整性**：`python3 scripts/check_release.py` 通过即覆盖随包清单与哈希校验；无需再核对 speckit 缓存目录。
+1. **发行根**：测未发布的工作树时，在仓外目录 rsync 复制本仓（排除 `.git`、`.zcode`、`__pycache__`、`.DS_Store`，以及仅限根层的维护软链 `AGENTS.md`/`CLAUDE.md`，不得排除 scaffold 内同名正文），`git init` + commit + `tag v<版本>`。采用历史矩阵的本地 transport 注入测试接口调用 `prepare_release`，只替换发行获取来源为该固定候选，保留包校验和回执写入，不运行账户 support；不能期待正式 CLI 从本地 tag 取得未发布包。测已发布版本才通过正常 CLI prepare 固定正式 tag。记下返回的 `root/version/tag/commit`，所有案例复用同一 root；本地候选标签不是公网发布。
+2. **发行包完整性**：运行 `python3 scripts/check_release.py`，核对必需技能、英中对照、清单、模板、迁移和链接。当前候选不得依赖旧上游缓存；历史源构造的依赖另按历史版本记录。
 3. **工作区**：`/tmp/ph-e2e-<日期>/` 下放发行根、各案例项目副本、驱动脚本与内容模块；用完即弃，方法以本文为准，不依赖那些脚本存续。
 
 ## 3. 案例矩阵
@@ -35,7 +36,7 @@
 
 ### 案例 A：空白项目 init
 
-dry-run（断言零写入）→ `init --apply` → `ph_speckit.py install --apply` → `check` → `verify` → `verify-content`（断言**失败**：骨架态被拦，问题为占位符 + 无证据报告）→ 终态断言（24 篇基础树与发行模板逐字节一致、constraints 零 README、导航 24 条、骨架状态标记如实保留）。
+先执行 init dry-run 并证明零写入，再执行 `init --apply` 和已装内核 `check`；用 `ph_governance.py verify` 检查导航，再用 `verify-content` 演示骨架被占位符和缺内容证据拦截。核对基础树、英文技能和中文对照、零旧活动技能、constraints 零 README 及导航集合；骨架检查通过不等于项目内容已经补全。
 
 ### 案例 B/C：存量升级（两阶段驱动）
 
@@ -49,9 +50,9 @@ dry-run（断言零写入）→ `init --apply` → `ph_speckit.py install --appl
 
 **finish（安装与网关）**：
 
-6. `ph_speckit.py install --apply`（随包安装：十技能 + `runtime/` + 宪法 override + `ph.json` speckit 基准重建；不联网、不用官方缓存）。
+6. 按新迁移说明运行 `ph_merge_update.py migrate-skills`，先预检后 apply，保全退役旧 canonical 与适配入口，再安装自研技能。接管 runtime 及治理脚本；有效定制须有活动落点，未知同名内容保持阻断，不伪造基准。原上游基准仅作旧资产识别证据，不重建为当前运行依赖。
 7. `ph.json` re-key（canonical/memory 按 scaffold；保留 adapter_mode、适配层与 worktree 验证命令）。
-8. 宪法物化（真实项目名、零占位符、PH 管理区 + 空导航占位）→ `refresh-navigation` 先 dry 后 `--apply`，断言条目数 = 基础树 + 项目新增 + 记录目录。
+8. 用 `ph_governance.py materialize-constitution` 物化缺失宪法，已有原则不得覆盖；`refresh-navigation --expected-sha <已审哈希>` 先预检后 apply，核对条目集合等于基础树、项目新增和记录目录。
 9. 迁移决定与证据报告：`verify_transplants` 通过后写 `project-harness/init-report.json`（`ph.content/1`，`project_kind=upgrade`，逐文件 sha256 + migration 决定）与 `.agents/init-report.md`。
 10. `updates/<to>/{state.json,report.md}`：链上每项 applied/not_applicable + 证据；瞬态中间项（如已被后续版本退役的技能项）写明「由终态直接承接」。
 11. 网关顺序：`verify-content` → `ph_merge_update.py verify` → `finalize`（dry）→ `finalize --apply` → 副本内已装内核 `ph_init.py check`。

@@ -17,6 +17,7 @@ from unittest.mock import Mock
 ROOT = Path(__file__).resolve().parents[1]
 CURRENT = json.loads((ROOT / "release.json").read_text())["version"]
 sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
 import ph_release
 
 

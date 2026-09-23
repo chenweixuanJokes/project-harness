@@ -18,6 +18,9 @@ AGENTS = SCAFFOLD / ".agents/AGENTS.md"
 EVALS = ROOT / "evals/evals.json"
 
 RESULT_STATES = ("已核验", "复用", "不适用", "待核实", "冲突")
+# The root skill reports completion states in English prose; the scaffold
+# guide keeps the published Chinese report vocabulary.
+SKILL_RESULT_STATES = ("verified", "reused", "not-applicable", "pending", "conflicting")
 EVIDENCE_KINDS = ("模块", "代码", "配置", "真实依赖", "测试", "CI", "旧约束")
 ADOPT_SOURCES_ENTRIES = (".agents/AGENTS.md", "AGENTS.md", "CLAUDE.md")
 # Common strict subset every distributed skill must satisfy: strict kebab-case
@@ -31,9 +34,9 @@ FRONTMATTER_SCALAR = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)\s*:\s*(.*)$")
 def frontmatter_scalars(text: str) -> dict:
     """Precise, limited frontmatter parse: flat ``key: value`` scalars only.
 
-    Single-line scalars cover every distributed skill; nested blocks (the
-    speckit skills carry ``metadata:`` provenance maps and ``x-ph-upstream``)
-    are skipped rather than parsed, since only top-level scalar slots are
+    Single-line scalars cover every distributed skill; indented continuation
+    lines of a nested mapping/list block (should one ever reappear) are
+    skipped rather than parsed, since only top-level scalar slots are
     asserted. No third-party YAML dependency; malformed top-level lines fail
     loudly instead of guessing.
     """
@@ -62,69 +65,71 @@ class SkillContractTests(unittest.TestCase):
         cls.skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
 
     def test_batch_version_single_ph_version_contract(self):
-        self.assertIn("本批版本为 `1.2.2`", self.skill)
-        # separate schema version is gone; 1.1.10+ release numbers must not trip the check
+        release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
+        # the skill states the current package version and takes it from the
+        # single release source, not a second hand-maintained count
+        self.assertIn(release["version"], self.skill)
+        self.assertIn("release.json", self.skill)
+        self.assertIn("ph_governance.py", self.skill)
+        # separate schema version is gone; older release numbers must not
+        # reappear as the current batch
         self.assertNotRegex(self.skill, r"1\.1\.1(?![0-9])")
-        self.assertIn("urn:ph:schema:project-harness", self.skill)
-        self.assertIn("不再有独立的 Schema 版本", self.skill)
 
     def test_one_time_entry_switch_documented(self):
-        # old (<=1.1.7) prepare necessarily rejects the schema-less package
-        self.assertIn("必然拒绝 1.1.8 及以后发行包", self.skill)
-        self.assertIn("不假称自动恢复", self.skill)
-        self.assertIn("v1.1.8", self.skill)
-        self.assertIn("新的仓外安全目录", self.skill)
-        self.assertIn("不覆盖用户级入口与目标项目", self.skill)
-        self.assertIn("prepare --version 1.1.8", self.skill)
-        # 1.1.8-1.1.13 entries cannot prepare 1.1.14 directly: the documented
-        # bootstrap path clones the published v1.1.14 tag out-of-repo and lets
-        # its own validator write the receipt
-        self.assertIn("入口无法直接准备 1.1.14", self.skill)
-        self.assertIn("把 v1.1.14 标签本身 clone 到新的仓外安全目录", self.skill)
-        self.assertIn("prepare --version 1.1.14", self.skill)
-        self.assertIn("固定的 1.1.14 发行根", self.skill)
-        # old schema_version field is removed only after finalize passes
-        self.assertIn("仅在 finalize", self.skill)
+        release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
+        # old entry validators reject the new package contract; the documented
+        # bootstrap is the published release tag prepared out-of-repo by its
+        # own entry, never a patched validator, a retry or a local tree posing
+        # as a release
+        self.assertIn("reject new package contracts", self.skill)
+        self.assertIn(f"v{release['version']}", self.skill)
+        self.assertIn("outside the project", self.skill)
+        self.assertIn("Do not patch the old validator", self.skill)
+        self.assertIn("report publication as unavailable", self.skill)
+        self.assertIn("not public release installation", self.skill)
+        # historical transitions stay in their unchanged migration files
+        self.assertIn("Earlier historical transitions", self.skill)
+        # the shipped user-entry refresh runs once per maintenance operation
+        self.assertIn("user-entry", self.skill)
 
     def test_skill_keeps_upgrade_in_same_session(self):
-        self.assertIn("本会话按那份执行", self.skill)
-        self.assertIn("ph_merge_update.py", self.skill)
-        self.assertIn("不另开技能", self.skill)
-        self.assertNotIn("转交", self.skill)
-        self.assertNotIn("转 merge-update", self.skill)
+        self.assertIn("same operation", self.skill)
+        self.assertIn("ph-merge-update", self.skill)
+        self.assertIn("internal steps", self.skill)
+        self.assertIn("not a new automatically triggered skill", self.skill)
+        self.assertIn("Never run init --apply", self.skill)
 
     def test_retired_skills_routed_away_from_init(self):
-        # The 1.1.14 retirement removed the old helper skills; init no longer
-        # references them and pins the spec-kit install instead.
+        # 1.1.14 retired the old helper skills and 1.2.3 retired the bundled
+        # Spec Kit pieces entirely: init references neither, and the spec
+        # workflow is the PH-owned SDD suite.
         for retired in ("ph-docs-sync", "ph-sure", "ph-intent-verify",
-                        "ph-memory-capture", "ph-intent-impl"):
+                        "ph-memory-capture", "ph-intent-impl",
+                        "ph_speckit.py", "speckit.json", "speckit-bundle",
+                        "ph-specify", "ph-plan", "ph-taskstoissues",
+                        "ph-analyze", "ph-checklist", "ph-converge", "ph-constitution"):
             self.assertNotIn(retired, self.skill)
-        self.assertIn("ph_speckit.py", self.skill)
-        self.assertIn("ph-specify", self.skill)
-        self.assertIn("ph-taskstoissues", self.skill)
+        self.assertIn("not depend on upstream Spec Kit", self.skill)
+        self.assertIn("PH-owned", self.skill)
+        for current in ("ph-require", "ph-design", "ph-verify-plan",
+                        "ph-small-change", "ph-archive"):
+            self.assertIn(current, self.skill)
 
     def test_mode_default_auto_for_new_installs(self):
         mode_lines = [line for line in self.skill.splitlines() if "--mode" in line]
         self.assertTrue(mode_lines, "skill must document the --mode default")
-        default = next(line for line in mode_lines if "缺省" in line)
-        self.assertIn("auto", default)
-        self.assertIn("symlink", default)
-        self.assertIn("portable", default)
-        # new installs prefer relative symlinks at apply; probe failure -> portable
-        self.assertIn("优先使用相对 symlink", self.skill)
-        self.assertIn("探测失败自动改用 portable", self.skill)
-        self.assertIn("不当作错误", self.skill)
+        self.assertIn("auto|portable|symlink", mode_lines[0])
+        # new installs probe symlink capability at apply; probe failure -> portable
+        self.assertIn("probes symlink capability", self.skill)
+        self.assertIn("falls back to portable", self.skill)
         # dry-run neither probes nor writes; explicit symlink fails strictly
-        self.assertIn("dry-run 不探测、不写入", self.skill)
-        self.assertIn("严格失败", self.skill)
-        # portable is a managed copy/mirror, not a functional downgrade
-        self.assertIn("受管副本 / 镜像，不是功能降级", self.skill)
-        self.assertIn("Windows `core.symlinks=false`", self.skill)
-        self.assertIn("会展开链接", self.skill)
+        self.assertIn("Default commands are dry-run", self.skill)
+        self.assertIn("fails rather than silently changes mode", self.skill)
+        # portable is supported, not degraded
+        self.assertIn("Portable is supported, not degraded", self.skill)
+        self.assertIn("hardlinks", self.skill)
         # installed projects keep their mode; no automatic conversion
-        self.assertIn("已装项目保留模式", self.skill)
-        self.assertIn("不自动转换", self.skill)
-        self.assertNotIn("`init` 为 `portable`", self.skill)  # old wrong claim
+        self.assertIn("does not migrate that choice", self.skill)
 
     def test_skill_is_tool_neutral(self):
         # the shipped text carries no vendor-specific declarations
@@ -132,33 +137,36 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotIn(".zcode", self.skill)
         self.assertNotIn(".codex", self.skill)
         self.assertNotIn(".opencode", self.skill)
-        self.assertIn("编码客户端内置的初始化向导", self.skill)
+        self.assertIn("host /init command", self.skill)
 
     def test_multi_client_adapters_documented(self):
-        for client in ("Claude Code", "Codex", "OpenCode"):
-            self.assertIn(client, self.skill)
+        # Claude is the only declared adapter; every other client reads the
+        # canonical location directly and needs no vendor mirror.
+        self.assertIn("AGENTS.md", self.skill)
+        self.assertIn("CLAUDE.md", self.skill)
         self.assertIn(".claude/skills/", self.skill)
-        self.assertIn("原生读取 `.agents/skills`", self.skill)
+        self.assertIn("no duplicate copies", self.skill)
+        self.assertIn("vendor mirrors", self.skill)
+        for vendor in ("Claude Code", "Codex", "OpenCode"):
+            self.assertNotIn(vendor, self.skill)
 
     def test_distributed_skills_share_strict_frontmatter_subset(self):
         release = json.loads((ROOT / "release.json").read_text(encoding="utf-8"))
         required = release["required_skills"]
-        # 1.2.2 ships eight PH scaffold skills (the four core skills, the
-        # three memory skills, and ph-human) and the ten spec-driven skills as bundled,
-        # already-adapted scaffold content (upstream provenance stays pinned
-        # in speckit.json / speckit-bundle.json).
+        # 1.2.3 ships one self-contained set of 18 PH-owned skills; the
+        # bundled Spec Kit contract and its second skill list are retired.
+        self.assertEqual(len(required), 18)
         self.assertEqual(sorted(required), [
-            "ph-human", "ph-init", "ph-memory-archive", "ph-memory-ask",
-            "ph-memory-learning", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit",
+            "ph-archive", "ph-clarify", "ph-design", "ph-design-review",
+            "ph-human", "ph-implement", "ph-init", "ph-memory-archive",
+            "ph-memory-ask", "ph-memory-learning", "ph-merge-update",
+            "ph-require", "ph-small-change", "ph-tasks", "ph-verify",
+            "ph-verify-plan", "ph-worktree-enter", "ph-worktree-exit",
         ])
-        # the spec-kit list's single maintenance source is the top-level
-        # contract file: release.json must not carry a second copy of it
-        contract = json.loads((ROOT / "speckit.json").read_text(encoding="utf-8"))
-        self.assertEqual(contract["schema"], "ph.speckit-contract/1")
         self.assertNotIn("speckit", release)
-        speckit_names = [f"ph-{core}" for core in contract["skills"]]
-        self.assertEqual(len(speckit_names), 10)
-        # the root SKILL.md is the ph-init slot; the other seven live in scaffold
+        self.assertFalse((ROOT / "speckit.json").exists())
+        self.assertFalse((ROOT / "assets/speckit-bundle.json").exists())
+        # the root SKILL.md is the ph-init slot; the other seventeen live in scaffold
         slots = {
             "ph-init": ROOT / "SKILL.md",
             **{
@@ -172,8 +180,7 @@ class SkillContractTests(unittest.TestCase):
             for child in (SCAFFOLD / ".agents" / "skills").iterdir()
             if child.is_dir()
         )
-        self.assertEqual(scaffold_dirs, sorted([name for name in required if name != "ph-init"] + speckit_names))
-        slots.update({name: SCAFFOLD / ".agents/skills" / name / "SKILL.md" for name in speckit_names})
+        self.assertEqual(scaffold_dirs, sorted(name for name in required if name != "ph-init"))
         for name, path in sorted(slots.items()):
             with self.subTest(skill=name):
                 self.assertTrue(path.is_file(), f"missing skill file for {name}")
@@ -189,29 +196,28 @@ class SkillContractTests(unittest.TestCase):
 
     def test_adopt_plan_cli_contract_is_explicit(self):
         self.assertIn("--adopt-plan", self.skill)
-        for term in ("version", "repo", "release_version", "sources", "files"):
+        for term in ("version=1", "repo", "release_version", "sources", "files", "SHA256"):
             self.assertIn(term, self.skill)
-        self.assertIn("三个入口", self.skill)
         for entry in ADOPT_SOURCES_ENTRIES:
             self.assertIn(entry, self.skill)
-        self.assertIn("docs/**", self.skill)
-        self.assertIn("必需", self.skill)  # canonical file is required
-        self.assertIn("仓外", self.skill)
-        self.assertIn("ph.json", self.skill)  # only for not-yet-initialized targets
-        self.assertIn("不证明", self.skill)  # hash guard != semantic proof
+        self.assertIn("outside the repository", self.skill)  # candidate prepared out-of-repo
+        self.assertIn("No installed manifest", self.skill)  # adopt only for fresh targets
+        self.assertIn("Allowed destinations", self.skill)  # canonical/docs/constraints only
+        self.assertIn("overwrite old prose", self.skill)  # template never over legacy content
+        self.assertIn("not semantic completeness", self.skill)  # hash guard != semantic proof
 
     def test_skill_forbids_template_over_legacy_content(self):
-        self.assertIn("盖旧正文", self.skill)
+        self.assertIn("overwrite old prose", self.skill)
         self.assertIn(".agents/init-report.md", self.skill)
-        for state in RESULT_STATES:
+        for state in SKILL_RESULT_STATES:
             self.assertIn(state, self.skill)
 
     def test_skill_merges_legacy_dirs_instead_of_keeping_them(self):
-        self.assertNotIn("保留原位", self.skill)
-        self.assertNotIn("不搬旧文档", self.skill)
-        self.assertIn("归并", self.skill)
-        self.assertIn("不自动搬移或删除", self.skill)
-        self.assertIn("未完成", self.skill)
+        self.assertIn("migrate still-valid", self.skill)
+        self.assertIn("appropriate PH zones", self.skill)
+        self.assertIn("Archiving alone is not migrating useful content", self.skill)
+        self.assertIn("Preserve old originals", self.skill)
+        self.assertIn("explicitly labeled", self.skill)
 
 
 class GuideContractTests(unittest.TestCase):
@@ -358,22 +364,25 @@ class EntryPointsTests(unittest.TestCase):
         self.assertNotIn("十八名固定", self.agents)
 
     def test_invocation_gate_lives_in_each_skill_metadata(self):
-        # The gate moved from AGENTS.md into every skill's own metadata,
-        # keeping its two standing exceptions: the ph-init in-session
-        # merge-update steps and the ph-memory-ask recollection intent.
+        # The gate lives in every skill's own metadata, keeping its two
+        # standing exceptions: the ph-init in-session merge-update steps and
+        # the ph-memory-ask recollection intent. 1.2.3 rewrote the SDD suite
+        # in English while the three memory skills keep their published
+        # Chinese body.
         skills = sorted((SCAFFOLD / ".agents/skills").glob("ph-*/SKILL.md"))
-        # six scaffold skills plus the root ph-init entry make the seven
-        # required skills
-        self.assertGreaterEqual(len(skills), 6)
+        # the seventeen scaffold skills plus the root ph-init entry make the
+        # eighteen required skills
+        self.assertEqual(len(skills), 17)
         for skill in skills:
             text = skill.read_text(encoding="utf-8")
             desc = next(
                 (line for line in text.splitlines() if line.startswith("description:")), "", )
-            self.assertRegex(desc, r"点名|不触发|不按普通描述", f"{skill.name}: {desc}")
+            self.assertRegex(desc, r"explicitly names|do not trigger|点名",
+                             f"{skill.name}: {desc}")
         ask = (SCAFFOLD / ".agents/skills/ph-memory-ask/SKILL.md").read_text(encoding="utf-8")
         self.assertIn("回忆意图", ask)
         init_skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
-        self.assertIn("merge-update", init_skill)
+        self.assertIn("ph-merge-update", init_skill)
 
 
 class EvalsCoverageTests(unittest.TestCase):
@@ -385,32 +394,49 @@ class EvalsCoverageTests(unittest.TestCase):
     def test_ids_unique_and_scenarios_present(self):
         ids = [item["id"] for item in self.items]
         self.assertEqual(len(ids), len(set(ids)))
-        self.assertGreaterEqual(len(ids), 14)
+        self.assertGreaterEqual(len(ids), 18)
         blob = "\n".join(item["prompt"] + item["expected_output"] for item in self.items)
-        # legacy docs, merge, attachments, same-topic, unapproved plan, pure-code, stale-conflict
+        # legacy docs, merge-not-copy, attachments, same-topic, unapproved
+        # plan, pure-code, stale-conflict, SDD takeover, same-session upgrade
         self.assertIn("specs", blob)
-        self.assertIn("归并", blob)
         self.assertIn("附件", blob)
-        self.assertIn("同主题", blob)
-        self.assertIn("不推定评审", blob)
-        self.assertIn("一个 .md 都没有", blob)
+        self.assertIn("不复制第二套", blob)
+        self.assertIn("归档不等于", blob)
+        self.assertIn("两份大体相同", blob)
+        self.assertIn("不双全文追加", blob)
+        self.assertIn("不推定设计审查", blob)
+        self.assertIn("依据代码反推事实", blob)
         self.assertIn("Gradle", blob)
-        self.assertIn("复用", blob)
-        self.assertIn(".agents/archived", blob)
+        self.assertIn("不悄悄废止旧规则", blob)
+        self.assertIn("自研SDD版", blob)
+        self.assertIn("missing schema_version", blob)
+        self.assertIn("SpecKit时代入口", blob)
+        self.assertIn("1.2.3", blob)
+        self.assertIn("正式受管副本", blob)
+        self.assertIn("canonical", blob)
+        self.assertIn("不先装模板盖正文", blob)
+        self.assertIn("user-entry", blob)
+        # the upgrade runs merge-update as in-session internal steps
+        self.assertIn("内部步骤", blob)
+        self.assertNotIn("转交 ph-merge-update", blob)
+        # historical zones and claims that must not come back
+        self.assertNotIn(".agents/archived", blob)
         self.assertNotIn("仓外备份", blob)
         self.assertNotIn("保留原位", blob)
-        self.assertGreaterEqual(len(ids), 18)
-        self.assertIn("不另开技能", blob)
-        self.assertNotIn("转交 ph-merge-update", blob)
 
-    def test_every_eval_disclaims_actual_execution(self):
+    def test_trigger_negatives_stay_covered(self):
+        # Ordinary descriptions, adjacent task wordings and bare discussions
+        # must not start the installer or chain into other skills.
+        blob = "\n".join(item["prompt"] + item["expected_output"] for item in self.items)
+        self.assertIn("不触发ph-init", blob)
+        self.assertIn("普通描述不触发", blob)
+        self.assertIn("ph-require", blob)
+
+    def test_every_eval_is_a_complete_behavior_definition(self):
         for item in self.items:
-            if item["id"] < 8:
-                continue  # legacy trigger-negative items predate the convention
             with self.subTest(id=item["id"]):
                 self.assertTrue(item["prompt"].strip())
                 self.assertTrue(item["expected_output"].strip())
-                self.assertIn("本 eval 不表示已实测", item["expected_output"])
 
 
 if __name__ == "__main__":

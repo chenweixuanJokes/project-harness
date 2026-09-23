@@ -1,0 +1,59 @@
+{
+  "skill_name": "ph-design",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-design 给 002-csv-export 做设计。",
+      "expected_output": "触发 ph-design。要求需求已充分澄清；读取需求、适用约束、当前架构、受影响源码、接口与既有测试，用语义工具追调用方与副作用；写 design.md 并把需求与验收成果映射到具体设计节，识别测试缝与资源需求而非任务级测试脚本；设计保持 draft 直到 ph-design-review 实际评审当前源码；报告用户可见行为、关键决策、风险与未决项，建议 ph-design-review，不实现。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用 ph-design 设计：需求里「对账系统按什么规则解析」还没确认，你按常见做法定一下就行。",
+      "expected_output": "触发 ph-design，但不静默决定未决业务问题：代查可核实事实，查不到的把冲突或依赖暴露给用户/记为未决，不以假设降低验收标准；设计完成标准是每条需求有设计落点或显式未决缺口。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用 ph-design 设计导出重构，别写「如果有现成工具就复用」这种话。",
+      "expected_output": "触发 ph-design。代码事实当场解决：核实文件与符号后给出引用，明确复用什么、改动哪些模块、数据流与错误处理；「reuse X if it exists」这类条件式猜测留给实现者即为本阶段失职；外部权威资料仅在需要时查证，且不发送私有项目内容。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用 ph-design 设计，内部工具类放 utils 还是新目录这种小事别拿来问我。",
+      "expected_output": "触发 ph-design。只对重大选择比较备选并写明选定项、证据与取舍；局部显然选择直接决定，不拿琐事烦用户，也不把未知的外部行为说成已确认。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-design 设计一个后台定时对账任务，没有界面。",
+      "expected_output": "触发 ph-design。为服务/内部改动描述真实消费者契约：触发方式、输出、失败表现与运维影响，而不是虚构界面；产品体验描述按实际载体裁剪。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-design 设计：现有架构做不了需求里的实时性要求，验收能不能放宽点？",
+      "expected_output": "触发 ph-design。设计与原需求冲突时暴露冲突：给出备选、代价与需要用户决定的事项；不悄悄降低验收迁就方案，也不在冲突未决时假装设计可行。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "用 ph-design 设计完直接把代码写了，省得再来一轮。",
+      "expected_output": "触发 ph-design 但止于设计：不写应用代码、不开分支、不建 worktree、不改外部配置或验收阈值；设计保持 draft 等待 ph-design-review 实际评审；建议 ph-design-review，实施需另行点名。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "帮我设计一下这个功能怎么做。",
+      "expected_output": "不触发 ph-design：普通描述没有点名技能；不给口头设计当已执行，可说明需点名 ph-design 才进入。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "ph-design 的设计稿放哪、和评审怎么衔接？先别执行。",
+      "expected_output": "不触发 ph-design：这是讨论技能本身，不是要求设计；按普通问题说明即可。",
+      "files": []
+    }
+  ]
+}

@@ -50,6 +50,22 @@ SECRET_CONTENT = re.compile(
     r"(?i:(?:password|passwd|token|secret|api[_-]?key)\s*[:=]\s*['\"]?[A-Za-z0-9_./+=-]{12,})"
 )
 DEFAULT_MAX_CHANGED_FILE_BYTES = 10 * 1024 * 1024
+# PH specs feature workspaces and their per-feature metadata (the PH SDD
+# runtime keeps the same convention: <specs root>/<feature id>/ph-feature.json,
+# schema ph-feature/1, id equal to the directory name).
+SPECS_ROOT = ".agents/project-harness/specs"
+FEATURE_METADATA_NAME = "ph-feature.json"
+# The SDD runtime's archive layout: read-only snapshots live under
+# archive/features/<feature id>/<UTC stamp>/, and each snapshot carries an
+# _evidence/ directory whose manifest.json maps original evidence records to
+# their in-snapshot copies. Cleanup only reads this layout to decide whether
+# referenced evidence is already preserved; creating or changing archives
+# stays the archive tool's job and is never done here.
+ARCHIVE_ROOT = ".agents/project-harness/archive/features"
+ARCHIVE_EVIDENCE_DIR = "_evidence"
+ARCHIVE_EVIDENCE_MANIFEST_NAME = "manifest.json"
+ARCHIVE_EVIDENCE_MANIFEST_SCHEMA = "ph-evidence-manifest/1"
+EVIDENCE_SHA256 = re.compile(r"[0-9a-f]{64}")
 
 
 class PHError(Exception):
@@ -61,7 +77,8 @@ def run(
     *args: str,
     check: bool = True,
     env: dict[str, str] | None = None,
-) -> subprocess.CompletedProcess[str]:
+    text: bool = True,
+) -> subprocess.CompletedProcess[Any]:
     merged_env = os.environ.copy()
     # Read-only Git queries must not refresh the index during dry-run.
     merged_env["GIT_OPTIONAL_LOCKS"] = "0"
@@ -70,13 +87,15 @@ def run(
     proc = subprocess.run(
         list(args),
         cwd=cwd,
-        text=True,
+        text=text,
         capture_output=True,
         env=merged_env,
     )
     if check and proc.returncode != 0:
-        detail = proc.stderr.strip() or proc.stdout.strip()
-        raise PHError(f"command failed ({' '.join(args)}): {detail}")
+        detail = proc.stderr or proc.stdout
+        if isinstance(detail, bytes):
+            detail = detail.decode("utf-8", errors="replace")
+        raise PHError(f"command failed ({' '.join(args)}): {detail.strip()}")
     return proc
 
 
@@ -306,6 +325,9 @@ def load_session(linked: Path) -> tuple[Path, dict[str, Any]]:
     missing = sorted(SESSION_FIELDS - data.keys())
     if missing:
         raise PHError(f"session is missing fields: {', '.join(missing)}")
+    # Optional feature bindings are validated read-time too: a moved or
+    # hand-edited binding must block delivery instead of being trusted.
+    feature_binding(main, data)
     return path, data
 
 
@@ -385,6 +407,582 @@ def session_policy(data: dict[str, Any]) -> tuple[list[list[str]], int]:
     if not isinstance(limit, int) or limit < 1:
         raise PHError("session maxChangedFileBytes is invalid")
     return commands, limit
+
+
+def parse_task_ids(values: list[str] | None) -> list[str]:
+    """Validate the optional enter --task-id bindings (repeatable)."""
+
+    task_ids: list[str] = []
+    for raw in values or []:
+        value = raw.strip()
+        if not value:
+            raise PHError("--task-id must not be empty or whitespace-only")
+        if value in task_ids:
+            raise PHError(f"--task-id is repeated: {value}")
+        task_ids.append(value)
+    return task_ids
+
+
+def parse_resources(values: list[str] | None) -> dict[str, str]:
+    """Validate the optional enter --resource bindings (repeatable key=value)."""
+
+    resources: dict[str, str] = {}
+    for raw in values or []:
+        key, separator, value = raw.partition("=")
+        key, value = key.strip(), value.strip()
+        if not separator or not key or not value:
+            raise PHError(f"--resource must be <key>=<value> with non-empty parts, got: {raw!r}")
+        if key in resources:
+            raise PHError(f"--resource repeats the key: {key}")
+        resources[key] = value
+    return resources
+
+
+def canonical_feature_path(main: Path, raw: str) -> str:
+    """Normalize a feature workspace path to a safe main-relative POSIX path.
+
+    Anti-escape: absolute paths, ``..``/``.`` components, symlink or junction
+    traversal and destinations outside the main worktree are refused. The
+    destination itself must be a PH feature directory directly under the
+    specs root, so an arbitrary business directory can never be mistaken for
+    a feature.
+    """
+
+    if not isinstance(raw, str) or not raw.strip() or raw.strip() != raw:
+        raise PHError("feature path must be a non-empty relative path without surrounding whitespace")
+    candidate = Path(raw)
+    if candidate.is_absolute():
+        raise PHError(f"feature path must be relative to the main worktree: {raw}")
+    resolved = require_local_path(main, main / candidate)
+    relative = resolved.relative_to(main)
+    specs_parts = tuple(Path(SPECS_ROOT).parts)
+    if len(relative.parts) != len(specs_parts) + 1 or relative.parts[: len(specs_parts)] != specs_parts:
+        raise PHError(
+            f"feature path must be a PH feature directory directly under {SPECS_ROOT}: {raw}"
+        )
+    return relative.as_posix()
+
+
+def validate_feature_metadata(main: Path, feature_path: str, feature_id: str | None) -> None:
+    """When the feature workspace carries PH metadata, the binding must match it."""
+
+    metadata_path = main / feature_path / FEATURE_METADATA_NAME
+    if not metadata_path.is_file():
+        return
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PHError(f"cannot read feature metadata {feature_path}/{FEATURE_METADATA_NAME}: {exc}") from exc
+    if not isinstance(metadata, dict) or not isinstance(metadata.get("id"), str) or not metadata["id"].strip():
+        raise PHError(
+            f"feature metadata {feature_path}/{FEATURE_METADATA_NAME} must be an object "
+            "with a non-empty string id"
+        )
+    metadata_id = metadata["id"]
+    if metadata_id != Path(feature_path).name:
+        raise PHError(
+            f"feature metadata id {metadata_id!r} does not match the feature directory "
+            f"{Path(feature_path).name!r}; refusing to bind an inconsistent feature"
+        )
+    if feature_id is not None and feature_id != metadata_id:
+        raise PHError(
+            f"feature id {feature_id!r} does not match the feature metadata id {metadata_id!r}"
+        )
+
+
+def feature_binding(main: Path, data: dict[str, Any]) -> dict[str, Any] | None:
+    """Validate a session record's optional feature binding; None if unbound.
+
+    Old sessions (and plain ones) carry none of the fields and stay fully
+    compatible. A record whose featurePath no longer re-canonicalizes to the
+    recorded value has moved or been tampered with: delivery is refused
+    instead of guessing.
+    """
+
+    raw_path = data.get("featurePath")
+    feature_id = data.get("featureId")
+    task_ids = data.get("taskIds")
+    resources = data.get("resources")
+    if raw_path is None and feature_id is None and task_ids is None and resources is None:
+        return None
+    binding: dict[str, Any] = {}
+
+    def check_feature_id(value: Any) -> str:
+        if not isinstance(value, str) or not value.strip() or value.strip() != value:
+            raise PHError("featureId must be a non-empty string without surrounding whitespace")
+        return value
+
+    if raw_path is not None:
+        if not isinstance(raw_path, str):
+            raise PHError("session featurePath must be a string")
+        try:
+            recorded = canonical_feature_path(main, raw_path)
+        except PHError as exc:
+            raise PHError(
+                f"session featurePath is not a safe main-relative path ({exc}); "
+                "refusing to proceed under a tampered or redirected binding"
+            ) from exc
+        if recorded != raw_path:
+            raise PHError(
+                f"session featurePath no longer matches its recorded location: "
+                f"recorded {raw_path}, resolves to {recorded}"
+            )
+        binding["path"] = recorded
+        binding["id"] = check_feature_id(feature_id) if feature_id is not None else Path(recorded).name
+        # Metadata, when present, must agree with the directory and the id.
+        validate_feature_metadata(main, recorded, binding["id"])
+    elif feature_id is not None:
+        binding["id"] = check_feature_id(feature_id)
+    if task_ids is not None:
+        if not isinstance(task_ids, list) or any(not isinstance(item, str) or not item for item in task_ids):
+            raise PHError("session taskIds must be a list of non-empty strings")
+        binding["taskIds"] = list(task_ids)
+    if resources is not None:
+        if not isinstance(resources, dict) or any(
+            not isinstance(key, str) or not key or not isinstance(value, str)
+            for key, value in resources.items()
+        ):
+            raise PHError("session resources must be an object with non-empty string keys and string values")
+        binding["resources"] = dict(resources)
+    return binding
+
+
+def feature_conflicts(
+    main: Path,
+    sessions: Path,
+    feature_path: str | None,
+    task_ids: list[str],
+    resources: dict[str, str],
+) -> list[dict[str, Any]]:
+    """Live sessions claiming overlapping task IDs or identical resources.
+
+    Task IDs are unique inside one feature group (same canonical feature
+    path); resource ``(key, value)`` pairs are unique across ALL live
+    sessions regardless of feature, because port 8001 or database pg-9
+    cannot be shared by two running worktrees. The same key with a
+    different value is a different resource and does not conflict.
+    """
+
+    conflicts: list[dict[str, Any]] = []
+    if not sessions.is_dir():
+        return conflicts
+    for path in sessions.glob("*.json"):
+        try:
+            other = read_session_record(main, path)
+            binding = feature_binding(main, other)
+        except PHError:
+            continue  # doctor reports corrupt records separately
+        if not binding:
+            continue
+        same_group = bool(feature_path) and binding.get("path") == feature_path
+        overlapping_tasks = (
+            sorted(set(binding.get("taskIds", [])) & set(task_ids)) if same_group else []
+        )
+        holder_resources = binding.get("resources", {})
+        overlapping_resources = sorted(
+            f"{key}={holder_resources[key]}"
+            for key in set(holder_resources) & set(resources)
+            if holder_resources[key] == resources[key]
+        )
+        if overlapping_tasks or overlapping_resources:
+            conflicts.append(
+                {
+                    "session": path.name,
+                    "phase": other.get("phase"),
+                    "featurePath": binding.get("path"),
+                    "taskIds": overlapping_tasks,
+                    "resources": overlapping_resources,
+                }
+            )
+    return conflicts
+
+
+def feature_group_report(
+    main: Path, session_path: Path, binding: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    """Group status for an exit result: own binding plus live sibling sessions.
+
+    A merged subtask stays visibly one subtask: pendingSiblings lists the
+    other live sessions of the same feature so a single delivery can never be
+    presented as whole-feature acceptance.
+    """
+
+    if not binding or not binding.get("path"):
+        return None
+    sessions, _ = session_dirs(main)
+    siblings: list[dict[str, Any]] = []
+    if sessions.is_dir():
+        for path in sessions.glob("*.json"):
+            if path == session_path:
+                continue
+            try:
+                other = read_session_record(main, path)
+                other_binding = feature_binding(main, other)
+            except PHError:
+                continue
+            if other_binding and other_binding.get("path") == binding["path"]:
+                siblings.append(
+                    {
+                        "session": path.name,
+                        "phase": other.get("phase"),
+                        "taskIds": other_binding.get("taskIds", []),
+                    }
+                )
+    return {**binding, "pendingSiblings": siblings}
+
+
+def file_sha256(path: Path) -> str | None:
+    """Digest of a regular non-symlink file, or None when it cannot be read."""
+
+    try:
+        if path.is_symlink() or not path.is_file():
+            return None
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except OSError:
+        return None
+
+
+def committed_blob_sha256(main: Path, rel: str) -> str | None:
+    """sha256 of the content committed at rel in the source HEAD, or None.
+
+    Persistence verdicts consult the committed tree only, never the index or
+    the working tree: a staged or otherwise uncommitted copy is not
+    persistence. Non-blob entries (symlinks, trees, submodules) never count.
+    """
+
+    spec = f"HEAD:{rel}"
+    kind = git(main, "cat-file", "-t", spec, check=False).stdout.strip()
+    if kind != "blob":
+        return None
+    proc = run(main, "git", "cat-file", "blob", spec, check=False, text=False)
+    if proc.returncode != 0:
+        return None
+    return hashlib.sha256(proc.stdout).hexdigest()
+
+
+def evidence_issue(
+    kind: str, binding: str, artifact: str, path: str, detail: str
+) -> dict[str, str]:
+    return {"artifact": artifact, "binding": binding, "path": path, "kind": kind, "detail": detail}
+
+
+def format_evidence_issue(issue: dict[str, str]) -> str:
+    location = issue["binding"]
+    if issue.get("path"):
+        location = f"{location} -> {issue['path']}"
+    return f"[{issue['kind']}] {location} - {issue['detail']}"
+
+
+def declared_feature_evidence(
+    main: Path, binding: dict[str, Any]
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """Every evidence binding the bound feature's metadata declares, plus
+    fail-closed diagnosis for anything unreadable or malformed.
+
+    Declared bindings are collected from the current artifact records, their
+    history entries, and the metadata's own archive history: an old evidence
+    declaration is a preservation subject just like the current one and is
+    never silently ignored. A metadata that cannot be read or parsed, or that
+    carries a malformed structure, yields a ``metadata-invalid`` issue; a
+    malformed evidence binding yields an ``evidence-invalid`` issue. Either
+    way cleanup loses its basis instead of silently passing. A metadata file
+    that does not exist at all stays compatible: nothing is declared, so
+    nothing is checked. Read-only.
+    """
+
+    feature_path = binding.get("path")
+    if not feature_path:
+        return [], []
+    metadata_binding = f"{feature_path}/{FEATURE_METADATA_NAME}"
+    metadata_path = main / feature_path / FEATURE_METADATA_NAME
+    # A genuinely absent metadata stays compatible (nothing declared, nothing
+    # checked). Anything else that is not a plain regular file - a directory,
+    # a symlink (whose target is never followed), a broken link - is a
+    # damaged binding and fails closed instead of counting as absent.
+    if metadata_path.is_symlink():
+        return [], [
+            evidence_issue(
+                "metadata-invalid", metadata_binding, "", "",
+                "the feature metadata must be a regular file, not a symlink",
+            )
+        ]
+    if not metadata_path.exists():
+        return [], []
+    if not metadata_path.is_file():
+        return [], [
+            evidence_issue(
+                "metadata-invalid", metadata_binding, "", "",
+                "the feature metadata path exists but is not a regular file",
+            )
+        ]
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        return [], [
+            evidence_issue(
+                "metadata-invalid", metadata_binding, "", "",
+                f"the feature metadata cannot be read or parsed ({exc}); "
+                "repair or re-mark it before cleanup",
+            )
+        ]
+    if not isinstance(metadata, dict):
+        return [], [
+            evidence_issue(
+                "metadata-invalid", metadata_binding, "", "",
+                "the feature metadata must be a JSON object",
+            )
+        ]
+    issues: list[dict[str, str]] = []
+    artifacts = metadata.get("artifacts")
+    if artifacts is None:
+        artifacts = {}
+    elif not isinstance(artifacts, dict):
+        issues.append(
+            evidence_issue(
+                "metadata-invalid", "artifacts", "", "",
+                "metadata artifacts must be an object",
+            )
+        )
+        artifacts = {}
+    archives = metadata.get("archive")
+    if archives is None:
+        archives = []
+    elif not isinstance(archives, list):
+        issues.append(
+            evidence_issue(
+                "metadata-invalid", "archive", "", "",
+                "metadata archive history must be an array",
+            )
+        )
+        archives = []
+
+    bindings: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def collect(label: str, artifact: str, evidence: Any) -> None:
+        if evidence is None:
+            return
+        if not isinstance(evidence, dict):
+            issues.append(
+                evidence_issue(
+                    "evidence-invalid", label, artifact, "",
+                    "an evidence binding must be an object with path and sha256",
+                )
+            )
+            return
+        path_value = evidence.get("path")
+        sha_value = evidence.get("sha256")
+        if (
+            not isinstance(path_value, str) or not path_value
+            or not isinstance(sha_value, str) or not EVIDENCE_SHA256.fullmatch(sha_value)
+        ):
+            shown = path_value if isinstance(path_value, str) else ""
+            issues.append(
+                evidence_issue(
+                    "evidence-invalid", label, artifact, shown,
+                    "an evidence binding needs a non-empty path and a "
+                    "64-hexadecimal sha256",
+                )
+            )
+            return
+        key = (path_value, sha_value)
+        if key in seen:
+            return
+        seen.add(key)
+        bindings.append(
+            {"artifact": artifact, "binding": label, "path": path_value, "sha256": sha_value}
+        )
+
+    for artifact, record in artifacts.items():
+        label_base = f"artifacts.{artifact}"
+        if not isinstance(record, dict):
+            issues.append(
+                evidence_issue(
+                    "metadata-invalid", label_base, str(artifact), "",
+                    "an artifact record must be an object",
+                )
+            )
+            continue
+        collect(f"{label_base}.evidence", str(artifact), record.get("evidence"))
+        history = record.get("history")
+        if history is None:
+            continue
+        if not isinstance(history, list):
+            issues.append(
+                evidence_issue(
+                    "metadata-invalid", f"{label_base}.history", str(artifact), "",
+                    "an artifact history must be an array",
+                )
+            )
+            continue
+        for index, entry in enumerate(history):
+            if not isinstance(entry, dict):
+                issues.append(
+                    evidence_issue(
+                        "metadata-invalid", f"{label_base}.history[{index}]",
+                        str(artifact), "",
+                        "a history entry must be an object",
+                    )
+                )
+                continue
+            collect(f"{label_base}.history[{index}].evidence", str(artifact), entry.get("evidence"))
+    for index, entry in enumerate(archives):
+        if not isinstance(entry, dict):
+            issues.append(
+                evidence_issue(
+                    "metadata-invalid", f"archive[{index}]", "", "",
+                    "an archive history entry must be an object",
+                )
+            )
+            continue
+        collect(f"archive[{index}].evidence", "", entry.get("evidence"))
+    return bindings, issues
+
+
+def archived_evidence_preserved(main: Path, feature_id: str, sha256: str) -> bool:
+    """A committed archive snapshot maps this evidence hash and its copy is
+    committed in the merged source with identical content.
+
+    Only this proves long-term preservation for evidence living outside the
+    repository: an external file merely existing today says nothing about
+    tomorrow. The mapping manifest is read from the working archive, but the
+    verdict consults the committed tree only, so an uncommitted snapshot or
+    manifest can never flip it. Corrupt or foreign manifests are skipped,
+    never repaired, and an unmatched manifest never blocks another snapshot
+    from qualifying.
+    """
+
+    if not isinstance(feature_id, str) or not feature_id or feature_id in {".", ".."}:
+        return False
+    if Path(feature_id).name != feature_id or "\\" in feature_id:
+        return False
+    archive_base = main / ARCHIVE_ROOT / feature_id
+    if not archive_base.is_dir():
+        return False
+    try:
+        snapshots = sorted(archive_base.iterdir())
+    except OSError:
+        return False
+    for snapshot in snapshots:
+        manifest_path = snapshot / ARCHIVE_EVIDENCE_DIR / ARCHIVE_EVIDENCE_MANIFEST_NAME
+        if not manifest_path.is_file():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(manifest, dict) or manifest.get("schema") != ARCHIVE_EVIDENCE_MANIFEST_SCHEMA:
+            continue
+        copies = manifest.get("copies")
+        if not isinstance(copies, list):
+            continue
+        for copy in copies:
+            if not isinstance(copy, dict) or copy.get("sha256") != sha256:
+                continue
+            snapshot_rel = copy.get("snapshot_path")
+            if not isinstance(snapshot_rel, str) or not snapshot_rel or "\\" in snapshot_rel:
+                continue
+            if Path(snapshot_rel).is_absolute() or any(
+                part in {"..", ""} for part in Path(snapshot_rel).parts
+            ):
+                continue
+            rel = "/".join((ARCHIVE_ROOT, feature_id, snapshot.name, *Path(snapshot_rel).parts))
+            if committed_blob_sha256(main, rel) == sha256:
+                return True
+    return False
+
+
+def feature_internal_evidence_rel(main: Path, feature_path: str, raw: str) -> str | None:
+    """Main-relative POSIX path of the evidence file when it lies inside the
+    feature workspace and is reachable without symlink or escape traversal;
+    None otherwise."""
+
+    candidate = Path(raw).expanduser()
+    try:
+        if candidate.is_absolute():
+            resolved = candidate.resolve()
+            resolved.relative_to((main / feature_path).resolve())
+        else:
+            resolved = require_local_path(main, main / candidate)
+            resolved.relative_to(main / feature_path)
+    except (PHError, ValueError):
+        return None
+    return resolved.relative_to(main).as_posix()
+
+
+def classify_evidence_failure(main: Path, record: dict[str, str]) -> dict[str, str]:
+    """Human-readable classification of a record that failed both
+    preservation routes: missing, changed, or unpreserved. The working file
+    is inspected here for diagnosis only - the preservation verdict itself
+    was already made against committed state."""
+
+    raw = record["path"]
+    candidate = Path(raw).expanduser()
+    resolved: Path | None = None
+    try:
+        resolved = (
+            candidate.resolve()
+            if candidate.is_absolute()
+            else require_local_path(main, main / candidate)
+        )
+    except PHError:
+        resolved = None
+    if resolved is None or not resolved.is_file():
+        return evidence_issue(
+            "missing", record["binding"], record["artifact"], raw,
+            "the evidence file is gone; archive the feature so a committed "
+            "snapshot copy preserves it, or re-mark the artifact with fresh "
+            "evidence",
+        )
+    if file_sha256(resolved) != record["sha256"]:
+        return evidence_issue(
+            "changed", record["binding"], record["artifact"], raw,
+            "the evidence content no longer matches the recorded hash; re-mark "
+            "the artifact with fresh evidence",
+        )
+    return evidence_issue(
+        "unpreserved", record["binding"], record["artifact"], raw,
+        "the evidence has no committed preservation: neither a committed "
+        "archive snapshot copy nor a committed file inside the feature "
+        "workspace; archive the feature or commit the evidence into the "
+        "feature workspace",
+    )
+
+
+def feature_evidence_issues(main: Path, binding: dict[str, Any] | None) -> list[dict[str, str]]:
+    """Every unpreserved or malformed evidence declaration of a feature-bound
+    session.
+
+    A declared evidence record counts as preserved when either a committed
+    archive snapshot maps its hash to a committed, content-identical copy, or
+    the evidence file is committed inside the feature workspace with exactly
+    the recorded content. Verdicts rest on committed state only (the merged
+    source HEAD), so a staged or otherwise uncommitted copy is never claimed
+    as persistence and a dirty source cannot flip a verdict; the working file
+    is only inspected to classify a failing record. Untracked or ignored
+    files keep the existing blocking behavior instead of counting as
+    preserved. Read-only throughout; empty for sessions without a bound
+    feature workspace, which keeps the previous behavior for old sessions and
+    id-only bindings.
+    """
+
+    if not binding or not binding.get("path"):
+        return []
+    feature_path = binding["path"]
+    bindings, issues = declared_feature_evidence(main, binding)
+    for record in bindings:
+        sha256 = record["sha256"]
+        if archived_evidence_preserved(main, str(binding.get("id") or ""), sha256):
+            continue
+        rel = feature_internal_evidence_rel(main, feature_path, record["path"])
+        if rel is not None and committed_blob_sha256(main, rel) == sha256:
+            continue
+        issues.append(classify_evidence_failure(main, record))
+    return issues
 
 
 def worktree_state_digest(repo: Path) -> str:
@@ -898,6 +1496,18 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
     ensure_no_operation(main)
     ensure_ignored(main)
     validate_branch(main, args.branch)
+    # Optional SDD bindings are user input: validate the raw values before
+    # any plan work, so malformed flags refuse even the read-only run.
+    feature_path = canonical_feature_path(main, args.feature_path) if args.feature_path is not None else None
+    if args.feature_id is not None and (
+        not args.feature_id.strip() or args.feature_id.strip() != args.feature_id
+    ):
+        raise PHError("--feature-id must be a non-empty string without surrounding whitespace")
+    feature_id = args.feature_id if args.feature_id is not None else (Path(feature_path).name if feature_path else None)
+    if feature_path is not None:
+        validate_feature_metadata(main, feature_path, feature_id)
+    task_ids = parse_task_ids(args.task_ids)
+    resources = parse_resources(args.resources)
     source_branch = current_branch(main)
     source_head = current_head(main)
     source_dirty = change_sets(main)
@@ -927,6 +1537,24 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
     # Duplicate diagnosis comes before branch-occupancy errors so an
     # interrupted run is reported as a recoverable live session.
     reject_live_session_conflicts(main, sessions, args.branch, target)
+    # Task-group anti-conflict: task IDs are unique inside one feature group;
+    # resource key=value pairs are unique across all live sessions. A dry-run
+    # reports conflicts read-only; the apply is refused before the confirmed
+    # WIP commit would run, so nothing is committed without a deliverable
+    # session.
+    conflicts = feature_conflicts(main, sessions, feature_path, task_ids, resources)
+    if conflicts and args.apply:
+        details = "; ".join(
+            f"{conflict['session']} (phase {conflict['phase']}, feature "
+            f"{conflict['featurePath'] or 'unbound'}): taskIds "
+            f"{conflict['taskIds'] or 'none'}, resources {conflict['resources'] or 'none'}"
+            for conflict in conflicts
+        )
+        raise PHError(
+            "enter conflicts with a live PH session (task IDs are unique inside "
+            "one feature group; resource key=value pairs are unique across all "
+            "live sessions): " + details
+        )
     exists = branch_exists(main, args.branch)
     if exists != args.existing:
         if exists:
@@ -951,6 +1579,20 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
         "verifyCommands": verify_commands,
         "maxChangedFileBytes": max_changed_file_bytes,
     }
+    if feature_path is not None or feature_id is not None or task_ids or resources:
+        feature_plan: dict[str, Any] = {}
+        if feature_path is not None:
+            feature_plan["path"] = feature_path
+            feature_plan["exists"] = (main / feature_path).is_dir()
+        if feature_id is not None:
+            feature_plan["id"] = feature_id
+        if task_ids:
+            feature_plan["taskIds"] = task_ids
+        if resources:
+            feature_plan["resources"] = resources
+        plan["feature"] = feature_plan
+    if conflicts:
+        plan["featureConflicts"] = conflicts
     if dirty:
         plan["sourceDirty"] = {
             "staged": source_dirty[0],
@@ -1000,6 +1642,16 @@ def command_enter(args: argparse.Namespace) -> dict[str, Any]:
     }
     if wip_commit is not None:
         session["sourceWipCommit"] = wip_commit
+    # Optional SDD bindings join the session record; old sessions without
+    # them stay compatible because every consumer treats them as absent.
+    if feature_path is not None:
+        session["featurePath"] = feature_path
+    if feature_id is not None:
+        session["featureId"] = feature_id
+    if task_ids:
+        session["taskIds"] = task_ids
+    if resources:
+        session["resources"] = resources
     session_path = sessions / f"{session_id}.json"
     save_session(session_path, session)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -1021,6 +1673,12 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
     commands, size_limit = session_policy(data)
     phase = data["phase"]
     result: dict[str, Any] = {"action": "exit", "apply": args.apply, "phase": phase}
+    # Feature-group status travels with every exit result (plan and apply):
+    # a delivered subtask stays visibly one subtask of its feature.
+    binding = feature_binding(main, data)
+    feature_report = feature_group_report(main, session_path, binding)
+    if feature_report is not None:
+        result["feature"] = feature_report
 
     if args.cleanup and phase != "merged":
         raise PHError(
@@ -1071,6 +1729,12 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
         result["mergeTarget"] = f"{data['mainPath']}:{data['sourceBranch']}"
         result["verifyCommands"] = commands
         result["cleanupPlanned"] = bool(args.cleanup)
+        # Evidence preservation is reported read-only in every plan so the
+        # user sees an upcoming cleanup block before anything runs; the
+        # blocking decision itself belongs to the cleanup apply below.
+        evidence_issues = feature_evidence_issues(main, binding)
+        if evidence_issues:
+            result["featureEvidenceIssues"] = evidence_issues
         return result
 
     if phase == "entered":
@@ -1122,7 +1786,20 @@ def command_exit(args: argparse.Namespace) -> dict[str, Any]:
 
     if phase == "merged":
         result["status"] = "merged"
+        # Computed here so the report reflects the merged source rather than
+        # the pre-merge state. Cleanup may only remove the worktree when every
+        # referenced evidence record is provably preserved; a blocked cleanup
+        # leaves the session merged, so archiving and retrying stays possible.
+        evidence_issues = feature_evidence_issues(main, binding)
+        if evidence_issues:
+            result["featureEvidenceIssues"] = evidence_issues
         if args.cleanup:
+            if evidence_issues:
+                details = "; ".join(format_evidence_issue(issue) for issue in evidence_issues)
+                raise PHError(
+                    "cleanup blocked by unpreserved feature evidence; removing the "
+                    "worktree must not destroy the last traceable copy: " + details
+                )
             cleanup_session(main, linked, data, session_path)
             result["status"] = "cleaned"
         else:
@@ -1284,6 +1961,9 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                 missing = sorted(SESSION_FIELDS - data.keys())
                 if missing:
                     raise ValueError(f"missing fields: {', '.join(missing)}")
+                # Optional feature bindings join the corruption check: an
+                # unsafe or tampered binding is reported, never trusted.
+                feature_binding(main, data)
             except PHError as exc:
                 corrupt.append(f"{path.name}: {exc}")
                 continue
@@ -1331,6 +2011,59 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
             continue
         if worktree_path not in session_tasks:
             unregistered.append(str(worktree_path))
+    # Read-only feature-group report: live sessions grouped by their bound
+    # feature workspace plus any task-ID/resource overlaps between them.
+    bindings: dict[str, dict[str, Any]] = {}
+    groups: dict[str, dict[str, Any]] = {}
+    for name, data in records:
+        binding = feature_binding(main, data)
+        if not binding:
+            continue
+        bindings[name] = binding
+        if not binding.get("path"):
+            continue
+        group = groups.setdefault(
+            binding["path"], {"featurePath": binding["path"], "featureId": binding.get("id"), "sessions": []}
+        )
+        group["sessions"].append(
+            {
+                "session": name,
+                "phase": data.get("phase"),
+                "taskBranch": data.get("taskBranch"),
+                "taskPath": data.get("taskPath"),
+                "taskIds": binding.get("taskIds", []),
+                "resources": binding.get("resources", {}),
+            }
+        )
+    # Conflict diagnosis over live sessions: task IDs collide only inside one
+    # feature group; resource (key, value) pairs collide across all features.
+    binding_entries = list(bindings.items())
+    feature_conflicts: list[dict[str, Any]] = []
+    for index, (name, binding) in enumerate(binding_entries):
+        for other_name, other_binding in binding_entries[index + 1 :]:
+            overlapping_tasks: list[str] = []
+            if binding.get("path") and binding.get("path") == other_binding.get("path"):
+                overlapping_tasks = sorted(
+                    set(binding.get("taskIds", [])) & set(other_binding.get("taskIds", []))
+                )
+            own_resources = binding.get("resources", {})
+            other_resources = other_binding.get("resources", {})
+            overlapping_resources = sorted(
+                f"{key}={own_resources[key]}"
+                for key in set(own_resources) & set(other_resources)
+                if own_resources[key] == other_resources[key]
+            )
+            if overlapping_tasks or overlapping_resources:
+                feature_conflicts.append(
+                    {
+                        "sessions": [name, other_name],
+                        "featurePaths": sorted(
+                            {path for path in (binding.get("path"), other_binding.get("path")) if path}
+                        ),
+                        "taskIds": overlapping_tasks,
+                        "resources": overlapping_resources,
+                    }
+                )
     return {
         "action": "doctor",
         "mainPath": str(main),
@@ -1341,6 +2074,8 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
         "interruptedCreating": interrupted_creating,
         "interruptedMerging": interrupted_merging,
         "corruptRecords": corrupt,
+        "featureGroups": [groups[path] for path in sorted(groups)],
+        "featureConflicts": feature_conflicts,
     }
 
 
@@ -1356,6 +2091,7 @@ def command_recover(args: argparse.Namespace) -> dict[str, Any]:
     missing = sorted(SESSION_FIELDS - data.keys())
     if missing:
         raise PHError(f"recovery target is missing fields: {', '.join(missing)}")
+    feature_binding(main, data)
     phase = data["phase"]
     result: dict[str, Any] = {
         "action": "recover",
@@ -1437,6 +2173,31 @@ def parser() -> argparse.ArgumentParser:
     enter.add_argument("--repo", required=True)
     enter.add_argument("--branch", required=True)
     enter.add_argument("--existing", action="store_true")
+    enter.add_argument(
+        "--feature-path",
+        dest="feature_path",
+        help="optional SDD feature workspace, a PH feature directory directly "
+        "under " + SPECS_ROOT + "; sessions sharing one canonical path form a task group",
+    )
+    enter.add_argument(
+        "--feature-id",
+        dest="feature_id",
+        help="optional feature id; defaults to the feature path's directory name",
+    )
+    enter.add_argument(
+        "--task-id",
+        dest="task_ids",
+        action="append",
+        help="optional task id implemented by this worktree; repeatable, "
+        "unique inside its feature group",
+    )
+    enter.add_argument(
+        "--resource",
+        dest="resources",
+        action="append",
+        help="optional resource allocation as key=value; repeatable, each "
+        "(key, value) pair unique across all live sessions",
+    )
     enter.add_argument("--expect-source-branch", dest="expect_source_branch")
     enter.add_argument("--expect-source-head", dest="expect_source_head")
     enter.add_argument(

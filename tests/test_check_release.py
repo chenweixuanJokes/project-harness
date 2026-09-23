@@ -35,6 +35,16 @@ REQUIRED_SKILLS = [
     "ph-memory-learning",
     "ph-memory-archive",
     "ph-human",
+    "ph-require",
+    "ph-clarify",
+    "ph-design",
+    "ph-design-review",
+    "ph-tasks",
+    "ph-verify-plan",
+    "ph-small-change",
+    "ph-implement",
+    "ph-verify",
+    "ph-archive",
 ]
 # The pre-1.1.8 era shipped exactly these ten skills (ph-docs-sync arrived in
 # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14); the synthetic legacy
@@ -188,19 +198,23 @@ class CheckReleaseTests(unittest.TestCase):
         self.assertNotIn("schema_version", result)
 
     def test_skill_list_contract(self):
-        # 1.2.2 ships eighteen skills (the eighth PH scaffold skill ph-human
-        # arrives in 1.2.2); the synthetic pre-1.1.8 legacy fixture
+        # 1.2.3 ships eighteen self-developed skills as the single required
+        # source (the ten spec-kit skills retired with the upstream
+        # integration); the synthetic pre-1.1.8 legacy fixture
         # must keep exactly the historical ten (ph-docs-sync arrived in
         # 1.1.10, ph-intent-verify in 1.1.13, ph-sure in 1.1.14) instead of
         # slicing the current list, so new release skills never leak into
         # legacy fixtures.
-        self.assertEqual(len(REQUIRED_SKILLS), 8)
+        self.assertEqual(len(REQUIRED_SKILLS), 18)
         self.assertEqual(len(LEGACY_TEN_SKILLS), 10)
         self.assertNotIn("ph-docs-sync", LEGACY_TEN_SKILLS)
         self.assertNotIn("ph-intent-verify", LEGACY_TEN_SKILLS)
         self.assertNotIn("ph-sure", LEGACY_TEN_SKILLS)
         self.assertIn("ph-merge-update", REQUIRED_SKILLS)
         self.assertIn("ph-worktree-exit", REQUIRED_SKILLS)
+        for retired in ("ph-analyze", "ph-checklist", "ph-converge", "ph-constitution",
+                        "ph-plan", "ph-specify", "ph-taskstoissues"):
+            self.assertNotIn(retired, REQUIRED_SKILLS)
 
     def test_cli_current_tree(self):
         buf = io.StringIO()

@@ -1,0 +1,59 @@
+{
+  "skill_name": "ph-small-change",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-small-change 准备修复：用户反馈 2026-09-30 当天生成的账单，账单期结束日写成了 2026-10-01，对账系统拒收。",
+      "expected_output": "触发 ph-small-change。先调查再接受「简单 bug」分类：读当前行为、相关代码/测试与适用约束，建立可复现输入、实际行为与预期行为，区分已确认原因与假设；调查可在范围内跑安全检查，但本准备阶段不实现修复。经 ph_sdd.py create --flow small 先 dry-run 后 apply 建功能目录，写 change.md（目标、要保留的既有行为、非目标、受影响位置、已确认原因或剩余不确定、最小方案、用户成果验收）与 tasks.md（含复现回归与稳定编号、拥有文件、完成标准），再按完整路线同语义写 verify-plan.md 与 acceptance.md（直接读模板与项目测试规则，不调用 ph-tasks/ph-verify-plan）。本轮调用内自查简版需求/方案的遗漏与约束冲突后记录真实评审；报告走简版的理由、最小计划、检查与阻塞，准备就绪才建议 ph-implement。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用 ph-small-change 准备：把用户表拆成两张表顺便改 public API，很小的一件事。",
+      "expected_output": "触发 ph-small-change，但拒绝简版路线：public API 变更、数据迁移、鉴权/安全语义、核心业务与跨模块广泛影响需要完整路线；保留已学到的调查记录并建议相应需求/设计阶段（ph-require/ph-clarify/ph-design），不自动启动完整流程，也不丢弃记录。判定看后果与不确定性，不看行数。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用 ph-small-change 把修复准备好，这一轮别动代码。",
+      "expected_output": "触发 ph-small-change。准备止于准备：不改应用代码、不建分支、不提交、不推定实施授权；产物是 change/tasks/verify-plan/acceptance 与运行时元数据；实施要用户明确点名 ph-implement。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用 ph-small-change 准备：我觉得是时区问题，你直接按这个写进 change.md 吧。",
+      "expected_output": "触发 ph-small-change，但区分已确认原因与假设：调查核实前不把猜测写成「已确认原因」；确认不了的如实记为剩余不确定并给出验证方法；change.md 保留既有行为与非目标，不借机顺手清理无关代码。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-small-change 准备：小改动就别搞 verify-plan 和 acceptance 了吧，费事。",
+      "expected_output": "触发 ph-small-change，但减文书不减测试与授权：agent 检查与用户成果两件都必须有，同完整路线语义——智能体查工作结果与受影响回归，用户确认准备好的代表性成果；直接读模板与项目测试规则撰写，不调用 ph-tasks 或 ph-verify-plan；既有全量测试要求照常适用。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-small-change 准备到一半。算了，你直接把代码改了吧。",
+      "expected_output": "触发 ph-small-change 但不变轨：准备阶段不编辑代码；已写产物保留，报告当前准备进度与剩余项；实施需用户明确点名 ph-implement 后另起执行。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "这个小 bug 很简单，你看着处理一下。",
+      "expected_output": "不触发 ph-small-change：普通描述没有点名技能，既未获准备授权也未获实施授权；不写文件不改代码，可说明需点名对应技能。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "ph-small-change 的「small」怎么判定？说说就行，先别执行。",
+      "expected_output": "不触发 ph-small-change：讨论技能名称不要求执行；按普通问题说明判定标准（后果与不确定性，而非行数）。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "用 ph-implement 修复月末账单 bug。",
+      "expected_output": "不触发 ph-small-change：用户点名的是 ph-implement；技能互不代为调用。该功能尚无任务计划时也不代为准备，准备需点名 ph-small-change。",
+      "files": []
+    }
+  ]
+}

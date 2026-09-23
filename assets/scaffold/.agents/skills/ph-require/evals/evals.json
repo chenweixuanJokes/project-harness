@@ -1,0 +1,59 @@
+{
+  "skill_name": "ph-require",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "用 ph-require 把这个新需求记下来：仓库管理后台要加一个盘点导出，仓库管理员能按日期范围导出盘点记录，导出后交给运营核对。请先预检再实施创建。",
+      "expected_output": "触发 ph-require。按开发共同约定读取项目规范；提取问题、目标用户、有价值成果、范围、非目标、不可违背限制与用户成果验收，并区分已供事实、已核实事实、假设与未决事项。只询问影响范围或验收的缺失决定，不问设计阶段的技术细节。选择无歧义功能编号且不改 Git 分支：先查看 ph_sdd.py create --help，dry-run create --repo <root> --feature <id> --flow full --title <title> 再在授权内 apply；requirement.md 分配稳定 FR/NFR 与用户成果验收编号，主成果写角色、初始条件、代表性操作和可观察结果。清晰度实际核过前保持 draft；发布支持的伴读；报告目标、范围、验收成果与阻塞，建议 ph-clarify 而不调用。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "用 ph-require 记一个需求：给订单列表加导出。给谁用、导出什么格式我还没想好，你按行业惯例先补齐写进去。",
+      "expected_output": "触发 ph-require，但拒绝编造：不为完成模板用合理业务假设填补业务未知。把目标用户与导出格式记为显式未决事项，只就真正影响范围或验收的缺失决定通过宿主问答工具实际提问；已供事实与未决分别记录，requirement.md 保持诚实的未知，不写猜测当决定。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "用 ph-require 录一个明确的小需求：登录页错误提示从英文改成中文。",
+      "expected_output": "触发 ph-require。调查深度与任务相称：先读相关项目事实与既有功能确认不重复，再如实记录这个明确请求，不把清晰小需求变成完整 PRD 访谈，也不问组件选型之类设计细节；完成标准写清用户如何辨认满意结果。",
+      "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "用 ph-require 修改既有功能 002-csv-export 的需求：客户名字段还要支持包含换行。",
+      "expected_output": "触发 ph-require。先读既有 requirement.md 与相关记录，在变更/澄清历史保留先前决定与原文，不暗中替换旧验收标准；新增范围写入对应范围节并分配或沿用稳定编号；未决事项显式保留；不改 Git 分支，不在本阶段设计实现。",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "用 ph-require 录入需求，顺便把方案定了、代码也改了。",
+      "expected_output": "触发 ph-require 但停在本阶段：本阶段记录意图，不设计方案、不实现代码、不做 Git 操作。报告目标、范围、验收成果与阻塞后建议 ph-clarify；实施与设计都需要用户另行点名对应技能。",
+      "files": []
+    },
+    {
+      "id": 6,
+      "prompt": "用 ph-require 给老功能 legacy-auth 补一份需求记录，它只有历史 spec.md。",
+      "expected_output": "触发 ph-require。历史 spec.md 仍是有效的映射来源：保留原文字节、原编号与既有问答/附件，不为了改名重写历史功能；现代门禁缺失按缺失评估而不从旧勾选推定；未核验状态不冒充已核验，需要时用运行时的显式接入操作建立元数据接续。",
+      "files": []
+    },
+    {
+      "id": 7,
+      "prompt": "我们要做一个盘点导出功能，帮我把需求先写下来。",
+      "expected_output": "不触发 ph-require：普通需求描述没有点名技能，不写任何文件；可以说明需要点名 ph-require 才执行录入。",
+      "files": []
+    },
+    {
+      "id": 8,
+      "prompt": "ph-require 和 ph-clarify 有什么区别？先介绍一下，不要执行。",
+      "expected_output": "不触发 ph-require：这是讨论技能名称与分工，不是要求录入需求；按普通问题说明两者职责即可。",
+      "files": []
+    },
+    {
+      "id": 9,
+      "prompt": "用 ph-design 给盘点导出做设计方案。",
+      "expected_output": "不触发 ph-require：用户点名的是 ph-design；技能互不代为调用，普通描述与点名其他技能都不触发本技能。",
+      "files": []
+    }
+  ]
+}

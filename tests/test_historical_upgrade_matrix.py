@@ -165,12 +165,17 @@ REINTRODUCED_MEMORY_SKILLS = {"ph-memory-ask", "ph-memory-archive"}
 # sibling included) that the CURRENT release does not ship again: the final
 # state must not carry them. Same membership as
 # scripts/ph_merge_update.RETIRED_SKILLS minus the reintroduced memory names.
-RETIRED_TARGET_SKILLS = set(HISTORICAL_TWELVE_SKILLS) - set(TARGET_SCAFFOLD_SKILLS) | {"ph-sure"}
+RETIRED_TARGET_SKILLS = (
+    set(HISTORICAL_TWELVE_SKILLS) - set(TARGET_SCAFFOLD_SKILLS) | {"ph-sure"}
+    | set(ph_merge_update.SDD_RETIRED_SKILLS)
+)
 SPECKIT_TARGET_SKILLS = tuple(f"ph-{core}" for core in _speckit_seed.contract()["skills"])
 LAYOUT_SKILLS = {
     # 1.2.1 ships the ten spec-kit skills as bundled scaffold content (no
-    # install-time generation) next to the seven PH scaffold skills.
+    # install-time generation) next to the seven PH scaffold skills; 1.2.2
+    # adds the ph-human companion as the eighth PH scaffold skill.
     "bundled-speckit-skills": TARGET_SCAFFOLD_SKILLS + SPECKIT_TARGET_SKILLS,
+    "bundled-speckit-human": TARGET_SCAFFOLD_SKILLS + SPECKIT_TARGET_SKILLS + ("ph-human",),
     "speckit-skills": ("ph-init", "ph-merge-update", "ph-worktree-enter", "ph-worktree-exit"),
     "twelve-skills": HISTORICAL_TWELVE_SKILLS,
     "eleven-skills": HISTORICAL_ELEVEN_SKILLS,
@@ -181,6 +186,7 @@ LAYOUT_SKILLS = {
 }
 LAYOUT_PROFILE = {
     "bundled-speckit-skills": "speckit-current",
+    "bundled-speckit-human": "speckit-current",
     "speckit-skills": "speckit-current",
     "twelve-skills": "1.1.0-current-names",
     "eleven-skills": "1.1.0-current-names",
@@ -347,7 +353,8 @@ def sources_for_version(version: str):
             "the upgrade matrix refuses to fabricate history - publish the tag or register a fixed source"
         )
     layout = (
-        "bundled-speckit-skills" if semver_tuple(version) >= (1, 2, 1)
+        "bundled-speckit-human" if semver_tuple(version) >= (1, 2, 2)
+        else "bundled-speckit-skills" if semver_tuple(version) >= (1, 2, 1)
         else "speckit-skills" if semver_tuple(version) >= (1, 1, 14)
         else "twelve-skills" if semver_tuple(version) >= (1, 1, 13)
         else "eleven-skills" if semver_tuple(version) >= (1, 1, 10)
@@ -1149,6 +1156,82 @@ ENGINE_ENSURE["speckit-next-step-hints"] = {
     "speckit": True,
 }
 
+SDD_RUNTIME_TEMPLATES = (
+    "acceptance", "change", "design", "requirement", "review", "tasks", "verification", "verify-plan",
+)
+
+ENGINE_ENSURE["sdd-skill-replacement"] = {
+    # 1.2.3 release deltas this item owns: the real migrate-skills payload
+    # (baseline identity recognition -> whole-directory archival of the seven
+    # retired skills -> in-place replacement of ph-clarify/ph-implement/
+    # ph-tasks -> the seven new self-developed installs), the ph-init payload
+    # refresh carrying the new entry contract and release metadata, and the
+    # speckit-free manifest/schema final form.
+    "sdd_skills": True,
+    "payload": True,
+    "schema": True,
+    "skills": (
+        *SPECKIT_TARGET_SKILLS,
+        "ph-require", "ph-design", "ph-design-review",
+        "ph-verify-plan", "ph-small-change", "ph-verify", "ph-archive",
+    ),
+}
+
+ENGINE_ENSURE["sdd-runtime-takeover"] = {
+    # 1.2.3 release deltas this item owns: the spec-kit runtime (bash helpers,
+    # six spec templates, integration/init-options metadata, license, the
+    # constitution override assets) retires into the in-project archive and
+    # the self-developed SDD runtime (README + templates/sdd) takes over; the
+    # shared companion/worktree scripts and the new ph_sdd.py refresh with it.
+    "runtime_takeover": True,
+    "docs": [
+        ".agents/scripts/ph_sdd.py", ".agents/scripts/ph_human.py", ".agents/scripts/ph_worktree.py",
+        f"{HOME}/runtime/README.md",
+        *(f"{HOME}/runtime/templates/sdd/{name}-template.md" for name in SDD_RUNTIME_TEMPLATES),
+    ],
+}
+
+ENGINE_ENSURE["bilingual-skills"] = {
+    # 1.2.3 release deltas this item owns: the four changed PH skills gain
+    # their English body refresh plus the SKILL.zh.md companion (ph-init's
+    # own companion rides the payload refresh; the ten replaced/retired
+    # names' companions ride the migrate-skills install).
+    "skills": ("ph-merge-update", "ph-worktree-enter", "ph-worktree-exit", "ph-human"),
+}
+
+ENGINE_ENSURE["docs-tests-consolidation"] = {
+    # 1.2.3 release deltas this item owns: the downstream documentation
+    # governance refresh (home README, documents/specs/archive indexes, the
+    # doc-governance constraint), the test-gate consolidation (Git/security/
+    # case/gate constraints), and the content-evidence re-run that pins
+    # init-report.json to the final constraint set (customized files keep
+    # their bytes; the fixture is deterministic and marker-preserving).
+    "content_fixture": True,
+    "docs": [
+        f"{HOME}/README.md",
+        f"{HOME}/archive/README.md",
+        f"{HOME}/documents/README.md",
+        f"{HOME}/specs/README.md",
+        f"{HOME}/constraints/harness规范/文档治理规范.md",
+        f"{HOME}/constraints/工程规范/Git规范.md",
+        f"{HOME}/constraints/工程规范/安全规范.md",
+        f"{HOME}/constraints/测试规范/用例规范.md",
+        f"{HOME}/constraints/测试规范/门禁规范.md",
+    ],
+}
+
+ENGINE_ENSURE["worktree-session-continuity"] = {
+    # 1.2.3 behavioral contract: live worktree sessions are never touched by
+    # the upgrade; the fixture's session content must survive byte-for-byte.
+    "worktree_sessions": True,
+}
+
+ENGINE_ENSURE["artifact-compat"] = {
+    # 1.2.3 behavioral contract: legacy spec/plan/tasks artifacts and the
+    # intent ledger stay byte-identical; old-generation specs remain readable.
+    "artifact_compat": True,
+}
+
 SPECIAL_SCAFFOLD_RELS = {".gitignore", ".agents/ph.json", ".agents/ph.schema.json", ".agents/AGENTS.md"}
 
 
@@ -1203,6 +1286,47 @@ def rename_contract_facts(repo: Path, prepared) -> list[str]:
         "项目内 ph_release.py 与发行根逐字节一致",
         "旧 Skill 路径 .agents/skills/ph-init、.agents/skills/ph-merge-update 保持不变（已核对）",
     ]
+
+
+def _seed_render(repo: Path, kind: str) -> bytes:
+    """Render the historical constitution pair for THIS repo via the seed driver.
+
+    The dev tree no longer carries ph_speckit (retired with the 1.2.3
+    takeover), so the rendering runs inside the historical tree's module
+    context (see _speckit_seed.module) exactly the way the 1.1.14-1.2.2
+    install rendered it."""
+    import base64
+
+    run = _speckit_seed.module()
+    out = run(
+        "import base64\n"
+        "repo = Path(args['ns']['repo'])\n"
+        "contract = ph_speckit.speckit_contract()\n"
+        "staging = ph_speckit.resolve_staging(None, contract)\n"
+        "if args['ns']['kind'] == 'override':\n"
+        "    data = ph_speckit.render_constitution_override(repo, staging, contract)\n"
+        "else:\n"
+        "    data = ph_speckit.render_live_constitution(repo, staging, contract)\n"
+        "print(json.dumps({'data': base64.b64encode(data).decode()}))\n",
+        {"repo": str(Path(repo).resolve()), "kind": kind},
+    )
+    return base64.b64decode(out["data"])
+
+
+def _seed_record_baselines(repo: Path) -> dict:
+    """Re-record the per-file speckit content baselines via the seed driver.
+
+    Mirrors the real hop: the seeded speckit install (and the 1.2.2
+    companion refresh) re-keys the manifest baselines to the freshly
+    installed generation, so the next upgrade's baseline proof classifies
+    the on-disk copies as managed-old instead of unattributable."""
+
+    run = _speckit_seed.module()
+    return run(
+        "repo = Path(args['ns']['repo'])\n"
+        "print(json.dumps(ph_speckit.cmd_record_baselines(repo, None)))\n",
+        {"repo": str(Path(repo).resolve())},
+    )
 
 
 class MergeEngine:
@@ -1593,6 +1717,141 @@ class MergeEngine:
             self.mutations.append("retire embedded worktree scripts: " + ", ".join(retired))
         return retired
 
+    # -- 1.2.3 self-developed skill contract ---------------------------------
+
+    def sdd_replace_skills(self) -> str:
+        """sdd-skill-replacement: run the REAL migrate-skills payload.
+
+        The speckit content baselines are re-recorded first (the seeded
+        speckit install refreshes skill bytes during the merged chain, so
+        the manifest proof must follow the disk exactly the way the real
+        1.2.2 companion install re-keyed it); the prepared tool's own
+        plan/apply then performs the baseline identity recognition,
+        whole-directory archival, same-name replacement and new-skill
+        installs. The fail-closed contract (a blocked plan writes nothing)
+        is asserted, never assumed."""
+        recorded = _seed_record_baselines(self.repo)
+        assert not recorded.get("blocked"), (
+            f"speckit baseline recording blocked: {recorded.get('conflicts')}"
+        )
+        planned = self.run_merge_tool("migrate-skills")
+        assert not planned["blocked"], f"migrate-skills plan blocked: {planned['conflicts']}"
+        applied = self.run_merge_tool("migrate-skills", "--apply")
+        assert not applied["blocked"], f"migrate-skills apply blocked: {applied['conflicts']}"
+        actions: dict[str, int] = {}
+        for item in applied["items"]:
+            actions[item["action"]] = actions.get(item["action"], 0) + 1
+        summary = ", ".join(f"{action}×{count}" for action, count in sorted(actions.items()))
+        self.mutations.append(f"migrate-skills: {summary}")
+        return (
+            "已运行发行自带的 migrate-skills 实装（基准身份识别 → 整目录归档退役 → "
+            f"同名替换为新契约 → 新自研技能安装），明细：{summary}"
+        )
+
+    def takeover_runtime(self) -> str:
+        """sdd-runtime-takeover: the spec-kit runtime retires, the self-developed
+        SDD runtime takes over. Target runtime files arrive from the prepared
+        scaffold; every superseded managed runtime file (bash helpers, the six
+        spec templates, integration/init-options metadata, license, the
+        constitution override template and marker) is archived in-project under
+        legacy-backup with its pre-takeover relative path."""
+        target_dir = self.prepared.scaffold_dir / f"{HOME}/runtime"
+        hist_dir = self.hist.scaffold_dir / f"{HOME}/runtime"
+        target_rels = {p.relative_to(target_dir).as_posix() for p in iter_regular_files(target_dir, strict=True)}
+        repo_runtime = self.repo / f"{HOME}/runtime"
+        archived = 0
+        if repo_runtime.is_dir():
+            for path in sorted(iter_regular_files(repo_runtime, strict=True)):
+                sub = path.relative_to(repo_runtime).as_posix()
+                if sub in target_rels:
+                    continue
+                old_rel = f"{HOME}/runtime/{sub}"
+                dest = self.repo / f"{HOME}/archive/legacy-backup" / old_rel
+                assert not dest.exists(), f"runtime archive destination already exists: {dest}"
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                original_digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                path.rename(dest)
+                assert hashlib.sha256(dest.read_bytes()).hexdigest() == original_digest, (
+                    f"retired runtime content changed: {old_rel}"
+                )
+                archived += 1
+            # bottom-up sweep of the emptied stale directories (scripts/bash/,
+            # templates/overrides/, ...); _sync_tree recreates the target tree
+            for dirpath, dirnames, filenames in os.walk(repo_runtime, topdown=False):
+                node = Path(dirpath)
+                if node == repo_runtime or node.is_symlink():
+                    continue
+                if not any(node.iterdir()):
+                    self.trash_move(node)
+        changed = self._sync_tree(repo_runtime, target_dir, hist_dir if hist_dir.exists() else None)
+        if changed or archived:
+            self.mutations.append(
+                f"runtime takeover: {archived} superseded runtime files archived, SDD runtime synced"
+            )
+        return (
+            f"运行时接管已核对：旧 spec-kit 运行时 {archived} 个文件按相对路径归档至 legacy-backup，"
+            "SDD 运行时（README + templates/sdd 八模板）已就位；宪法刷新改由 ph_governance 承担"
+        )
+
+    def run_content_fixture(self) -> None:
+        """docs-tests-consolidation: re-run the shared documentation-completion
+        fixture against the PREPARED constraint set, so every target template
+        carries content evidence and init-report.json matches the final bytes.
+        Idempotent by construction: the fixed bodies are deterministic and the
+        matrix custom marker lines are carried over verbatim."""
+        from content_fixture import complete_documentation_project
+        complete_documentation_project(self.repo, self.prepared.root)
+        self.rewritten.update(
+            rel for rel in self.prepared.scaffold_files if rel.startswith(f"{HOME}/constraints/")
+        )
+        self.mutations.append("刷新约束内容证据与 init-report.json（对齐目标约束集）")
+
+    def verify_worktree_sessions(self):
+        """worktree-session-continuity: live worktree sessions are never
+        touched by the upgrade; session content must survive byte-for-byte."""
+        root = self.repo / ".worktrees"
+        if not root.is_dir() or not any(root.iterdir()):
+            return "not_applicable", (
+                "本例没有进行中的 worktree 会话（.worktrees/ 为空或不存在），无需连续性处理（已核对）"
+            )
+        sessions = sorted(p.name for p in root.iterdir() if p.is_dir())
+        drifted = [
+            rel for rel, digest in self.before_digests.items()
+            if rel.startswith(".worktrees/") and (self.repo / rel).is_file()
+            and hashlib.sha256((self.repo / rel).read_bytes()).hexdigest() != digest
+        ]
+        assert not drifted, f"worktree session content drifted during the upgrade: {drifted}"
+        return "applied", (
+            f"worktree 会话连续性已核对：{len(sessions)} 个会话目录（{', '.join(sessions)}）原样保留，"
+            "分支、WIP 与会话内文件未触碰"
+        )
+
+    def verify_artifact_compat(self):
+        """artifact-compat: legacy spec/plan/tasks artifacts and the intent
+        ledger stay byte-identical; old-generation specs remain readable."""
+        specs = self.repo / f"{HOME}/specs"
+        if not specs.is_dir():
+            return "not_applicable", "本例没有 specs/ 存量工件目录（历史安装未产生），无兼容性处理需求（已核对）"
+        checked: list[str] = []
+        ledger_path = specs / ".ph-intent-ledger.json"
+        if ledger_path.is_file():
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+            stale = []
+            for entry in ledger.get("entries", []):
+                spec_path = self.repo / entry["spec"]
+                digest = hashlib.sha256(spec_path.read_bytes()).hexdigest() if spec_path.is_file() else None
+                if digest == entry.get("spec_sha256"):
+                    checked.append(entry["spec"])
+                else:
+                    stale.append(entry["spec"])
+            assert not stale, f"ledger spec drifted from its recorded sha256: {stale}"
+        total = sum(1 for _ in iter_regular_files(specs))
+        return "applied", (
+            f"存量工件逐字节保留已核对：specs/ 共 {total} 个文件"
+            + (f"，台账 {len(checked)} 条 spec 摘要与正文一致" if checked else "")
+            + "；旧 spec/plan/tasks 正文未重写、未移动"
+        )
+
     def ensure_speckit_file(self, rel: str, target: Path) -> str:
         """Bring one speckit-owned file to the seed bytes, with the manifest
         baseline as the ownership proof — mirroring the real engine's
@@ -1636,11 +1895,10 @@ class MergeEngine:
                 self.ensure_speckit_file(rel, path)
             copied.append(f".agents/skills/{name}")
             self.rebuild_mirrors(name)
-        import ph_speckit
         # The constitution override is rendered against THIS repo's
         # constraints (constitution-governance-zone owns that write); the
         # seed's copy is its own build-time render and must not be compared.
-        override_sub = ph_speckit.CONSTITUTION_OVERRIDE_REL.removeprefix(f"{HOME}/runtime/")
+        override_sub = "templates/overrides/constitution-template.md"
         changed_runtime = self._sync_tree(
             self.repo / f"{HOME}/runtime", seed / f"{HOME}/runtime", None,
             skip=frozenset({override_sub}),
@@ -1658,23 +1916,21 @@ class MergeEngine:
         override from the seeded upstream skeleton and write it as the
         priority-1 project template (existing copies with the PH marker are
         refreshed; the file keeps its recoverable backup semantics)."""
-        import ph_speckit
         from content_fixture import complete_documentation_project
         complete_documentation_project(self.repo, self.prepared.root)
         self.rewritten.update(rel for rel in HOME_SCAFFOLD_RELS if "/constraints/" in rel)
-        seed = _speckit_seed.ensure_seed()
-        contract = ph_speckit.speckit_contract()
-        data = ph_speckit.render_constitution_override(self.repo, seed, contract)
-        dest = self.repo / ph_speckit.CONSTITUTION_OVERRIDE_REL
+        data = _seed_render(self.repo, "override")
+        rel = f"{HOME}/runtime/templates/overrides/constitution-template.md"
+        dest = self.repo / rel
         if dest.is_file() and dest.read_bytes() == data:
             return
         if dest.exists() or dest.is_symlink():
             if not dest.is_file():
                 raise AssertionError(f"constitution override destination is not a regular file: {dest}")
             self.trash_move(dest)
-            self.mutations.append(f"backup+refresh {ph_speckit.CONSTITUTION_OVERRIDE_REL}")
+            self.mutations.append(f"backup+refresh {rel}")
         else:
-            self.mutations.append(f"create {ph_speckit.CONSTITUTION_OVERRIDE_REL}")
+            self.mutations.append(f"create {rel}")
         dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(data)
 
@@ -1682,8 +1938,7 @@ class MergeEngine:
         """The speckit install records per-file content baselines into
         .agents/ph.json (the ownership proof the next upgrade compares a
         differing file against); simulate that manifest write too."""
-        import ph_speckit
-        ph_speckit.cmd_record_baselines(self.repo, None)
+        _seed_record_baselines(self.repo)
         self.mutations.append("record speckit per-file content baselines into .agents/ph.json")
 
     def migrate_intents_to_spec(self) -> str:
@@ -1847,14 +2102,11 @@ class MergeEngine:
         """constitution-materialization: render the live constitution at
         project-harness/constitution.md from the seeded skeleton plus the
         (post-restructure) constraints tree."""
-        import ph_speckit
         from content_fixture import complete_documentation_project
         complete_documentation_project(self.repo, self.prepared.root)
         self.rewritten.update(rel for rel in HOME_SCAFFOLD_RELS if "/constraints/" in rel)
-        seed = _speckit_seed.ensure_seed()
-        contract = ph_speckit.speckit_contract()
-        data = ph_speckit.render_live_constitution(self.repo, seed, contract)
-        rel = ph_speckit.CONSTITUTION_MEMORY_REL
+        data = _seed_render(self.repo, "live")
+        rel = f"{HOME}/constitution.md"
         dest = self.repo / rel
         if dest.is_file() and dest.read_bytes() == data:
             return
@@ -1992,6 +2244,10 @@ def _make_handler(item_id):
     spec = ENGINE_ENSURE[item_id]
 
     def handler(engine: MergeEngine):
+        if spec.get("worktree_sessions"):
+            return engine.verify_worktree_sessions()
+        if spec.get("artifact_compat"):
+            return engine.verify_artifact_compat()
         mark = len(engine.mutations)
         extra = []
         if spec.get("restructure"):
@@ -2011,6 +2267,14 @@ def _make_handler(item_id):
                 raise AssertionError(f"scope references a scaffold file missing from the target: {rel}")
             engine.ensure_scaffold(rel)
         for name in spec.get("skills", ()):
+            if name in SPECKIT_TARGET_SKILLS:
+                # The ten bundled spec-kit skills are migrate-skills' business
+                # in every 1.2.3 chain: their generation refresh rides the
+                # seeded speckit install, and their retirement/replacement
+                # rides the real migrate-skills payload. Syncing target files
+                # into a managed-old directory here would forge attachments
+                # (e.g. SKILL.zh.md) that the baseline proof cannot attribute.
+                continue
             engine.ensure_skill(name)
         for name in spec.get("retire", ()):
             extra.extend(engine.retire_skill(name))
@@ -2020,6 +2284,12 @@ def _make_handler(item_id):
             extra.extend(engine.retire_embedded_worktree_scripts())
         if spec.get("speckit"):
             engine.install_speckit()
+        if spec.get("sdd_skills"):
+            extra.append(engine.sdd_replace_skills())
+        if spec.get("runtime_takeover"):
+            extra.append(engine.takeover_runtime())
+        if spec.get("content_fixture"):
+            engine.run_content_fixture()
         if spec.get("constitution"):
             engine.ensure_constitution_override()
         if spec.get("materialize"):
@@ -2161,8 +2431,12 @@ def check_scope_coverage(case, prepared: PreparedTarget, hist: HistoricalTree, i
         spec = ENGINE_ENSURE[item]
         ensure_rels.update(spec.get("docs", []))
         if spec.get("speckit"):
-            bundle = json.loads((prepared.root / "assets/speckit-bundle.json").read_text())
-            ensure_rels.update(bundle["files"])
+            bundle = prepared.root / "assets/speckit-bundle.json"
+            # Chains targeting the 1.2.3+ release no longer carry a bundle:
+            # the historical speckit items' ownership proof is their own
+            # historical scaffold, not the current release tree.
+            if bundle.is_file():
+                ensure_rels.update(json.loads(bundle.read_text())["files"])
         ensure_skills.update(spec.get("skills", ()))
         payload = payload or bool(spec.get("payload"))
         agents = agents or bool(spec.get("agents"))
@@ -2338,6 +2612,14 @@ def insert_terminal_customizations(repo: Path, case: dict, release: Path) -> dic
         "结构化记忆正文保持原文：归档原件与结构化文档都必须逐字节保留。\n",
         encoding="utf-8",
     )
+    # Live worktree session content: the 1.2.3 worktree-session-continuity
+    # contract keeps sessions, branches and WIP untouched by the upgrade.
+    worktree_wip = repo / ".worktrees" / "matrix-demo" / "notes.md"
+    worktree_wip.parent.mkdir(parents=True, exist_ok=True)
+    worktree_wip.write_text(
+        "升级矩阵注入的 worktree 会话笔记：升级必须保留会话，不触碰分支与未提交内容。\n",
+        encoding="utf-8",
+    )
     from content_fixture import complete_documentation_project
 
     complete_documentation_project(repo, release)
@@ -2347,6 +2629,7 @@ def insert_terminal_customizations(repo: Path, case: dict, release: Path) -> dic
         f"{HOME}/constraints/harness规范/文档治理规范.md": governance.read_bytes(),
         f"{HOME}/memory/temporary/20260909-matrix-note.md": temp_memory.read_bytes(),
         f"{HOME}/memory/structured/矩阵主题.md": struct_memory.read_bytes(),
+        ".worktrees/matrix-demo/notes.md": worktree_wip.read_bytes(),
     }
     case["preserved_digests"] = {
         rel: hashlib.sha256(data).hexdigest() for rel, data in sorted(preserved.items())
@@ -2651,19 +2934,6 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             self.assertTrue(evidence and evidence.strip(), f"empty evidence for {item['id']}")
             item["status"] = status
             item["evidence"] = evidence
-        if ("speckit-core-integration" in item_ids or "ph-home-restructure" in item_ids
-                or "human-readable-companion" in item_ids):
-            # The real ph_speckit install writes the per-file content baselines
-            # into .agents/ph.json once everything (skills, runtime, and the
-            # constitution override from the later item) is on disk; the
-            # fixture mirrors that manifest write exactly once, after the
-            # item loop, because verify pins the recorded baselines. A
-            # 1.1.14/1.1.15-era project gets its relocated runtime (and the
-            # re-keyed baselines) from the ph-home-restructure item; the
-            # 1.2.2 companion item re-runs the same install to refresh the
-            # ten skills' bytes (and their baselines) on the 1.2.1 chain,
-            # where neither earlier item is present.
-            engine.record_speckit_baselines()
         if "tool-neutral-adapters" in item_ids:
             self.assertIsNotNone(
                 engine.codex_seen,
@@ -2784,14 +3054,14 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         self.assertEqual(manifest["adapter_mode"], mode)
         self.assertEqual(
             manifest["skills"]["required_names"],
-            list(prepared.required_skills) + list(SPECKIT_TARGET_SKILLS),
+            list(prepared.required_skills),
         )
-        speckit_section = manifest["speckit"]
-        self.assertEqual(speckit_section["commit"], _speckit_seed.contract()["commit"])
-        self.assertEqual(
-            speckit_section["skills"],
-            {name: f"speckit-{name[3:]}" for name in SPECKIT_TARGET_SKILLS},
-        )
+        # 1.2.3 retires the bundled spec-kit integration wholesale: no
+        # speckit section survives finalize, and the ten historical names are
+        # gone from the managed install (the three same-name replacements
+        # were reinstalled from the self-developed scaffold, the seven others
+        # retired outright).
+        self.assertNotIn("speckit", manifest)
         self.assertEqual(manifest["canonical"]["scripts"], ".agents/scripts")
         self.assertEqual(manifest["project_note"], "升级矩阵注入的项目备注：必须在 finalize 后逐字节保留。")
         schema = json.loads((repo / ".agents" / "ph.schema.json").read_text(encoding="utf-8"))
@@ -2800,21 +3070,43 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         )
         self.assertEqual(schema["$id"], "urn:ph:schema:project-harness")
         skills = sorted(p.name for p in (repo / ".agents" / "skills").iterdir() if p.is_dir())
-        self.assertEqual(
-            skills,
-            sorted(set(prepared.required_skills) | set(SPECKIT_TARGET_SKILLS)),
-        )
+        self.assertEqual(skills, sorted(prepared.required_skills))
         for name in sorted(RETIRED_TARGET_SKILLS):
             self.assertFalse((repo / ".agents" / "skills" / name).exists(),
                              f"retired skill still installed: {name}")
             self.assertFalse((repo / ".claude" / "skills" / name).exists(),
                              f"retired Claude mirror still installed: {name}")
+        for name in SPECKIT_TARGET_SKILLS:
+            live = repo / ".agents" / "skills" / name
+            if name in ph_merge_update.SDD_REPLACED_SKILLS:
+                self.assertTrue(live.is_dir(), f"replaced skill missing: {name}")
+                self.assertEqual(
+                    (live / "SKILL.md").read_bytes(),
+                    (prepared.scaffold_dir / ".agents" / "skills" / name / "SKILL.md").read_bytes(),
+                    f"replaced skill not at the self-developed contract: {name}",
+                )
+            else:
+                self.assertFalse(live.exists(), f"retired spec-kit skill still installed: {name}")
+        # the ten historical skill trees (and their .claude mirrors) archive
+        # in-project exactly once, under retired-skills/
+        retired_root = repo / f"{HOME}/archive/legacy-backup"
+        retired_days = sorted(
+            child for child in (retired_root.iterdir() if retired_root.is_dir() else [])
+            if child.name.endswith(CODEX_ARCHIVE_SUFFIX) and (child / "retired-skills").is_dir()
+        )
+        self.assertEqual(len(retired_days), 1, "migrate-skills must share one archive date directory")
+        for name in ph_merge_update.SDD_RETIRED_SKILLS:
+            self.assertTrue(
+                (retired_days[0] / "retired-skills" / name / "SKILL.md").is_file(),
+                f"retired spec-kit skill not archived: {name}",
+            )
         for name in ("ph-worktree-enter", "ph-worktree-exit"):
             self.assertFalse((repo / ".agents" / "skills" / name / "scripts").exists(),
                              f"embedded worktree script dir must be retired: {name}")
-        # 1.2.1 terminal layout: no root .specify, the constitution is
-        # materialized inside the home, and the override template lives in
-        # the relocated runtime.
+        # 1.2.1 relocated the home; 1.2.3's runtime takeover replaced the
+        # spec-kit runtime with the self-developed SDD runtime and retired
+        # the constitution override assets (ph_governance refresh-navigation
+        # owns the constitution from now on).
         self.assertFalse((repo / ".specify").exists(), "root .specify must be gone")
         self.assertFalse((repo / "specs").exists(), "root specs/ must be gone")
         materialized = repo / f"{HOME}/constitution.md"
@@ -2825,17 +3117,27 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         self.assertIn("## 约束导航", materialized_text)
         self.assertFalse((repo / f"{HOME}/runtime/workflows").exists(),
                          "workflow-engine assets must not be installed")
-        override = repo / f"{HOME}/runtime/templates/overrides/constitution-template.md"
-        self.assertTrue(override.is_file())
-        override_text = override.read_text(encoding="utf-8")
-        self.assertIn("## 约束导航", override_text)
-        # The links are written for the MATERIALIZED location
-        # (project-harness/constitution.md), so they are resolved from the
-        # home root, not from the override's own deeper directory.
-        materialized_base = repo / HOME
-        for link in [line for line in override_text.splitlines() if "](constraints/" in line]:
-            target = (materialized_base / link.split("](", 1)[1].split(")", 1)[0]).resolve()
-            self.assertTrue(target.exists() and not target.is_symlink(), f"broken constitution link: {link}")
+        for rel in (
+            f"{HOME}/runtime/README.md",
+            *(f"{HOME}/runtime/templates/sdd/{name}-template.md" for name in SDD_RUNTIME_TEMPLATES),
+        ):
+            self.assertTrue((repo / rel).is_file(), f"missing SDD runtime file: {rel}")
+            self.assertEqual((repo / rel).read_bytes(), (prepared.scaffold_dir / rel).read_bytes(),
+                             f"SDD runtime file drifted: {rel}")
+        for stale in (
+            "runtime/scripts", "runtime/templates/overrides",
+            "runtime/templates/constitution-template.md",
+            "runtime/SPEC-KIT-LICENSE", "runtime/init-options.json",
+            "runtime/integration.json", "runtime/.constitution-template.json",
+            "runtime/.gitignore",
+        ):
+            self.assertFalse((repo / f"{HOME}/{stale}").exists(), f"stale runtime file survived: {stale}")
+        archived_runtime = repo / f"{HOME}/archive/legacy-backup/{HOME}/runtime"
+        self.assertTrue(archived_runtime.is_dir(), "superseded runtime must be archived in-project")
+        self.assertTrue((archived_runtime / "templates" / "constitution-template.md").is_file())
+        self.assertTrue((archived_runtime / "scripts" / "bash" / "setup-plan.sh").is_file())
+        self.assertTrue((archived_runtime / "SPEC-KIT-LICENSE").is_file(),
+                        "retired upstream license must remain in the historical archive")
         for name in OLD_ALIASES:
             for base in (".agents", ".claude", ".codex"):
                 self.assertFalse((repo / base / "skills" / name).exists(), f"legacy alias still live: {base}/skills/{name}")
@@ -2856,7 +3158,7 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
         else:
             self.assertEqual(os.readlink(root_entry), ".agents/AGENTS.md")
             self.assertEqual(os.readlink(claude_entry), ".agents/AGENTS.md")
-        for name in (*prepared.required_skills, *SPECKIT_TARGET_SKILLS):
+        for name in prepared.required_skills:
             adapter = repo / ".claude" / "skills" / name
             if mode == "portable":
                 self.assertTrue(adapter.is_dir() and not adapter.is_symlink(),
@@ -3145,50 +3447,55 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
                         with self.assertRaisesRegex(module.PHReleaseError, "missing schema_version"):
                             module.prepare_release(CURRENT, **kwargs)
                     elif semver_tuple(version) < (1, 1, 14):
-                        # 1.1.8-1.1.13 entries cannot directly prepare 1.1.14:
-                        # the 1.1.14 design deliberately splits the skill list
-                        # into 4 scaffold skills (release.json
-                        # required_skills) plus 10 generated spec-kit skills
-                        # (manifest required_names, never scaffold content),
-                        # while every published pre-1.1.14 validator pins
-                        # manifest names == required_skills exactly. The
-                        # sanctioned bootstrap is documented in the
-                        # ph-merge-update skill: clone the v1.1.14 tag itself
-                        # into a safe out-of-repo directory and run that
-                        # tree's prepare (its own validators accept the
-                        # release and write the receipt).
-                        with self.assertRaisesRegex(
-                            module.PHReleaseError, "skills.required_names mismatch"
-                        ):
-                            module.prepare_release(CURRENT, **kwargs)
-                    else:
+                        # 1.1.8-1.1.13 entries pin manifest names ==
+                        # release.json required_skills — exactly the 1.2.3
+                        # shape (the spec-kit generation was the only one that
+                        # split the list). Their prepare of the 1.2.3 release
+                        # succeeds and records the receipt identity unchanged.
                         downloaded = module.prepare_release(CURRENT, **kwargs)
                         self.assertEqual(downloaded.version, CURRENT)
                         self.assertEqual(downloaded.tag, f"v{CURRENT}")
                         self.assertEqual(downloaded.commit, self.prepared.commit)
-                        # The pre-rename downloader records the historical URL
-                        # in SourceInfo.source and the receipt; the new tool
-                        # verifies that identity unchanged.
                         self.assertEqual(downloaded.source, module.FIXED_SOURCE)
                         downloaded_receipt = json.loads(
                             (downloaded.root / ".ph-source.json").read_text(encoding="utf-8")
                         )
                         self.assertEqual(downloaded_receipt["source"], module.FIXED_SOURCE)
+                    else:
+                        # 1.2.3 retires the bundled spec-kit integration, so
+                        # every published speckit-era entry (1.1.14-1.2.2)
+                        # refuses the new tree: its validator demands the ten
+                        # generated speckit names in manifest required_names,
+                        # which the self-developed 18-name contract no longer
+                        # carries. This hard failure is the documented one-time
+                        # transition (migrations/1.2.2-to-1.2.3.md): the
+                        # upgrade prepares the release from the v1.2.3 tag in
+                        # a safe out-of-repo directory instead; the old entry
+                        # must exit with an error and no state writes, never
+                        # degrade to another source.
+                        with self.assertRaisesRegex(
+                            module.PHReleaseError, "skills.required_names mismatch"
+                        ):
+                            module.prepare_release(CURRENT, **kwargs)
+                        # the refusal happens at tree validation, after the
+                        # fetch: the contract is the hard error itself (no
+                        # receipt, no upgrade state - asserted by the raise)
                     support.assert_not_called()
                 finally:
                     sys.modules.pop(name, None)
 
     def test_pre_rename_118_downloader_package_upgrades_both_modes(self):
-        """The pre-rename 1.1.8 entry prepares the 1.1.9 package; the new tool upgrades.
+        """The pre-rename 1.1.8 entry prepares the 1.2.3 package; the new tool upgrades.
 
         A 1.1.8 project's installed downloader still addresses the historical
-        FIXED_SOURCE URL. The package it prepares must be complete (same
-        commit, receipt keeping the historical source URL, the renamed new
-        tool inside), and the new ph_merge_update shipped in that package must
-        verify that receipt and drive the full upgrade in both adapter modes.
-        This reuses the standard run_case chain end to end: install,
-        customizations, semantic merge, verify, finalize, installed check and
-        idempotency.
+        FIXED_SOURCE URL. Its manifest contract (names == release.json
+        required_skills) is exactly the 1.2.3 shape, so the package it
+        prepares is complete (same commit, receipt keeping the historical
+        source URL, the renamed new tool inside), and the new ph_merge_update
+        shipped in that package must verify that receipt and drive the full
+        upgrade in both adapter modes. This reuses the standard run_case
+        chain end to end: install, customizations, semantic merge, verify,
+        finalize, installed check and idempotency.
         """
         cases = [c for c in self.cases if c["version"] == "1.1.8"]
         self.assertTrue(cases, "the pre-rename 1.1.8 release must be part of the matrix")
@@ -3202,35 +3509,25 @@ class HistoricalUpgradeMatrixTests(unittest.TestCase):
             support = Mock(side_effect=AssertionError("unexpected GitHub support action"))
             if hasattr(module, "offer_official_support"):
                 module.offer_official_support = support
-            # 1.1.14 deliberately splits the skill list (4 scaffold + 10
-            # generated), while every pre-1.1.14 validator pins manifest
-            # names == release.json required_skills exactly, so the 1.1.8
-            # entry cannot prepare this release; assert the documented
-            # rejection (same as the handoff test) and bootstrap via the
-            # sanctioned v1.1.14-tag-clone path: the current tool's own
-            # prepare against the same synthetic source, addressed by the
-            # historical FIXED_SOURCE URL the way a 1.1.8-era clone would be.
-            with self.assertRaisesRegex(module.PHReleaseError, "skills.required_names mismatch"):
-                module.prepare_release(
-                    CURRENT,
-                    transport=LocalTransport(self.prepared.source, expected=module.FIXED_SOURCE),
-                    parent=self.workspace / "pre-rename-118-handoff",
-                    offer_support=False,
-                )
+            # 1.1.8 pins manifest names == release.json required_skills —
+            # exactly the 1.2.3 shape (only the spec-kit generation split the
+            # list) — so the pre-rename entry still prepares the new release
+            # directly: same commit, receipt keeping the historical source
+            # URL, the renamed current tool inside the package.
+            downloaded = module.prepare_release(
+                CURRENT,
+                transport=LocalTransport(self.prepared.source, expected=module.FIXED_SOURCE),
+                parent=self.workspace / "pre-rename-118-handoff",
+                offer_support=False,
+            )
+            self.assertEqual(downloaded.version, CURRENT)
+            self.assertEqual(downloaded.commit, self.prepared.commit)
+            self.assertEqual(downloaded.source, module.FIXED_SOURCE)
             support.assert_not_called()
         finally:
             sys.modules.pop(name, None)
-        downloaded = prepared_ph_release(self.prepared.root).prepare_release(
-            CURRENT,
-            transport=LocalTransport(self.prepared.source, expected=ph_release.DOWNLOAD_SOURCE),
-            parent=self.workspace / "pre-rename-118-handoff",
-            offer_support=False,
-        )
-        self.assertEqual(downloaded.version, CURRENT)
-        self.assertEqual(downloaded.tag, f"v{CURRENT}")
-        self.assertEqual(downloaded.commit, self.prepared.commit)
         old_target = PreparedTarget.from_prepared(
-            downloaded, origin="bootstrapped by the current tool (v1.1.14-tag clone path)"
+            downloaded, origin="prepared by the pre-rename 1.1.8 entry (FIXED_SOURCE transport)"
         )
         for case in cases:
             with self.subTest(mode=case["mode"]):

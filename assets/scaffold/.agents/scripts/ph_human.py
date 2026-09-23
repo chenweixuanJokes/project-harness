@@ -1,12 +1,10 @@
 #!/usr/bin/env python3
 """Human-readable companion plumbing for PH spec-driven skills.
 
-The ten spec-driven skills (ph-specify, ph-clarify, ph-plan, ph-tasks,
-ph-converge, ph-implement, ph-constitution, ph-checklist, ph-analyze,
-ph-taskstoissues) attach a human-readable companion document next to the
-machine artifact they produce. A companion is a snapshot explanation written
-by the calling skill following .agents/skills/ph-human/references/
-human-writing.md; it is never an authoritative rule or acceptance source.
+The spec-driven skills attach a human-readable companion document next to
+the machine artifact they produce. A companion is a snapshot explanation
+written by the calling skill; it is never an authoritative rule or
+acceptance source.
 
 This script does the mechanical half only - it never generates prose:
 
@@ -15,20 +13,25 @@ This script does the mechanical half only - it never generates prose:
                      path, source sha256, producing skill, timestamp, body
                      hash) and atomically publish a candidate prose file.
 * ``publish-snapshot`` publish a companion with no on-disk machine source
-                     (the ph-analyze report / the authorized ph-taskstoissues
-                     results of THIS invocation).
+                     (an invocation-snapshot report produced by THIS call).
 * ``status``         read-only staleness report: fresh / stale / orphan /
                      user-modified / snapshot companions, plus root-level
                      machine artifacts that have no companion yet.
 
-Naming contract (the single authority; human-writing.md documents it):
+Naming contract (the single authority; the mapping below is it):
 
 * <feature>/spec.md|plan.md|research.md|data-model.md|quickstart.md|
-  tasks.md|verification.md  ->  <feature>/<name>-human.md
+  tasks.md|verification.md|requirement.md|design.md|verify-plan.md|
+  acceptance.md|change.md     ->  <feature>/<name>-human.md
 * <feature>/checklists/<n>.md  ->  <feature>/checklists-<n>-human.md
 * <feature>/contracts/<n>.md   ->  <feature>/contracts-<n>-human.md
 * .agents/project-harness/constitution.md
                                ->  .agents/project-harness/constitution-human.md
+
+The spec/plan/research/data-model/quickstart names are kept for features
+created by the retired SpecKit-based flow; the requirement/design/
+verify-plan/acceptance/change names belong to the self-built SDD flow
+(ph_sdd.py). tasks.md and verification.md exist in both.
 
 Every companion lives at the feature directory root (never inside
 checklists/ or contracts/), so scans never descend into those directories.
@@ -61,13 +64,22 @@ FOOTER_KEYS = ("source", "source_sha256", "kind", "skill", "generated", "body_sh
 HEX64 = set("0123456789abcdef")
 CONSTITUTION_SOURCE = ".agents/project-harness/constitution.md"
 ROOT_MACHINE_NAMES = (
+    # retired SpecKit-flow artifacts (kept for old feature directories)
     "spec",
     "plan",
     "research",
     "data-model",
     "quickstart",
+    # shared by both flows
     "tasks",
     "verification",
+    # self-built SDD flow (ph_sdd.py)
+    "requirement",
+    "design",
+    "review",
+    "verify-plan",
+    "acceptance",
+    "change",
 )
 NESTED_SOURCE_DIRS = ("checklists", "contracts")
 COMPANION_SUFFIX = "-human.md"
